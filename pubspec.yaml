@@ -1,4 +1,4 @@
-﻿name: projectnbx
+name: projectnbx
 description: "A new Flutter project."
 publish_to: 'none'
 
@@ -11,6 +11,14 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  lucide_icons_flutter: ^3.1.15
+  google_fonts: ^8.2.1
+  window_manager: ^0.5.2
+  tray_manager: ^0.5.3
+  hotkey_manager: ^0.2.3
+  livekit_client: ^2.11.0
+  permission_handler: ^13.0.1
 
 dev_dependencies:
   flutter_test:
