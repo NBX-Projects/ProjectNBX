@@ -22,65 +22,70 @@ O **ProjectNBX** é um aplicativo multiplataforma projetado para grupos e comuni
 
 ---
 
-## 🏗️ Arquitetura & Stack Tecnológica
+## 🛠️ Versões e Tecnologias
 
-| Componente | Tecnologia | Descrição |
+| Tecnologia | Versão Recomendada | Canal / Detalhes |
 | :--- | :--- | :--- |
-| **Frontend / Cliente** | Flutter (Dart 3.x) | Interface responsiva e nativa para todas as plataformas |
-| **Engine de Mídia** | LiveKit WebRTC (`livekit_client`) | Servidor SFU para roteamento escalável de áudio e vídeo |
-| **Atalhos & Janela** | `hotkey_manager` + `tray_manager` | Controle nativo do sistema operacional (Desktop) |
-| **Sinalização & Chat** | WebSockets / REST API | Mensagens em tempo real, presença e canais de texto |
+| **Flutter SDK** | `3.41.2` (ou superior) | `stable` |
+| **Dart SDK** | `3.11.0` | Incluído no Flutter |
+| **FVM (Flutter Version Management)** | `4.x` | Gerenciamento de versão configurado via `.fvmrc` |
 
 ---
 
-## 🚀 Como Executar Localmente
+## 🚀 Como Executar no Windows
 
-### Pré-requisitos
-- [Flutter SDK](https://flutter.dev/docs/get-started/install) instalado (`3.x` ou superior).
-- Compiladores da plataforma desejada (Visual Studio com C++ para Windows, Xcode para macOS/iOS, Android Studio para Android).
+Se você utiliza **FVM** (Flutter Version Management) ou o Flutter instalado globalmente:
 
-### 1. Clonar e Instalar Dependências
+### 1. Inicializar o ambiente FVM
 ```bash
-git clone https://github.com/tauisilva/projectNBX.git
-cd projectNBX
-flutter pub get
+# Na raiz do projeto:
+fvm use stable
+fvm flutter pub get
 ```
 
-### 2. Executar no Desktop (Windows / Linux / macOS)
+### 2. Executar o App no Windows (Desktop)
 ```bash
-# Executar no Windows
+# Com FVM:
+fvm flutter run -d windows
+
+# Ou com Flutter Global:
 flutter run -d windows
-
-# Executar no macOS
-flutter run -d macos
-
-# Executar no Linux
-flutter run -d linux
 ```
 
-### 3. Executar no Mobile
-```bash
-# Listar dispositivos conectados
-flutter devices
+> **Dica de Desenvolvimento:** Ao executar no Windows, pressione `r` no terminal para Hot Reload instantâneo ou `R` para Hot Restart.
 
-# Executar no dispositivo conectado ou emulador
-flutter run
+---
+
+## 📱 Execução em Outras Plataformas
+
+```bash
+# macOS
+fvm flutter run -d macos
+
+# Linux
+fvm flutter run -d linux
+
+# Web (Google Chrome / Edge)
+fvm flutter run -d chrome
+
+# Android / iOS (com emulador aberto ou celular plugado)
+fvm flutter run
 ```
 
 ---
 
-## 📦 Build e Empacotamento
+## 📦 Build e Empacotamento de Produção
 
 ```bash
 # Gerar executável para Windows (.exe)
-flutter build windows --release
+fvm flutter build windows --release
 
-# Gerar APK ou App Bundle para Android
-flutter build apk --release
-flutter build appbundle --release
+# Gerar APK / App Bundle para Android
+fvm flutter build apk --release
+fvm flutter build appbundle --release
 
 # Gerar build Web
-flutter build web --release
+fvm flutter build web --release
 ```
 
 ---
