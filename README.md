@@ -8,6 +8,13 @@
 
 ---
 
+## 📖 Documentação & Guias
+
+- 🚀 **[Guia Passo a Passo de Inicialização (GETTING_STARTED.md)](GETTING_STARTED.md)**
+- 🤖 **[Diretrizes de Arquitetura para Agentes & Devs (AGENTS.md)](AGENTS.md)**
+
+---
+
 ## 📌 Visão Geral
 
 O **ProjectNBX** é um aplicativo multiplataforma projetado para grupos e comunidades que buscam alta performance, controle dos próprios dados e latência ultrabaixa em chamadas de voz e compartilhamento de tela.
