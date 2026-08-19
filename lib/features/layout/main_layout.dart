@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../servers/providers/server_provider.dart';
 import '../servers/models/server_model.dart';
-import 'widgets/server_sidebar.dart';
-import 'widgets/channel_sidebar.dart';
-import '../chat/widgets/chat_view.dart';
-import '../voice/widgets/voice_room_view.dart';
+import 'widgets/top_command_bar.dart';
+import 'widgets/squad_dock.dart';
+import '../chat/widgets/cyber_chat_view.dart';
+import '../voice/widgets/squad_voice_hud.dart';
 
 class MainLayout extends ConsumerWidget {
   const MainLayout({super.key});
@@ -17,20 +17,27 @@ class MainLayout extends ConsumerWidget {
     final selectedChannel = serverState.selectedChannel;
 
     return Scaffold(
-      backgroundColor: AppColors.bgChat,
-      body: Row(
+      backgroundColor: AppColors.bgOnyx,
+      body: Column(
         children: [
-          // 1. Leftmost Server Rail (72px)
-          const ServerSidebar(),
+          // 1. Top Cyber Command Bar
+          const TopCommandBar(),
 
-          // 2. Channel Sidebar (240px)
-          const ChannelSidebar(),
-
-          // 3. Main Dynamic Area (Chat or Voice)
+          // 2. Main Workspace Body
           Expanded(
-            child: selectedChannel.type == ChannelType.voice
-                ? const VoiceRoomView()
-                : const ChatView(),
+            child: Row(
+              children: [
+                // Left Navigation & Channel Dock
+                const SquadDock(),
+
+                // Central Workspace Deck (Holographic Voice HUD or Cyber Chat)
+                Expanded(
+                  child: selectedChannel.type == ChannelType.voice
+                      ? const SquadVoiceHUD()
+                      : const CyberChatView(),
+                ),
+              ],
+            ),
           ),
         ],
       ),

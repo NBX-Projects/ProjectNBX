@@ -1,52 +1,74 @@
 ﻿import 'dart:async';
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/voice_state.dart';
 
 class VoiceNotifier extends StateNotifier<VoiceRoomState> {
-  Timer? _speakingSimulationTimer;
+  Timer? _waveformTimer;
+  final Random _random = Random();
 
   VoiceNotifier() : super(const VoiceRoomState());
 
-  void joinVoiceChannel(String roomId, String roomName) {
-    // If already connected to the same room, do nothing
+  void joinVoiceChannel(String roomId, String roomName, {String serverName = 'NBX Cyber-HQ'}) {
     if (state.isConnected && state.roomId == roomId) return;
 
     state = VoiceRoomState(
       isConnected: true,
       roomId: roomId,
       roomName: roomName,
+      serverName: serverName,
       isMuted: false,
       isDeafened: false,
       isScreenSharing: false,
       isCameraOn: false,
-      pingMs: 14,
+      pingMs: 11,
+      codec: 'Opus 48kHz (DTX)',
+      bitrateKbps: 48,
       participants: [
         const VoiceParticipant(
           id: 'p1',
-          name: 'Taui (Você)',
-          avatar: 'TL',
+          name: 'Taui',
+          tag: 'TL',
+          avatar: 'assets/logo.png',
+          activity: 'Flutter / Windows Engine',
           isSpeaking: false,
+          audioLevel: 0.0,
         ),
         const VoiceParticipant(
           id: 'p2',
           name: 'Lucas Dev',
+          tag: 'LD',
           avatar: 'LD',
+          activity: 'LiveKit Rust SFU',
           isSpeaking: true,
+          audioLevel: 0.75,
         ),
         const VoiceParticipant(
           id: 'p3',
           name: 'Gabriel',
+          tag: 'GB',
           avatar: 'GB',
+          activity: 'Counter-Strike 2',
           isSpeaking: false,
+          audioLevel: 0.0,
+        ),
+        const VoiceParticipant(
+          id: 'p4',
+          name: 'CyberBot 01',
+          tag: 'AI',
+          avatar: '🤖',
+          activity: 'Synthesizing Audio',
+          isSpeaking: false,
+          audioLevel: 0.0,
         ),
       ],
     );
 
-    _startSpeakingSimulation();
+    _startWaveformSimulation();
   }
 
   void leaveVoiceChannel() {
-    _speakingSimulationTimer?.cancel();
+    _waveformTimer?.cancel();
     state = const VoiceRoomState(isConnected: false);
   }
 
@@ -57,7 +79,11 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
       isMuted: newMute,
       participants: state.participants.map((p) {
         if (p.id == 'p1') {
-          return p.copyWith(isMuted: newMute, isSpeaking: newMute ? false : p.isSpeaking);
+          return p.copyWith(
+            isMuted: newMute,
+            isSpeaking: newMute ? false : p.isSpeaking,
+            audioLevel: newMute ? 0.0 : p.audioLevel,
+          );
         }
         return p;
       }).toList(),
@@ -76,6 +102,7 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
             isDeafened: newDeafen,
             isMuted: newDeafen ? true : state.isMuted,
             isSpeaking: false,
+            audioLevel: 0.0,
           );
         }
         return p;
@@ -111,22 +138,33 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
     );
   }
 
-  void _startSpeakingSimulation() {
-    _speakingSimulationTimer?.cancel();
+  void _startWaveformSimulation() {
+    _waveformTimer?.cancel();
     int tick = 0;
-    _speakingSimulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    _waveformTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) {
       if (!state.isConnected) {
         timer.cancel();
         return;
       }
       tick++;
-      final isLucasSpeaking = tick % 2 == 0;
-      final isGabrielSpeaking = tick % 3 == 0;
+
+      final lucasSpeaking = (tick ~/ 15) % 2 == 0;
+      final gabrielSpeaking = (tick ~/ 20) % 3 == 1;
 
       state = state.copyWith(
         participants: state.participants.map((p) {
-          if (p.id == 'p2') return p.copyWith(isSpeaking: isLucasSpeaking);
-          if (p.id == 'p3') return p.copyWith(isSpeaking: isGabrielSpeaking);
+          if (p.id == 'p2') {
+            return p.copyWith(
+              isSpeaking: lucasSpeaking,
+              audioLevel: lucasSpeaking ? 0.3 + _random.nextDouble() * 0.7 : 0.0,
+            );
+          }
+          if (p.id == 'p3') {
+            return p.copyWith(
+              isSpeaking: gabrielSpeaking,
+              audioLevel: gabrielSpeaking ? 0.2 + _random.nextDouble() * 0.8 : 0.0,
+            );
+          }
           return p;
         }).toList(),
       );
@@ -135,7 +173,7 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
 
   @override
   void dispose() {
-    _speakingSimulationTimer?.cancel();
+    _waveformTimer?.cancel();
     super.dispose();
   }
 }
