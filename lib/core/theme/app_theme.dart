@@ -1,17 +1,19 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
   static ThemeData get darkTheme {
+    final baseTextTheme = GoogleFonts.interTextTheme(
+      ThemeData(brightness: Brightness.dark).textTheme,
+    );
+
     return ThemeData(
+      useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.bgOnyx,
       primaryColor: AppColors.neonCyan,
-      fontFamily: GoogleFonts.outfit().fontFamily,
-      textTheme: GoogleFonts.outfitTextTheme(
-        ThemeData(brightness: Brightness.dark).textTheme,
-      ).apply(
+      textTheme: baseTextTheme.apply(
         bodyColor: AppColors.textPrimary,
         displayColor: AppColors.textPrimary,
       ),
@@ -23,6 +25,11 @@ class AppTheme {
         onPrimary: Colors.black,
         onSurface: AppColors.textPrimary,
       ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStateProperty.all(AppColors.borderGlow.withValues(alpha: 0.7)),
+        radius: const Radius.circular(8),
+        thickness: WidgetStateProperty.all(5),
+      ),
       dividerTheme: const DividerThemeData(
         color: AppColors.borderSubtle,
         thickness: 1,
@@ -30,16 +37,25 @@ class AppTheme {
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: const Color(0xFF090A0F),
-          borderRadius: BorderRadius.circular(6),
+          color: AppColors.bgSurface,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.borderGlow),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.6),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         textStyle: const TextStyle(
-          color: AppColors.neonCyan,
+          color: AppColors.textPrimary,
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
     );
   }
 }
+
