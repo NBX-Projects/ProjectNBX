@@ -14,6 +14,11 @@
 - 🤖 **[Diretrizes de Arquitetura para Agentes & Devs (AGENTS.md)](AGENTS.md)**
 
 ---
+## 🎨 Design & Protótipo
+
+* 📱 [Acessar Protótipo no Figma (UX-NBX)](https://www.figma.com/make/ZFTQctJ9RrvmF2cPd2BINo/UX-NBX?t=jGh4g2lVq1tvnQ5E-1)
+
+---
 
 ## 📌 Visão Geral
 
