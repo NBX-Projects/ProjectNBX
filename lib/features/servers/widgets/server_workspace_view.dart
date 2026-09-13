@@ -42,7 +42,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   ServerViewMode _viewMode = ServerViewMode.home;
   ServerSidebarTab _activeSidebarTab = ServerSidebarTab.canais;
   ChannelModel? _activeChannel;
-  String _activeTopic = '# geral';
 
   int _selectedBannerPreset = 0;
   Color _selectedAccentColor = const Color(0xFFF5CBA7);
@@ -53,7 +52,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   bool _isInVoice = false;
   String? _connectedVoiceChannelId;
 
-  // Stream & HUD Controls
+  // Real stream / screen share transmission state
+  bool _isTransmitting = false;
   double _streamVolume = 0.75;
   bool _isChatMinimized = false;
   bool _isFullscreen = false;
@@ -74,47 +74,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     const Color(0xFFC084FC), // Soft Lavender
   ];
 
-  final List<String> _subTopics = [
-    '# geral',
-    '📢 anúncios 2',
-    '💬 off-topic',
-    '🎯 estratégia',
-  ];
-
   @override
   void initState() {
     super.initState();
     _selectedBannerPreset = widget.server.bannerPreset.clamp(0, _bannerPresets.length - 1);
     _selectedAccentColor = Color(widget.server.accentColor);
-
-    // Initial realistic chat seed for hybrid experience
-    _channelMessages['default'] = [
-      const _ChatMessage(
-        author: 'LucasM',
-        authorColor: Color(0xFF38BDF8),
-        content: 'QUE CURVA CARA 🔥',
-      ),
-      const _ChatMessage(
-        author: 'Rafael A',
-        authorColor: Color(0xFF818CF8),
-        content: 'Marina na pole position kkkk',
-      ),
-      const _ChatMessage(
-        author: 'Pedro_K',
-        authorColor: Color(0xFF4ADE80),
-        content: 'Sector 2 perfeito',
-      ),
-      const _ChatMessage(
-        author: 'Você',
-        authorColor: Color(0xFFF5CBA7),
-        content: 'VAMO MARINA!!!! 🏁',
-      ),
-      const _ChatMessage(
-        author: 'LucasM',
-        authorColor: Color(0xFF38BDF8),
-        content: 'que largada insana',
-      ),
-    ];
   }
 
   @override
@@ -145,6 +109,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       author: authorName,
       authorColor: _selectedAccentColor,
       content: text,
+      timestamp: DateTime.now(),
     );
 
     setState(() {
@@ -166,7 +131,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   void _openHybridChannel(ChannelModel channel) {
     setState(() {
       _activeChannel = channel;
-      _activeTopic = '# ${channel.name}';
       _viewMode = ServerViewMode.channel;
       _isInVoice = true;
       _connectedVoiceChannelId = channel.id;
@@ -177,8 +141,21 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   void _leaveVoice() {
     setState(() {
       _isInVoice = false;
+      _isTransmitting = false;
       _connectedVoiceChannelId = null;
       _viewMode = ServerViewMode.home;
+    });
+  }
+
+  void _toggleTransmission() {
+    setState(() {
+      _isTransmitting = !_isTransmitting;
+      if (_isTransmitting) {
+        _isInVoice = true;
+        if (_activeChannel != null) {
+          _connectedVoiceChannelId = _activeChannel!.id;
+        }
+      }
     });
   }
 
@@ -188,9 +165,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
-    final username = user?.username ?? 'Jhona';
+    final username = user?.username ?? 'Taui Lima';
 
-    // Channels with fallback to standard hybrid setup
     final effectiveChannels = widget.server.channels.isNotEmpty
         ? widget.server.channels
         : [
@@ -199,32 +175,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               serverId: widget.server.id,
               name: 'geral',
               type: ChannelType.hybrid,
-              unreadCount: 0,
-            ),
-            ChannelModel(
-              id: 'chn_anuncios',
-              serverId: widget.server.id,
-              name: 'anúncios',
-              type: ChannelType.announcement,
-              unreadCount: 2,
-            ),
-            ChannelModel(
-              id: 'chn_midia',
-              serverId: widget.server.id,
-              name: 'Imagens',
-              type: ChannelType.media,
-            ),
-            ChannelModel(
-              id: 'chn_files',
-              serverId: widget.server.id,
-              name: 'Arquivos',
-              type: ChannelType.files,
             ),
           ];
 
     return Column(
       children: [
-        // 1. Top Sub-Navigation Bar
+        // 1. Sub-Header Navigation Bar
         _buildServerTopNav(context, isDark, username),
 
         // 2. Main Body: Stage (Home OR Hybrid Channel Stage) + Right Sidebar
@@ -232,7 +188,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Main Stage (Home or Hybrid Stream+Chat View)
+              // Main Stage (Home, Direct Chat, or Immersive Stream + HUD)
               Expanded(
                 child: _viewMode == ServerViewMode.home
                     ? _buildServerHomeContent(context, isDark, username, effectiveChannels)
@@ -371,16 +327,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
           const SizedBox(width: 10),
 
-          // Search Button
-          IconButton(
-            icon: const Icon(LucideIcons.search, size: 15),
-            tooltip: 'Buscar no Servidor',
-            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-            onPressed: () {},
-          ),
-
-          const SizedBox(width: 8),
-
           // User Pill
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -397,17 +343,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 Container(
                   width: 20,
                   height: 20,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF6366F1),
+                  decoration: BoxDecoration(
+                    color: _selectedAccentColor,
                     shape: BoxShape.circle,
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'EU',
-                      style: TextStyle(
+                      username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                      style: const TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: Colors.black,
                       ),
                     ),
                   ),
@@ -446,7 +392,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   // ===========================================================================
-  // 2. HYBRID CHANNEL STAGE (IMMERSIVE VIDEO/STAGE + FLOATING HUD CHAT)
+  // 2. HYBRID CHANNEL STAGE
   // ===========================================================================
   Widget _buildHybridChannelStage(
     BuildContext context,
@@ -455,26 +401,40 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     List<ChannelModel> channels,
   ) {
     final activeChannelName = _activeChannel?.name ?? 'geral';
-    final messages = _channelMessages['default'] ?? [];
+    final channelKey = _activeChannel?.id ?? 'default';
+    final messages = _channelMessages[channelKey] ?? [];
 
+    // CASO 1: SEM TRANSMISSÃO -> Mostra o Chat diretamente em tela inteira
+    if (!_isTransmitting) {
+      return _buildDirectChatView(
+        context,
+        isDark,
+        activeChannelName,
+        channelKey,
+        username,
+        messages,
+      );
+    }
+
+    // CASO 2: COM TRANSMISSÃO -> Mostra Palco de Vídeo/Tela + Chat Flutuante HUD
     return Container(
       color: const Color(0xFF0C0D14),
       child: Stack(
         children: [
-          // A. Immersive Stage Background / Video Player Surface
+          // A. Palco Imersivo de Transmissão / Screen Share
           Positioned.fill(
-            child: _buildImmersiveStreamPlayer(isDark),
+            child: _buildImmersiveStreamPlayer(isDark, username),
           ),
 
-          // B. Stage Bottom Overlay Bar (Volume, Fullscreen, PiP & Live Status)
+          // B. Barra Inferior da Transmissão (Volume, Tela Cheia, PiP)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _buildStageBottomControlBar(isDark),
+            child: _buildStageBottomControlBar(isDark, username),
           ),
 
-          // C. Floating Glassmorphism Chat HUD Overlay
+          // C. Chat Flutuante HUD (Glassmorphism Overlay)
           Positioned(
             top: 20,
             right: 20,
@@ -484,6 +444,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               context,
               isDark,
               activeChannelName,
+              channelKey,
               username,
               messages,
             ),
@@ -493,8 +454,246 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  // Immersive Stream Player Canvas
-  Widget _buildImmersiveStreamPlayer(bool isDark) {
+  // Visualização Direta do Chat (quando NÃO há transmissão ativa)
+  Widget _buildDirectChatView(
+    BuildContext context,
+    bool isDark,
+    String activeChannelName,
+    String channelKey,
+    String username,
+    List<_ChatMessage> messages,
+  ) {
+    return Container(
+      color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
+      child: Column(
+        children: [
+          // Channel Header Bar
+          Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141520) : Colors.white,
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.hash, size: 18, color: _selectedAccentColor),
+                const SizedBox(width: 10),
+                Text(
+                  activeChannelName,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Canal Híbrido · Texto, Voz e Transmissão integrados',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+                const Spacer(),
+
+                // Transmitir Tela Button
+                ElevatedButton.icon(
+                  onPressed: _toggleTransmission,
+                  icon: const Icon(LucideIcons.screenShare, size: 14),
+                  label: const Text(
+                    'Transmitir Tela',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _selectedAccentColor,
+                    foregroundColor: _selectedAccentColor.computeLuminance() > 0.5
+                        ? Colors.black
+                        : Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Message Feed or Clean Empty State
+          Expanded(
+            child: messages.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                            ),
+                          ),
+                          child: Icon(
+                            LucideIcons.messageSquare,
+                            size: 32,
+                            color: _selectedAccentColor,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Início do canal #$activeChannelName',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Envie uma mensagem ou inicie uma transmissão para conversar!',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: _toggleTransmission,
+                          icon: const Icon(LucideIcons.screenShare, size: 14),
+                          label: const Text('Iniciar Transmissão de Tela'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _selectedAccentColor,
+                            side: BorderSide(color: _selectedAccentColor),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(20),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = messages[index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: msg.authorColor.withValues(alpha: 0.3),
+                              child: Text(
+                                msg.author.isNotEmpty ? msg.author[0].toUpperCase() : 'U',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: msg.authorColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        msg.author,
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: msg.authorColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}',
+                                        style: GoogleFonts.jetBrainsMono(
+                                          fontSize: 10,
+                                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    msg.content,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Message Input Box
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141520) : Colors.white,
+              border: Border(
+                top: BorderSide(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Conversar em #$activeChannelName...',
+                        border: InputBorder.none,
+                        isDense: true,
+                        hintStyle: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                      ),
+                      onSubmitted: (_) => _sendMessage(channelKey, username),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(LucideIcons.send, size: 16, color: _selectedAccentColor),
+                    onPressed: () => _sendMessage(channelKey, username),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Palco de Transmissão Imersiva
+  Widget _buildImmersiveStreamPlayer(bool isDark, String username) {
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF090A10),
@@ -502,19 +701,55 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Dynamic Track/Game Live Graphic Canvas
+          // Graphic Simulation of Screen Share / Stream
           const CustomPaint(
             painter: _RacingStreamCanvasPainter(),
           ),
 
-          // Subtle Gradient Overlays for Video Vibe
+          // Screen Share Overlay
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _selectedAccentColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(LucideIcons.screenShare, size: 48, color: _selectedAccentColor),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Transmissão ao vivo de $username',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Transmissão de tela em alta fidelidade ativa',
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Gradient Overlays
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.black.withValues(alpha: 0.3),
+                  Colors.black.withValues(alpha: 0.4),
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.8),
+                  Colors.black.withValues(alpha: 0.85),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -526,15 +761,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  // Stage Bottom Bar
-  Widget _buildStageBottomControlBar(bool isDark) {
+  // Barra Inferior da Transmissão
+  Widget _buildStageBottomControlBar(bool isDark, String username) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
             Colors.transparent,
-            Colors.black.withValues(alpha: 0.85),
+            Colors.black.withValues(alpha: 0.9),
           ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -570,7 +805,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           ),
           const SizedBox(width: 8),
           Text(
-            'Marina_S — Le Mans Ultimate',
+            '$username — Transmissão de Tela',
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -579,6 +814,21 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           ),
 
           const Spacer(),
+
+          // Stop Transmission Button
+          ElevatedButton.icon(
+            onPressed: _toggleTransmission,
+            icon: const Icon(LucideIcons.screenShareOff, size: 12),
+            label: const Text('Parar Transmissão', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+          ),
+
+          const SizedBox(width: 12),
 
           // Volume Control
           IconButton(
@@ -613,13 +863,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
           const SizedBox(width: 12),
 
-          // Picture in Picture
-          IconButton(
-            icon: const Icon(LucideIcons.pictureInPicture, size: 16, color: Colors.white70),
-            tooltip: 'Picture-in-Picture',
-            onPressed: () {},
-          ),
-
           // Fullscreen Toggle
           IconButton(
             icon: Icon(
@@ -629,13 +872,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             ),
             tooltip: 'Tela Cheia',
             onPressed: () => setState(() => _isFullscreen = !_isFullscreen),
-          ),
-
-          // Settings
-          IconButton(
-            icon: const Icon(LucideIcons.settings, size: 16, color: Colors.white70),
-            tooltip: 'Opções da Transmissão',
-            onPressed: () {},
           ),
         ],
       ),
@@ -647,6 +883,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     BuildContext context,
     bool isDark,
     String activeChannelName,
+    String channelKey,
     String username,
     List<_ChatMessage> messages,
   ) {
@@ -714,89 +951,52 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               ),
 
               if (!_isChatMinimized) ...[
-                // 2. Sub-Topic Quick Chips
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Color(0xFF1E2030)),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _subTopics.map((topic) {
-                        final isSelected = _activeTopic == topic;
-                        return InkWell(
-                          onTap: () => setState(() => _activeTopic = topic),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF2A2D42)
-                                  : const Color(0xFF181926),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isSelected
-                                    ? _selectedAccentColor.withValues(alpha: 0.5)
-                                    : Colors.transparent,
-                              ),
-                            ),
-                            child: Text(
-                              topic,
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected ? Colors.white : Colors.white60,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-
-                // 3. Compact Message Stream
+                // 2. Message Stream
                 Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = messages[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '${msg.author}: ',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: msg.authorColor,
-                                ),
-                              ),
-                              TextSpan(
-                                text: msg.content,
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w400,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
-                              ),
-                            ],
+                  child: messages.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Nenhuma mensagem ainda.\nEnvie algo no chat!',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
                           ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final msg = messages[index];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '${msg.author}: ',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: msg.authorColor,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: msg.content,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w400,
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
 
-                // 4. Message Input Field
+                // 3. Message Input Field
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   child: Container(
@@ -820,11 +1020,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(vertical: 8),
                             ),
-                            onSubmitted: (_) => _sendMessage('default', username),
+                            onSubmitted: (_) => _sendMessage(channelKey, username),
                           ),
                         ),
                         InkWell(
-                          onTap: () => _sendMessage('default', username),
+                          onTap: () => _sendMessage(channelKey, username),
                           borderRadius: BorderRadius.circular(4),
                           child: const Icon(LucideIcons.send, size: 12, color: Colors.white70),
                         ),
@@ -833,7 +1033,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   ),
                 ),
 
-                // 5. Quick Voice Control Bar inside HUD
+                // 4. Quick Voice Control Bar inside HUD
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: const BoxDecoration(
@@ -1286,9 +1486,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           _buildActivityItem(
             isDark: isDark,
             icon: LucideIcons.headphones,
-            title: 'Canal #geral com transmissão ativa',
-            subtitle: 'Marina_S transmitindo Le Mans Ultimate em alta fidelidade',
-            time: 'Ao Vivo',
+            title: 'Canal #${channels.isNotEmpty ? channels.first.name : "geral"} pronto',
+            subtitle: _isTransmitting
+                ? 'Transmissão de tela ativa no canal'
+                : 'Conecte-se para conversar por texto, voz ou transmitir sua tela',
+            time: _isTransmitting ? 'Ao Vivo' : 'Ativo',
           ),
         ],
       ),
@@ -1372,7 +1574,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               const Icon(LucideIcons.radio, size: 14, color: Color(0xFF10B981)),
               const SizedBox(width: 6),
               Text(
-                'CANAL HÍBRIDO ATIVO',
+                'CANAL HÍBRIDO',
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -1392,8 +1594,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   color: const Color(0xFF10B981),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Center(
-                  child: Icon(LucideIcons.play, size: 18, color: Colors.black),
+                child: Center(
+                  child: Icon(
+                    _isTransmitting ? LucideIcons.screenShare : LucideIcons.headphones,
+                    size: 18,
+                    color: Colors.black,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1402,7 +1608,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '# geral',
+                      _isTransmitting ? 'Transmissão Ativa' : 'Sala de Áudio e Texto',
                       style: GoogleFonts.spaceGrotesk(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
@@ -1410,7 +1616,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                       ),
                     ),
                     Text(
-                      'Marina_S ao vivo · 4 membros em áudio',
+                      _isTransmitting
+                          ? 'Transmissão de tela ao vivo'
+                          : 'Pronto para conversas e transmissões',
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: isDark ? Colors.white70 : Colors.black54,
@@ -1476,9 +1684,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '4',
-                      style: TextStyle(
+                    Text(
+                      _isInVoice ? '1' : '0',
+                      style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF10B981),
@@ -1506,7 +1714,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Anúncios e lembretes',
+          'Informações do servidor',
           style: GoogleFonts.spaceGrotesk(
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -1575,7 +1783,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         Icon(LucideIcons.sparkles, size: 14, color: _selectedAccentColor),
                         const SizedBox(width: 6),
                         Text(
-                          'Canais Híbridos Ativos',
+                          'Canais Híbridos',
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -1586,7 +1794,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Cada canal combina chat de texto, chamada de voz e transmissão de tela no mesmo ambiente integrado.',
+                      'Cada canal combina chat de texto, chamada de áudio e transmissão de tela no mesmo ambiente integrado.',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -1727,121 +1935,87 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           children: [
-            // Active Hybrid Channel (# geral with 4 members nested)
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E2030) : const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _selectedAccentColor.withValues(alpha: 0.3),
-                  width: 1,
+            ...channels.map((c) {
+              final isCurrentActive = _viewMode == ServerViewMode.channel && _activeChannel?.id == c.id;
+              final isConnected = _isInVoice && _connectedVoiceChannelId == c.id;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  color: isCurrentActive
+                      ? (isDark ? const Color(0xFF1E2030) : const Color(0xFFE2E8F0))
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isCurrentActive
+                        ? _selectedAccentColor.withValues(alpha: 0.4)
+                        : Colors.transparent,
+                    width: 1,
+                  ),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Channel Title Row
-                  InkWell(
-                    onTap: () {
-                      if (channels.isNotEmpty) _openHybridChannel(channels.first);
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      child: Row(
-                        children: [
-                          const Icon(LucideIcons.volume2, size: 14, color: Color(0xFF4ADE80)),
-                          const SizedBox(width: 8),
-                          Text(
-                            'geral',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : Colors.black87,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Channel Item Header
+                    InkWell(
+                      onTap: () => _openHybridChannel(c),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(
+                              LucideIcons.hash,
+                              size: 14,
+                              color: isCurrentActive ? _selectedAccentColor : (isDark ? Colors.white60 : Colors.black54),
                             ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(9999),
-                            ),
-                            child: const Text(
-                              '4',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF4ADE80),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                c.name,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: isCurrentActive ? FontWeight.w700 : FontWeight.w500,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            if (isConnected)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: const Text(
+                                  '1',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF4ADE80),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  // Nested Connected Channel Members
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12, right: 8, bottom: 8),
-                    child: Column(
-                      children: [
-                        _buildNestedMemberRow(
-                          initials: 'LM',
-                          name: 'LucasM',
-                          color: const Color(0xFF38BDF8),
-                          isLive: false,
-                        ),
-                        _buildNestedMemberRow(
-                          initials: 'MS',
-                          name: 'Marina_S',
-                          color: const Color(0xFFC084FC),
-                          isLive: true,
-                        ),
-                        _buildNestedMemberRow(
-                          initials: 'PK',
-                          name: 'Pedro_K',
-                          color: const Color(0xFF4ADE80),
-                          isLive: false,
-                        ),
-                        _buildNestedMemberRow(
-                          initials: 'VU',
+                    // Connected Real Members list under active channel
+                    if (isConnected)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12, right: 8, bottom: 8),
+                        child: _buildNestedMemberRow(
+                          initials: username.isNotEmpty ? username[0].toUpperCase() : 'U',
                           name: username,
                           color: _selectedAccentColor,
-                          isLive: false,
+                          isLive: _isTransmitting,
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Secondary Channels List
-            _buildSecondaryChannelItem(
-              icon: LucideIcons.hash,
-              name: 'anúncios',
-              badge: '2',
-              isDark: isDark,
-              onTap: () {
-                if (channels.length > 1) _openHybridChannel(channels[1]);
-              },
-            ),
-            _buildSecondaryChannelItem(
-              icon: LucideIcons.image,
-              name: 'Imagens',
-              isDark: isDark,
-              onTap: () {},
-            ),
-            _buildSecondaryChannelItem(
-              icon: LucideIcons.folder,
-              name: 'Arquivos',
-              isDark: isDark,
-              onTap: () {},
-            ),
+                      ),
+                  ],
+                ),
+              );
+            }),
           ],
         );
 
@@ -1852,7 +2026,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Text(
-                'ONLINE — 4',
+                'ONLINE — 1',
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 9.5,
                   fontWeight: FontWeight.w700,
@@ -1861,10 +2035,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 ),
               ),
             ),
-            _buildSidebarMemberRow('LucasM', 'Membro', const Color(0xFF38BDF8)),
-            _buildSidebarMemberRow('Marina_S', 'Ao Vivo', const Color(0xFFC084FC)),
-            _buildSidebarMemberRow('Pedro_K', 'Membro', const Color(0xFF4ADE80)),
-            _buildSidebarMemberRow(username, 'Owner', _selectedAccentColor),
+            _buildSidebarMemberRow(username, 'Owner & Criador', _selectedAccentColor),
           ],
         );
 
@@ -1885,7 +2056,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               ),
               const SizedBox(height: 4),
               Text(
-                '• Membros Conectados: 4',
+                '• Membros Conectados: ${_isInVoice ? 1 : 0}',
                 style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
               ),
             ],
@@ -1940,82 +2111,23 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
-                color: const Color(0xFFC084FC).withValues(alpha: 0.2),
+                color: const Color(0xFFEF4444).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: const Color(0xFFC084FC).withValues(alpha: 0.6),
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.6),
                   width: 1,
                 ),
               ),
-              child: Text(
+              child: const Text(
                 'AO VIVO',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
                   fontSize: 8,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFFC084FC),
+                  color: Color(0xFFEF4444),
                 ),
               ),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSecondaryChannelItem({
-    required IconData icon,
-    required String name,
-    String? badge,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 14,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    name,
-                    style: GoogleFonts.inter(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                ),
-                if (badge != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
-                      borderRadius: BorderRadius.circular(9999),
-                    ),
-                    child: Text(
-                      badge,
-                      style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2161,11 +2273,13 @@ class _ChatMessage {
   final String author;
   final Color authorColor;
   final String content;
+  final DateTime timestamp;
 
   const _ChatMessage({
     required this.author,
     required this.authorColor,
     required this.content,
+    required this.timestamp,
   });
 }
 
