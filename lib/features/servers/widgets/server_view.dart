@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/websocket_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../voice/widgets/theater_mode.dart';
 import '../models/ux_nbx_data.dart';
@@ -36,38 +39,241 @@ class ServerView extends StatefulWidget {
 }
 
 class _ServerViewState extends State<ServerView> {
+  final ApiClient _apiClient = ApiClient();
+  final WebSocketClient _wsClient = WebSocketClient();
+  StreamSubscription? _wsSub;
+
   String _selectedChannelId = "t1";
   String _activeTab = "channels"; // channels, members, board
   bool _showTheater = false;
   bool _showMembers = true;
   String? _currentFileFolder = "root";
   final TextEditingController _chatController = TextEditingController();
-  final List<ChatMessageData> _messages = List.from(uxMessages);
+
+  List<ChannelData> _channels = List.from(uxChannels);
+  List<ChatMessageData> _messages = List.from(uxMessages);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLiveChannels();
+    _loadLiveMessages();
+    _initWebSocket();
+  }
+
+  @override
+  void didUpdateWidget(covariant ServerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serverId != widget.serverId) {
+      _loadLiveChannels();
+      _loadLiveMessages();
+    }
+  }
 
   @override
   void dispose() {
+    _wsSub?.cancel();
+    _wsClient.dispose();
     _chatController.dispose();
     super.dispose();
+  }
+
+  void _initWebSocket() {
+    _wsClient.connect(serverId: widget.serverId);
+    _wsSub = _wsClient.events.listen((event) {
+      if (event['type'] == 'CHAT_MESSAGE') {
+        final payload = event['payload'];
+        if (payload is Map<String, dynamic>) {
+          final chId = event['channel_id'] as String? ?? _selectedChannelId;
+          if (chId == _selectedChannelId) {
+            final authorMap = payload['author'] as Map<String, dynamic>?;
+            final authorName = authorMap?['username'] as String? ?? 'Dev';
+            final authorId = payload['author_id'] as String? ?? '';
+
+            if (authorId == 'usr_dev_1' || authorName.contains('Você')) {
+              return; // Já renderizado localmente de forma instantânea
+            }
+
+            if (mounted) {
+              setState(() {
+                _messages.add(
+                  ChatMessageData(
+                    id: payload['id'] as String? ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+                    author: authorName,
+                    initials: authorName.length >= 2 ? authorName.substring(0, 2).toUpperCase() : 'NB',
+                    color: AppColors.accent,
+                    time: '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                    content: payload['content'] as String? ?? '',
+                    isMe: false,
+                  ),
+                );
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _loadLiveChannels() async {
+    try {
+      final liveList = await _apiClient.listChannels(widget.serverId);
+      if (liveList.isNotEmpty && mounted) {
+        setState(() {
+          _channels = liveList.map((ch) {
+            final id = ch['id']?.toString() ?? 't1';
+            final name = ch['name']?.toString() ?? 'geral';
+            final typeStr = ch['type']?.toString() ?? 'text';
+            ChannelKind kind = ChannelKind.text;
+            if (typeStr == 'voice' || name.toLowerCase().contains('match') || name.toLowerCase().contains('review') || name.toLowerCase().contains('stream')) {
+              kind = ChannelKind.textVoice;
+            } else if (name.contains('imagens')) {
+              kind = ChannelKind.images;
+            } else if (name.contains('arquivos')) {
+              kind = ChannelKind.files;
+            }
+
+            return ChannelData(
+              id: id,
+              name: name,
+              type: kind,
+              users: kind == ChannelKind.textVoice ? uxVoiceUsers : const [],
+              description: "Canal em tempo real conectado ao Go Backend",
+            );
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('[ServerView] Erro ao carregar canais: $e');
+    }
+  }
+
+  Future<void> _loadLiveMessages() async {
+    try {
+      final msgs = await _apiClient.listMessages(widget.serverId, _selectedChannelId);
+      if (msgs.isNotEmpty && mounted) {
+        setState(() {
+          _messages = msgs.map((m) {
+            final authorMap = m['author'] as Map<String, dynamic>?;
+            final authorName = authorMap?['username'] as String? ?? 'DarkLord_X';
+            final content = m['content']?.toString() ?? '';
+            final id = m['id']?.toString() ?? '1';
+
+            return ChatMessageData(
+              id: id,
+              author: authorName,
+              initials: authorName.length >= 2 ? authorName.substring(0, 2).toUpperCase() : 'NB',
+              color: AppColors.accent,
+              time: '10:30',
+              content: content,
+              isMe: authorName.contains('Você'),
+            );
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('[ServerView] Erro ao carregar mensagens: $e');
+    }
   }
 
   void _sendMessage() {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
+
+    final newMsg = ChatMessageData(
+      id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+      author: 'Você',
+      initials: 'EU',
+      color: AppColors.accent,
+      time: '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+      content: text,
+      isMe: true,
+    );
+
     setState(() {
-      _messages.add(
-        ChatMessageData(
-          id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-          author: 'Você',
-          initials: 'EU',
-          color: AppColors.accent,
-          time: '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
-          content: text,
-          isMe: true,
-        ),
-      );
+      _messages.add(newMsg);
     });
+
+    // Envia via REST para o Go backend e emite via WebSocket
+    _apiClient.sendMessage(widget.serverId, _selectedChannelId, text);
+    _wsClient.sendEvent(
+      'CHAT_MESSAGE',
+      {'content': text},
+      channelId: _selectedChannelId,
+      serverId: widget.serverId,
+    );
+
     widget.onSendMessage?.call(text);
     _chatController.clear();
+  }
+
+  void _showCreateChannelDialog() {
+    final controller = TextEditingController();
+    String selectedType = "text";
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.panel,
+          title: const Text('Criar Canal', style: TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                style: const TextStyle(color: AppColors.text, fontSize: 13),
+                decoration: const InputDecoration(
+                  hintText: 'Nome do canal (ex: clipes, duos)...',
+                  hintStyle: TextStyle(color: AppColors.muted),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.accent)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('Texto (#)', style: TextStyle(fontSize: 12)),
+                    selected: selectedType == "text",
+                    onSelected: (val) => setDialogState(() => selectedType = "text"),
+                    selectedColor: AppColors.accent,
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('Voz (🔊)', style: TextStyle(fontSize: 12)),
+                    selected: selectedType == "voice",
+                    onSelected: (val) => setDialogState(() => selectedType = "voice"),
+                    selectedColor: AppColors.green,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: AppColors.muted)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = controller.text.trim();
+                if (name.isNotEmpty) {
+                  Navigator.pop(ctx);
+                  final res = await _apiClient.createChannel(widget.serverId, name, selectedType);
+                  if (res != null) {
+                    _loadLiveChannels();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+              child: const Text('Criar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -77,9 +283,9 @@ class _ServerViewState extends State<ServerView> {
       orElse: () => uxServers.first,
     );
 
-    final selectedChannel = uxChannels.firstWhere(
+    final selectedChannel = _channels.firstWhere(
       (c) => c.id == _selectedChannelId,
-      orElse: () => uxChannels.first,
+      orElse: () => _channels.first,
     );
 
     if (_showTheater) {
@@ -206,19 +412,6 @@ class _ServerViewState extends State<ServerView> {
               },
             ),
           ),
-          // Add Server
-          Tooltip(
-            message: 'Adicionar Servidor',
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.panel,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(LucideIcons.plus, color: AppColors.green, size: 20),
-            ),
-          ),
           const SizedBox(height: 12),
         ],
       ),
@@ -294,9 +487,9 @@ class _ServerViewState extends State<ServerView> {
         // Active Voice Strip (if in text-voice)
         Container(
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.panel,
-            border: const Border(top: BorderSide(color: AppColors.border)),
+            border: Border(top: BorderSide(color: AppColors.border)),
           ),
           child: Row(
             children: [
@@ -360,11 +553,21 @@ class _ServerViewState extends State<ServerView> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Text('CANAIS DE TEXTO & VOZ', style: TextStyle(color: AppColors.muted, fontSize: 10, fontWeight: FontWeight.bold)),
+        Row(
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text('CANAIS', style: TextStyle(color: AppColors.muted, fontSize: 10, fontWeight: FontWeight.bold)),
+            ),
+            const Spacer(),
+            IconButton(
+              onPressed: _showCreateChannelDialog,
+              icon: const Icon(LucideIcons.plus, size: 14, color: AppColors.muted),
+              tooltip: 'Criar Canal',
+            ),
+          ],
         ),
-        ...uxChannels.map((channel) {
+        ..._channels.map((channel) {
           final isSelected = _selectedChannelId == channel.id;
           IconData iconData = LucideIcons.hash;
           if (channel.type == ChannelKind.textVoice) iconData = LucideIcons.volume2;
@@ -376,6 +579,8 @@ class _ServerViewState extends State<ServerView> {
               InkWell(
                 onTap: () {
                   setState(() => _selectedChannelId = channel.id);
+                  _loadLiveMessages();
+
                   if (channel.type == ChannelKind.textVoice) {
                     widget.onCallChange?.call({
                       'serverId': widget.serverId,
@@ -560,30 +765,6 @@ class _ServerViewState extends State<ServerView> {
                           ),
                           const SizedBox(height: 4),
                           Text(msg.content, style: const TextStyle(color: AppColors.text, fontSize: 13, height: 1.3)),
-                          if (msg.reactions.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              children: msg.reactions.entries.map((entry) {
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.panel,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: AppColors.border),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(entry.key, style: const TextStyle(fontSize: 12)),
-                                      const SizedBox(width: 4),
-                                      Text('${entry.value}', style: const TextStyle(color: AppColors.dim, fontSize: 11)),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -619,7 +800,7 @@ class _ServerViewState extends State<ServerView> {
                     onSubmitted: (_) => _sendMessage(),
                     style: const TextStyle(color: AppColors.text, fontSize: 13),
                     decoration: const InputDecoration(
-                      hintText: 'Conversar em #geral...',
+                      hintText: 'Conversar...',
                       hintStyle: TextStyle(color: AppColors.muted, fontSize: 13),
                       border: InputBorder.none,
                     ),

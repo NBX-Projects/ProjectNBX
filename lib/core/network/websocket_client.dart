@@ -19,6 +19,9 @@ class WebSocketClient {
   void connect({String? token, String? serverId}) async {
     disconnect();
 
+    // Se estiver em ambiente de testes automatizados do Flutter, não conecta socket real
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+
     try {
       final queryParams = <String, String>{};
       if (token != null) queryParams['token'] = token;

@@ -36,7 +36,7 @@ func (r *MemoryRepository) seedInitialData() {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 	adminUser := &models.User{
 		ID:        "usr_dev_1",
-		Username:  "NBX_Dev",
+		Username:  "DarkLord_X",
 		Email:     "dev@projectnbx.com",
 		Password:  string(hash),
 		AvatarURL: "https://api.dicebear.com/7.x/bottts/svg?seed=nbxdev",
@@ -45,59 +45,132 @@ func (r *MemoryRepository) seedInitialData() {
 	}
 	r.users[adminUser.ID] = adminUser
 
-	// Servidor padrão de Comunidade NBX
-	serverID := "srv_main_nbx"
-	server := &models.Server{
-		ID:          serverID,
-		Name:        "ProjectNBX Lounge",
-		IconURL:     "https://api.dicebear.com/7.x/identicon/svg?seed=ProjectNBX",
-		OwnerID:     adminUser.ID,
-		MemberCount: 42,
-		CreatedAt:   time.Now(),
+	seedServers := []struct {
+		ID       string
+		Name     string
+		Banner   string
+		Channels []struct {
+			ID   string
+			Name string
+			Type models.ChannelType
+		}
+	}{
+		{
+			ID:     "1",
+			Name:   "Apex Predators",
+			Banner: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1400&h=420&fit=crop&auto=format",
+			Channels: []struct {
+				ID   string
+				Name string
+				Type models.ChannelType
+			}{
+				{"t1", "geral", models.ChannelTypeText},
+				{"t2", "anúncios", models.ChannelTypeText},
+				{"v1", "Ranked Match", models.ChannelTypeVoice},
+			},
+		},
+		{
+			ID:     "2",
+			Name:   "Dev Lounge",
+			Banner: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400&h=420&fit=crop&auto=format",
+			Channels: []struct {
+				ID   string
+				Name string
+				Type models.ChannelType
+			}{
+				{"t3", "geral", models.ChannelTypeText},
+				{"v2", "Code Review", models.ChannelTypeVoice},
+			},
+		},
+		{
+			ID:     "3",
+			Name:   "Le Mans Ultimate",
+			Banner: "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=1400&h=420&fit=crop&auto=format",
+			Channels: []struct {
+				ID   string
+				Name string
+				Type models.ChannelType
+			}{
+				{"t4", "geral", models.ChannelTypeText},
+				{"v3", "Live Stream", models.ChannelTypeVoice},
+			},
+		},
+		{
+			ID:     "4",
+			Name:   "Minecraft Realm",
+			Banner: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1400&h=420&fit=crop&auto=format",
+			Channels: []struct {
+				ID   string
+				Name string
+				Type models.ChannelType
+			}{
+				{"t5", "geral", models.ChannelTypeText},
+				{"v4", "Build Session", models.ChannelTypeVoice},
+			},
+		},
+		{
+			ID:     "5",
+			Name:   "CS2 Tactics",
+			Banner: "https://images.unsplash.com/photo-1547394765-185e1e68f34e?w=1400&h=420&fit=crop&auto=format",
+			Channels: []struct {
+				ID   string
+				Name string
+				Type models.ChannelType
+			}{
+				{"t6", "geral", models.ChannelTypeText},
+				{"v5", "Scrim Room", models.ChannelTypeVoice},
+			},
+		},
+		{
+			ID:     "6",
+			Name:   "Study Group",
+			Banner: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1400&h=420&fit=crop&auto=format",
+			Channels: []struct {
+				ID   string
+				Name string
+				Type models.ChannelType
+			}{
+				{"t7", "geral", models.ChannelTypeText},
+				{"v6", "Foco Total", models.ChannelTypeVoice},
+			},
+		},
 	}
-	r.servers[serverID] = server
 
-	// Canais padrão
-	c1 := &models.Channel{
-		ID:        "chn_general_chat",
-		ServerID:  serverID,
-		Name:      "geral-devs",
-		Type:      models.ChannelTypeText,
-		Position:  1,
-		CreatedAt: time.Now(),
-	}
-	c2 := &models.Channel{
-		ID:        "chn_voice_lounge",
-		ServerID:  serverID,
-		Name:      "Sala de Voz Principal",
-		Type:      models.ChannelTypeVoice,
-		Position:  2,
-		CreatedAt: time.Now(),
-	}
-	c3 := &models.Channel{
-		ID:        "chn_voice_gaming",
-		ServerID:  serverID,
-		Name:      "Gaming & Chill",
-		Type:      models.ChannelTypeVoice,
-		Position:  3,
-		CreatedAt: time.Now(),
+	for _, sData := range seedServers {
+		srv := &models.Server{
+			ID:          sData.ID,
+			Name:        sData.Name,
+			IconURL:     sData.Banner,
+			OwnerID:     adminUser.ID,
+			MemberCount: 100,
+			CreatedAt:   time.Now(),
+		}
+		r.servers[srv.ID] = srv
+
+		for pos, cData := range sData.Channels {
+			ch := &models.Channel{
+				ID:        cData.ID,
+				ServerID:  srv.ID,
+				Name:      cData.Name,
+				Type:      cData.Type,
+				Position:  pos + 1,
+				CreatedAt: time.Now(),
+			}
+			r.channels[ch.ID] = ch
+		}
 	}
 
-	r.channels[c1.ID] = c1
-	r.channels[c2.ID] = c2
-	r.channels[c3.ID] = c3
-
-	// Mensagem de boas vindas
+	// Mensagem de boas vindas no canal t1
 	welcomeMsg := &models.Message{
 		ID:        uuid.New().String(),
-		ChannelID: c1.ID,
-		ServerID:  serverID,
+		ChannelID: "t1",
+		ServerID:  "1",
 		AuthorID:  adminUser.ID,
 		Author:    adminUser,
-		Content:   "🚀 Bem-vindo ao servidor oficial do ProjectNBX! Voz WebRTC de ultrabaixa latência conectada via LiveKit.",
+		Content:   "Pessoal, campeonato interno começa sábado às 21h 🏆",
 		CreatedAt: time.Now(),
 	}
-	r.messages[c1.ID] = []*models.Message{welcomeMsg}
+	r.messages["t1"] = []*models.Message{welcomeMsg}
 }
 
 // User methods

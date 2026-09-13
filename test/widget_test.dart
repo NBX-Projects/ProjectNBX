@@ -15,7 +15,7 @@ void main() {
         child: ProjectNBXApp(),
       ),
     );
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(ProjectNBXApp), findsOneWidget);
   });
 }

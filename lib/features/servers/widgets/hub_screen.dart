@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/websocket_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../models/ux_nbx_data.dart';
 import '../models/ux_nbx_models.dart';
@@ -31,10 +33,110 @@ class HubScreen extends StatefulWidget {
 class _HubScreenState extends State<HubScreen> {
   String _selectedCategory = "TODOS";
   String _searchQuery = "";
+  final ApiClient _apiClient = ApiClient();
+  final WebSocketClient _wsClient = WebSocketClient();
+  List<ServerData> _servers = List.from(uxServers);
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLiveServers();
+    _wsClient.connect();
+  }
+
+  @override
+  void dispose() {
+    _wsClient.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLiveServers() async {
+    setState(() => _isLoading = true);
+    try {
+      final liveList = await _apiClient.listServers();
+      if (liveList.isNotEmpty && mounted) {
+        final List<ServerData> parsed = liveList.map((item) {
+          final id = item['id']?.toString() ?? '1';
+          final name = item['name']?.toString() ?? 'Servidor';
+          final banner = item['icon_url']?.toString() ?? 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1400&h=420&fit=crop&auto=format';
+          final memberCount = item['member_count'] is int ? item['member_count'] as int : 1;
+
+          // Encontra se temos metadados ricos correspondentes
+          final existing = uxServers.firstWhere(
+            (s) => s.id == id,
+            orElse: () => ServerData(
+              id: id,
+              name: name,
+              banner: banner,
+              voiceCount: 0,
+              memberCount: memberCount,
+              category: "Comunidade",
+              accentColor: AppColors.accent,
+              unread: 0,
+              activeChannel: "geral",
+              description: "Servidor oficial criado no ProjectNBX Backend.",
+            ),
+          );
+          return existing;
+        }).toList();
+
+        setState(() {
+          _servers = parsed;
+        });
+      }
+    } catch (e) {
+      debugPrint('[HubScreen] Erro ao carregar servidores reais: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showCreateServerDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.panel,
+        title: const Text('Criar Novo Servidor', style: TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.text, fontSize: 13),
+          decoration: const InputDecoration(
+            hintText: 'Nome do Servidor...',
+            hintStyle: TextStyle(color: AppColors.muted),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.accent)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.muted)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(ctx);
+                final res = await _apiClient.createServer(name);
+                if (res != null) {
+                  _loadLiveServers();
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+            child: const Text('Criar Servidor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filteredServers = uxServers.where((s) {
+    final filteredServers = _servers.where((s) {
       final matchesCategory = _selectedCategory == "TODOS" ||
           s.category.toLowerCase() == _selectedCategory.toLowerCase();
       final matchesSearch = _searchQuery.isEmpty ||
@@ -66,7 +168,9 @@ class _HubScreenState extends State<HubScreen> {
                       // Discovery Grid
                       Expanded(
                         flex: 7,
-                        child: _buildDiscoveryGrid(filteredServers),
+                        child: _isLoading && _servers.isEmpty
+                            ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
+                            : _buildDiscoveryGrid(filteredServers),
                       ),
 
                       // Right Sidebar: Amigos & Atividades
@@ -124,9 +228,9 @@ class _HubScreenState extends State<HubScreen> {
           // Servers list
           Expanded(
             child: ListView.builder(
-              itemCount: uxServers.length,
+              itemCount: _servers.length,
               itemBuilder: (context, index) {
-                final server = uxServers[index];
+                final server = _servers[index];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _buildServerRailButton(server),
@@ -137,9 +241,9 @@ class _HubScreenState extends State<HubScreen> {
           // Add Server button
           _buildRailIcon(
             icon: LucideIcons.plus,
-            tooltip: 'Adicionar Servidor',
+            tooltip: 'Criar Novo Servidor',
             accentColor: AppColors.green,
-            onTap: () {},
+            onTap: _showCreateServerDialog,
           ),
           const SizedBox(height: 12),
         ],
