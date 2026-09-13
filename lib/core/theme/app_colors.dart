@@ -1,46 +1,64 @@
 import 'package:flutter/material.dart';
 
-/// Paleta de Cores Oficial do UX NBX (Figma 1:1)
 class AppColors {
-  // Backgrounds & Panels
-  static const Color bg = Color(0xFF1A1D22);         // Fundo principal
-  static const Color panel = Color(0xFF2B2F36);      // Cards e superfícies elevadas
-  static const Color deep = Color(0xFF202225);       // Barra lateral e inputs
-  static const Color input = Color(0xFF202225);
-  static const Color card = Color(0xFF2B2F36);
-  static const Color cardHover = Color(0xFF333842);
+  // ==========================================
+  // 🌑 DARK THEME (Matte Charcoal & Pastel Tech)
+  // Reference: Pastel Tech Aesthetic
+  // ==========================================
+  static const Color darkCanvas = Color(0xFF181926); // Deep Matte Charcoal
+  static const Color darkSurface = Color(0xFF1E2030); // Structural Card Panels
+  static const Color darkSurfaceElevated = Color(
+    0xFF24273A,
+  ); // Floating Overlays & Hovers
+  static const Color darkInput = Color(0xFF141520); // Inset Input Fields
+  static const Color darkBorder = Color(0xFF313244); // Precision 1px Frame
+  static const Color darkBorderFocus = Color(0xFF3B4252); // Interactive Border
 
-  // Cores de Acento & Status
-  static const Color accent = Color(0xFF5865F2);     // Blurple Oficial
-  static const Color primary = Color(0xFF5865F2);
-  static const Color green = Color(0xFF43B581);      // Voz ativa / Online
-  static const Color red = Color(0xFFF04747);        // Mudo / Desconectar / Perigo
-  static const Color yellow = Color(0xFFFAA61A);     // Ausente / Warning / Nitro
-  static const Color purple = Color(0xFF9B59B6);     // Dev / Booster
-  
-  // Tipografia & Textos
-  static const Color text = Color(0xFFDCDDDE);       // Texto principal
-  static const Color textPrimary = Color(0xFFDCDDDE);
-  static const Color dim = Color(0xFFB9BBBE);        // Texto secundário
-  static const Color textSecondary = Color(0xFFB9BBBE);
-  static const Color muted = Color(0xFF8E9297);      // Timestamps e hashes
-  static const Color textMuted = Color(0xFF8E9297);
+  // Dark Mineral Pastels
+  static const Color darkPrimary = Color(
+    0xFFF5CBA7,
+  ); // Warm Pastel Peach / Apricot
+  static const Color darkPrimaryHover = Color(0xFFE4BC98);
+  static const Color darkSage = Color(
+    0xFFA8C5B5,
+  ); // Pastel Sage Green (Active/Success)
+  static const Color darkLavender = Color(0xFFC5B4E3); // Soft Lavender / Lilac
+  static const Color darkPowderBlue = Color(
+    0xFFA5C4D4,
+  ); // Powder Blue (Tech/Code)
+  static const Color darkDanger = Color(0xFFF38BA8); // Pastel Coral / Red
 
-  // Bordas & Divisórias
-  static const Color border = Color(0x0FFFFFFF);     // rgba(255, 255, 255, 0.06)
-  static const Color borderSubtle = Color(0x1AFFFFFF); // rgba(255, 255, 255, 0.10)
-  static const Color borderGlow = Color(0x335865F2);
+  // Dark Typography
+  static const Color darkTextPrimary = Color(0xFFE6E9EF); // Creamy White
+  static const Color darkTextSecondary = Color(0xFFBAC2DE); // Soft Muted Gray
+  static const Color darkTextMuted = Color(0xFF6E738D); // Subtext & Metadata
 
-  // Gradients
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [Color(0xFF5865F2), Color(0xFF7289DA)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  // ==========================================
+  // ☀️ LIGHT THEME (Forest Slate & Daylight Pastel)
+  // Reference: Forest Slate Engineering Portfolio
+  // ==========================================
+  static const Color lightCanvas = Color(0xFFFAF9F6); // Alabaster Cream
+  static const Color lightSurface = Color(0xFFFFFFFF); // Pure White Cards
+  static const Color lightSurfaceElevated = Color(0xFFE8F2EC); // Soft Sage Tint
+  static const Color lightInput = Color(0xFFFFFFFF); // Input Background
+  static const Color lightBorder = Color(0xFFE2E8F0); // Subtle Border
+  static const Color lightBorderFocus = Color(0xFFCBD5E1);
 
-  static const LinearGradient voiceActiveGradient = LinearGradient(
-    colors: [Color(0xFF43B581), Color(0xFF5865F2)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  // Light Chromatic Accents
+  static const Color lightPrimary = Color(0xFF2D6A4F); // Forest Sage
+  static const Color lightPrimaryHover = Color(0xFF1B4332);
+  static const Color lightSage = Color(
+    0xFF2D6A4F,
+  ); // Forest Sage (Active/Success)
+  static const Color lightLavender = Color(0xFF5B4282); // Deep Royal Lavender
+  static const Color lightSkyBlue = Color(0xFF2C5E8A); // Deep Slate Blue
+  static const Color lightPeach = Color(0xFFA05022); // Terracotta Peach
+  static const Color lightDanger = Color(0xFFDC2626); // Deep Crimson
+
+  // Light Typography
+  static const Color lightTextPrimary = Color(
+    0xFF1E293B,
+  ); // Deep Slate Graphite
+  static const Color lightTextSecondary = Color(0xFF475569); // Muted Slate Gray
+  static const Color lightTextMuted = Color(0xFF64748B); // Secondary Slate
 }

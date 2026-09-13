@@ -6,12 +6,14 @@ import (
 
 // Config armazena as configurações da aplicação
 type Config struct {
-	Port            string
-	JWTSecret       string
-	LiveKitURL      string
-	LiveKitAPIKey   string
-	LiveKitSecret   string
-	AllowedOrigins  string
+	Port           string
+	JWTSecret      string
+	LiveKitURL     string
+	LiveKitAPIKey  string
+	LiveKitSecret  string
+	AllowedOrigins string
+	DatabaseURL    string
+	MigrationsDir  string
 }
 
 // LoadConfig carrega as configurações das variáveis de ambiente com valores padrão
@@ -23,6 +25,8 @@ func LoadConfig() *Config {
 		LiveKitAPIKey:  getEnv("LIVEKIT_API_KEY", "devkey"),
 		LiveKitSecret:  getEnv("LIVEKIT_API_SECRET", "secret"),
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "*"),
+		DatabaseURL:    getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/projectnbx?sslmode=disable"),
+		MigrationsDir:  getEnv("MIGRATIONS_DIR", "migrations"),
 	}
 }
 

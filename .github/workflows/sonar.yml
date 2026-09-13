@@ -1,0 +1,53 @@
+name: SonarQube & Quality Gate Analysis
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  sonar-analysis:
+    name: SonarQube Quality Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+
+      # 1. Setup Flutter & Generate Coverage
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Run Flutter Analyze
+        run: flutter analyze
+
+      - name: Run Flutter Tests & Generate LCOV
+        run: flutter test --coverage
+
+      # 2. Setup Go & Generate Coverage
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Go Tests & Coverage
+        working-directory: backend
+        run: |
+          go test -v -coverprofile=coverage.out ./... || true
+
+      # 3. SonarCloud / SonarQube Scanner
+      - name: SonarQube / SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

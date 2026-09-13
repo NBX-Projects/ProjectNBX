@@ -52,6 +52,20 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Registrar Auditoria
+	_ = h.repo.CreateAuditLog(&models.AuditLog{
+		Source:     models.AuditSourceAuth,
+		Action:     "USER_REGISTER",
+		UserID:     &user.ID,
+		ResourceID: &user.ID,
+		IPAddress:  r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		Metadata: map[string]interface{}{
+			"email":    user.Email,
+			"username": user.Username,
+		},
+	})
+
 	token, err := h.jwtService.GenerateToken(user)
 	if err != nil {
 		http.Error(w, `{"error":"Erro ao gerar token"}`, http.StatusInternalServerError)
@@ -75,11 +89,36 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.repo.GetUserByEmail(req.Email)
 	if err != nil {
+		// Log de auditoria para tentativa falha
+		_ = h.repo.CreateAuditLog(&models.AuditLog{
+			Source:    models.AuditSourceAuth,
+			Action:    "USER_LOGIN_FAILED",
+			IPAddress: r.RemoteAddr,
+			UserAgent: r.UserAgent(),
+			Metadata: map[string]interface{}{
+				"email":  req.Email,
+				"reason": "user_not_found",
+			},
+		})
+
 		http.Error(w, `{"error":"Credenciais inválidas"}`, http.StatusUnauthorized)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		// Log de auditoria para senha incorreta
+		_ = h.repo.CreateAuditLog(&models.AuditLog{
+			Source:    models.AuditSourceAuth,
+			Action:    "USER_LOGIN_FAILED",
+			UserID:    &user.ID,
+			IPAddress: r.RemoteAddr,
+			UserAgent: r.UserAgent(),
+			Metadata: map[string]interface{}{
+				"email":  req.Email,
+				"reason": "invalid_password",
+			},
+		})
+
 		http.Error(w, `{"error":"Credenciais inválidas"}`, http.StatusUnauthorized)
 		return
 	}
@@ -89,6 +128,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"Erro ao gerar token"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// Registrar Auditoria de Login com Sucesso
+	_ = h.repo.CreateAuditLog(&models.AuditLog{
+		Source:     models.AuditSourceAuth,
+		Action:     "USER_LOGIN_SUCCESS",
+		UserID:     &user.ID,
+		ResourceID: &user.ID,
+		IPAddress:  r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		Metadata: map[string]interface{}{
+			"email": user.Email,
+		},
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(models.AuthResponse{

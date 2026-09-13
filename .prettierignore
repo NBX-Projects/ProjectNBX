@@ -1,0 +1,29 @@
+# Version Control & Dependencies
+.git
+.github
+.dart_tool
+.idea
+.vscode
+node_modules
+
+# Flutter Build Artifacts & Native Platforms
+build/
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+
+# Package locks & Generated files
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Go Binaries & Docker Volumes
+backend/bin/
+backend/tmp/
+*.exe
+*.dll
+*.so

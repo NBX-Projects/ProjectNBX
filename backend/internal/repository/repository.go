@@ -33,4 +33,8 @@ type Repository interface {
 	// Mensagens
 	CreateMessage(msg *models.Message) error
 	ListMessagesByChannel(channelID string, limit int) ([]*models.Message, error)
+
+	// Auditoria
+	CreateAuditLog(log *models.AuditLog) error
+	ListAuditLogs(limit int, source models.AuditSource) ([]*models.AuditLog, error)
 }

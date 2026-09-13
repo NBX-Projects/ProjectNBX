@@ -6,6 +6,7 @@ import (
 
 	"github.com/projectnbx/backend/config"
 	"github.com/projectnbx/backend/internal/auth"
+	"github.com/projectnbx/backend/internal/database"
 	"github.com/projectnbx/backend/internal/repository"
 	"github.com/projectnbx/backend/internal/router"
 	"github.com/projectnbx/backend/internal/websocket"
@@ -17,21 +18,34 @@ func main() {
 	// 1. Carregar configurações
 	cfg := config.LoadConfig()
 
-	// 2. Inicializar Repositório de Dados
-	repo := repository.NewMemoryRepository()
+	// 2. Conectar ao Banco de Dados PostgreSQL Real
+	db, err := database.ConnectPostgres(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("❌ Falha crítica ao conectar ao PostgreSQL: %v", err)
+	}
+	defer db.Close()
 
-	// 3. Inicializar Serviço JWT
+	// 3. Executar Migrations SQL
+	log.Printf("📦 Executando migrations do diretório '%s'...", cfg.MigrationsDir)
+	if err := database.RunMigrations(db, cfg.MigrationsDir); err != nil {
+		log.Fatalf("❌ Falha crítica ao aplicar migrations: %v", err)
+	}
+
+	// 4. Inicializar Repositório PostgreSQL
+	repo := repository.NewPostgresRepository(db)
+
+	// 5. Inicializar Serviço JWT
 	jwtService := auth.NewJWTService(cfg.JWTSecret)
 
-	// 4. Inicializar WebSocket Hub
+	// 6. Inicializar WebSocket Hub
 	hub := websocket.NewHub(repo)
 	go hub.Run()
 
-	// 5. Configurar Rotas HTTP e Middlewares
+	// 7. Configurar Rotas HTTP e Middlewares
 	appRouter := router.NewRouter(cfg, repo, jwtService, hub)
 	handler := appRouter.SetupRoutes()
 
-	// 6. Subir Servidor HTTP
+	// 8. Subir Servidor HTTP
 	addr := ":" + cfg.Port
 	log.Printf("✨ Servidor HTTP & WebSocket escutando na porta %s", addr)
 	log.Printf("🎙️ LiveKit SFU configurado para: %s (API Key: %s)", cfg.LiveKitURL, cfg.LiveKitAPIKey)

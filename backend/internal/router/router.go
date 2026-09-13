@@ -12,6 +12,7 @@ import (
 	"github.com/projectnbx/backend/config"
 	"github.com/projectnbx/backend/internal/auth"
 	"github.com/projectnbx/backend/internal/handlers"
+	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
 	"github.com/projectnbx/backend/internal/websocket"
 )
@@ -89,6 +90,18 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/servers/{id}/channels", serverHandler.CreateChannel).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.ListMessages).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.SendMessage).Methods("POST", "OPTIONS")
+
+	// Auditoria
+	protected.HandleFunc("/audit-logs", func(w http.ResponseWriter, req *http.Request) {
+		source := models.AuditSource(req.URL.Query().Get("source"))
+		logs, err := r.repo.ListAuditLogs(50, source)
+		if err != nil {
+			http.Error(w, `{"error":"Erro ao buscar logs de auditoria"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(logs)
+	}).Methods("GET", "OPTIONS")
 
 	return router
 }

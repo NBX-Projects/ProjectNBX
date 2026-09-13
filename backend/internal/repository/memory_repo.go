@@ -45,6 +45,19 @@ func (r *MemoryRepository) seedInitialData() {
 	}
 	r.users[adminUser.ID] = adminUser
 
+	// Usuário demo dev@nbx.com (senha: senha_segura_123)
+	devHash, _ := bcrypt.GenerateFromPassword([]byte("senha_segura_123"), bcrypt.DefaultCost)
+	devUser := &models.User{
+		ID:        "usr_dev_2",
+		Username:  "DevNBX",
+		Email:     "dev@nbx.com",
+		Password:  string(devHash),
+		AvatarURL: "https://api.dicebear.com/7.x/bottts/svg?seed=taui",
+		Status:    "online",
+		CreatedAt: time.Now(),
+	}
+	r.users[devUser.ID] = devUser
+
 	seedServers := []struct {
 		ID       string
 		Name     string
@@ -336,4 +349,12 @@ func (r *MemoryRepository) ListMessagesByChannel(channelID string, limit int) ([
 	}
 	start := len(msgs) - limit
 	return msgs[start:], nil
+}
+
+func (r *MemoryRepository) CreateAuditLog(log *models.AuditLog) error {
+	return nil
+}
+
+func (r *MemoryRepository) ListAuditLogs(limit int, source models.AuditSource) ([]*models.AuditLog, error) {
+	return []*models.AuditLog{}, nil
 }
