@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0 # Full git history for Sonar blame & analysis
 
       # 1. Setup Flutter & Generate Coverage
       - name: Setup Flutter
@@ -48,7 +48,16 @@ jobs:
 
       # 3. SonarCloud / SonarQube Scanner
       - name: SonarQube / SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+
+      - name: Sonar Token Notice
+        if: env.SONAR_TOKEN == ''
+        run: |
+          echo "⚠️ SONAR_TOKEN não configurado nos secrets do repositório GitHub."
+          echo "👉 Para ativar o Quality Gate no SonarCloud/SonarQube, adicione o secret SONAR_TOKEN em Settings > Secrets and variables > Actions."
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
