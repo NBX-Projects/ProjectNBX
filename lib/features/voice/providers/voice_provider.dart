@@ -1,15 +1,23 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/network/api_client.dart';
 import '../models/voice_state.dart';
+import '../services/livekit_voice_service.dart';
 
 class VoiceNotifier extends StateNotifier<VoiceRoomState> {
   Timer? _waveformTimer;
   final Random _random = Random();
+  final ApiClient _apiClient = ApiClient();
+  final LiveKitVoiceService _liveKitService = LiveKitVoiceService();
+
+  StreamSubscription? _speakingSub;
 
   VoiceNotifier() : super(const VoiceRoomState());
 
-  void joinVoiceChannel(String roomId, String roomName, {String serverName = 'NBX Cyber-HQ'}) {
+  void joinVoiceChannel(String roomId, String roomName, {String serverName = 'NBX Cyber-HQ'}) async {
     if (state.isConnected && state.roomId == roomId) return;
 
     state = VoiceRoomState(
@@ -40,8 +48,8 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
           tag: 'LD',
           avatar: 'LD',
           activity: 'LiveKit Rust SFU',
-          isSpeaking: true,
-          audioLevel: 0.75,
+          isSpeaking: false,
+          audioLevel: 0.0,
         ),
         const VoiceParticipant(
           id: 'p3',
@@ -64,17 +72,57 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
       ],
     );
 
+    // 1. Tenta obter token oficial LiveKit gerado pelo Go Backend
+    try {
+      final tokenData = await _apiClient.getVoiceToken(
+        roomName: roomId,
+        participantName: 'Taui',
+        identity: 'usr_dev_1',
+      );
+
+      if (tokenData != null && tokenData['token'] != null) {
+        final token = tokenData['token'] as String;
+        final serverUrl = tokenData['server_url'] as String? ?? ApiConstants.defaultLiveKitUrl;
+
+        debugPrint('[VoiceNotifier] Conectando ao LiveKit Server com token do Go Backend: $serverUrl');
+        final connected = await _liveKitService.connect(url: serverUrl, token: token);
+
+        if (connected) {
+          _speakingSub?.cancel();
+          _speakingSub = _liveKitService.onSpeakingChanged.listen((speakers) {
+            state = state.copyWith(
+              participants: state.participants.map((p) {
+                final isSpeaking = speakers[p.id] ?? speakers[p.name] ?? false;
+                return p.copyWith(
+                  isSpeaking: isSpeaking,
+                  audioLevel: isSpeaking ? 0.8 : 0.0,
+                );
+              }).toList(),
+            );
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[VoiceNotifier] LiveKit connection fallback: $e');
+    }
+
+    // Fallback gracioso caso o LiveKit SFU não esteja acessível localmente
     _startWaveformSimulation();
   }
 
   void leaveVoiceChannel() {
     _waveformTimer?.cancel();
+    _speakingSub?.cancel();
+    _liveKitService.disconnect();
     state = const VoiceRoomState(isConnected: false);
   }
 
   void toggleMute() {
     if (!state.isConnected) return;
     final newMute = !state.isMuted;
+    _liveKitService.setMuted(newMute);
+
     state = state.copyWith(
       isMuted: newMute,
       participants: state.participants.map((p) {
@@ -113,6 +161,8 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
   void toggleScreenShare() {
     if (!state.isConnected) return;
     final newScreenShare = !state.isScreenSharing;
+    _liveKitService.setScreenShareEnabled(newScreenShare);
+
     state = state.copyWith(
       isScreenSharing: newScreenShare,
       participants: state.participants.map((p) {
@@ -127,6 +177,8 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
   void toggleCamera() {
     if (!state.isConnected) return;
     final newCamera = !state.isCameraOn;
+    _liveKitService.setCameraEnabled(newCamera);
+
     state = state.copyWith(
       isCameraOn: newCamera,
       participants: state.participants.map((p) {
@@ -174,6 +226,8 @@ class VoiceNotifier extends StateNotifier<VoiceRoomState> {
   @override
   void dispose() {
     _waveformTimer?.cancel();
+    _speakingSub?.cancel();
+    _liveKitService.dispose();
     super.dispose();
   }
 }

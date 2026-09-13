@@ -1,4 +1,4 @@
-﻿# 🚀 Guia de Inicialização — ProjectNBX
+# 🚀 Guia de Inicialização — ProjectNBX
 
 Este documento contém o passo a passo completo para configurar o ambiente e rodar o **ProjectNBX** na sua máquina local.
 
@@ -9,10 +9,7 @@ Este documento contém o passo a passo completo para configurar o ambiente e rod
 Antes de iniciar, certifique-se de ter instalado:
 
 1. **Git:** [Download Git](https://git-scm.com/)
-2. **FVM (Flutter Version Management):**
-   ```bash
-   dart pub global activate fvm
-   ```
+2. **Flutter SDK:** Instalado e configurado no PATH do sistema (`stable`).
 3. **Para Windows Desktop (Obrigatório):**
    - **[Visual Studio Community 2022](https://visualstudio.microsoft.com/pt-br/downloads/)** com a carga de trabalho:
      👉 **"Desenvolvimento para desktop com C++"** (*Desktop development with C++*).
@@ -24,11 +21,8 @@ Antes de iniciar, certifique-se de ter instalado:
 Abra o terminal na pasta do projeto (`D:\Github\My\projectNBX`) e execute:
 
 ```bash
-# 1. Travar a versão do Flutter no canal estável (Flutter 3.41.x / Dart 3.11.x)
-fvm use stable
-
-# 2. Baixar todas as dependências do projeto
-fvm flutter pub get
+# Baixar todas as dependências do projeto
+flutter pub get
 ```
 
 ---
@@ -37,22 +31,22 @@ fvm flutter pub get
 
 ### 🪟 Windows (Desktop)
 ```bash
-fvm flutter run -d windows
+flutter run -d windows
 ```
 
 ### 🌐 Web (Google Chrome / Edge)
 ```bash
-fvm flutter run -d chrome
+flutter run -d chrome
 ```
 
 ### 📱 Android / iOS
 Com o celular conectado via USB (com Depuração USB ativada) ou com um emulador aberto:
 ```bash
 # Ver dispositivos disponíveis
-fvm flutter devices
+flutter devices
 
 # Rodar no dispositivo
-fvm flutter run
+flutter run
 ```
 
 ---
@@ -76,11 +70,11 @@ Quando o aplicativo estiver rodando com `flutter run`, use estes comandos no ter
 ### ❌ Erro: *Android licenses not accepted*
 - **Solução:** Execute no terminal:
   ```bash
-  fvm flutter doctor --android-licenses
+  flutter doctor --android-licenses
   ```
   e digite `y` para aceitar os termos.
 
 ### 🔍 Verificar Saúde do Ambiente:
 ```bash
-fvm flutter doctor
+flutter doctor
 ```

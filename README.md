@@ -1,4 +1,4 @@
-﻿# 🚀 ProjectNBX
+# 🚀 ProjectNBX
 
 <div align="center">
   <img src="assets/logo.png" alt="ProjectNBX Logo" width="128" height="128" />
@@ -40,27 +40,18 @@ O **ProjectNBX** é um aplicativo multiplataforma projetado para grupos e comuni
 | :--- | :--- | :--- |
 | **Flutter SDK** | `3.41.2` (ou superior) | `stable` |
 | **Dart SDK** | `3.11.0` | Incluído no Flutter |
-| **FVM (Flutter Version Management)** | `4.x` | Gerenciamento de versão configurado via `.fvmrc` |
 
 ---
 
 ## 🚀 Como Executar no Windows
 
-Se você utiliza **FVM** (Flutter Version Management) ou o Flutter instalado globalmente:
-
-### 1. Inicializar o ambiente FVM
+### 1. Obter dependências
 ```bash
-# Na raiz do projeto:
-fvm use stable
-fvm flutter pub get
+flutter pub get
 ```
 
 ### 2. Executar o App no Windows (Desktop)
 ```bash
-# Com FVM:
-fvm flutter run -d windows
-
-# Ou com Flutter Global:
 flutter run -d windows
 ```
 
@@ -72,16 +63,16 @@ flutter run -d windows
 
 ```bash
 # macOS
-fvm flutter run -d macos
+flutter run -d macos
 
 # Linux
-fvm flutter run -d linux
+flutter run -d linux
 
 # Web (Google Chrome / Edge)
-fvm flutter run -d chrome
+flutter run -d chrome
 
 # Android / iOS (com emulador aberto ou celular plugado)
-fvm flutter run
+flutter run
 ```
 
 ---
@@ -90,14 +81,14 @@ fvm flutter run
 
 ```bash
 # Gerar executável para Windows (.exe)
-fvm flutter build windows --release
+flutter build windows --release
 
 # Gerar APK / App Bundle para Android
-fvm flutter build apk --release
-fvm flutter build appbundle --release
+flutter build apk --release
+flutter build appbundle --release
 
 # Gerar build Web
-fvm flutter build web --release
+flutter build web --release
 ```
 
 ---

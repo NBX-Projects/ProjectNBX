@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # Servidor SFU WebRTC LiveKit
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: projectnbx-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"         # Porta HTTP/WebSocket de sinalização
+      - "7881:7881"         # Porta TCP WebRTC
+      - "50000-50020:50000-50020/udp" # Portas UDP WebRTC
+    depends_on:
+      - redis
+
+  # Redis para estado e sessões
+  redis:
+    image: redis:7-alpine
+    container_name: projectnbx-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # Backend em Go (ProjectNBX API & WebSocket Hub)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projectnbx-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - JWT_SECRET=super_secret_jwt_key_projectnbx_change_me_in_production
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - ALLOWED_ORIGINS=*
+    depends_on:
+      - livekit
+      - redis

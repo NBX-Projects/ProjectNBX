@@ -11,45 +11,45 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: AppColors.bgOnyx,
-      primaryColor: AppColors.neonCyan,
+      scaffoldBackgroundColor: AppColors.bg,
+      primaryColor: AppColors.accent,
       textTheme: baseTextTheme.apply(
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
+        bodyColor: AppColors.text,
+        displayColor: AppColors.text,
       ),
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.neonCyan,
-        secondary: AppColors.neonViolet,
-        surface: AppColors.bgCard,
-        error: AppColors.neonCoral,
-        onPrimary: Colors.black,
-        onSurface: AppColors.textPrimary,
+        primary: AppColors.accent,
+        secondary: AppColors.green,
+        surface: AppColors.panel,
+        error: AppColors.red,
+        onPrimary: Colors.white,
+        onSurface: AppColors.text,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thumbColor: WidgetStateProperty.all(AppColors.borderGlow.withValues(alpha: 0.7)),
+        thumbColor: WidgetStateProperty.all(AppColors.deep),
         radius: const Radius.circular(8),
         thickness: WidgetStateProperty.all(5),
       ),
       dividerTheme: const DividerThemeData(
-        color: AppColors.borderSubtle,
+        color: AppColors.border,
         thickness: 1,
         space: 1,
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: AppColors.bgSurface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.borderGlow),
+          color: AppColors.deep,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.6),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         textStyle: const TextStyle(
-          color: AppColors.textPrimary,
+          color: AppColors.text,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -58,4 +58,3 @@ class AppTheme {
     );
   }
 }
-
