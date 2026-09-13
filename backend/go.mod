@@ -11,3 +11,11 @@ require (
 	github.com/livekit/protocol v1.18.0
 	golang.org/x/crypto v0.24.0
 )
+
+require (
+	github.com/go-jose/go-jose/v3 v3.0.3 // indirect
+	github.com/twitchtv/twirp v8.1.3+incompatible // indirect
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)

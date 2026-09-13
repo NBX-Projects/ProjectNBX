@@ -40,14 +40,15 @@ jobs:
           go-version: '1.22'
           cache-dependency-path: backend/go.sum
 
-      - name: Run Go Tests & Coverage
+      - name: Install Go Dependencies & Run Tests
         working-directory: backend
         run: |
+          go mod download
           go test -v -coverprofile=coverage.out ./... || true
 
       # 3. SonarCloud / SonarQube Scanner
       - name: SonarQube / SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
