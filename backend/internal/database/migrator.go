@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -26,10 +25,27 @@ func RunMigrations(db *sql.DB, migrationsDir string) error {
 		return fmt.Errorf("erro ao criar tabela schema_migrations: %w", err)
 	}
 
-	// 2. Ler arquivos de migrations
-	files, err := os.ReadDir(migrationsDir)
+	// 2. Localizar diretório de migrations com fallback inteligente
+	resolvedDir := migrationsDir
+	if info, err := os.Stat(resolvedDir); err != nil || !info.IsDir() {
+		candidates := []string{
+			"migrations",
+			"backend/migrations",
+			"../migrations",
+			"../../migrations",
+			"./migrations",
+		}
+		for _, c := range candidates {
+			if cinf, err := os.Stat(c); err == nil && cinf.IsDir() {
+				resolvedDir = c
+				break
+			}
+		}
+	}
+
+	files, err := os.ReadDir(resolvedDir)
 	if err != nil {
-		return fmt.Errorf("erro ao ler diretório de migrations (%s): %w", migrationsDir, err)
+		return fmt.Errorf("erro ao ler diretório de migrations (%s): %w", resolvedDir, err)
 	}
 
 	var upFiles []string
@@ -53,7 +69,7 @@ func RunMigrations(db *sql.DB, migrationsDir string) error {
 		}
 
 		log.Printf("📦 Aplicando migration: %s...", file)
-		filePath := filepath.Join(migrationsDir, file)
+		filePath := filepath.Join(resolvedDir, file)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return fmt.Errorf("erro ao ler arquivo %s: %w", file, err)
@@ -140,76 +156,6 @@ func SeedInitialData(db *sql.DB) error {
 		return fmt.Errorf("erro ao criar usuário DarkLord_X: %w", err)
 	}
 
-	// Servidores e canais padrão
-	seedServers := []struct {
-		ID       string
-		Name     string
-		Banner   string
-		Channels []struct {
-			ID   string
-			Name string
-			Type string
-		}
-	}{
-		{
-			ID:     "srv_1",
-			Name:   "Apex Predators",
-			Banner: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1400&h=420&fit=crop&auto=format",
-			Channels: []struct {
-				ID   string
-				Name string
-				Type string
-			}{
-				{"chn_t1", "geral", "text"},
-				{"chn_t2", "anúncios", "text"},
-				{"chn_v1", "Ranked Match", "voice"},
-			},
-		},
-		{
-			ID:     "srv_2",
-			Name:   "Dev Lounge",
-			Banner: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400&h=420&fit=crop&auto=format",
-			Channels: []struct {
-				ID   string
-				Name string
-				Type string
-			}{
-				{"chn_t3", "geral", "text"},
-				{"chn_v2", "Code Review", "voice"},
-			},
-		},
-	}
-
-	for _, s := range seedServers {
-		_, err := db.Exec(`
-			INSERT INTO servers (id, name, icon_url, owner_id, member_count, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (id) DO NOTHING`,
-			s.ID, s.Name, s.Banner, "usr_dev_1", 100, time.Now(), time.Now(),
-		)
-		if err != nil {
-			continue
-		}
-
-		for pos, c := range s.Channels {
-			_, _ = db.Exec(`
-				INSERT INTO channels (id, server_id, name, type, position, created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-				ON CONFLICT (id) DO NOTHING`,
-				c.ID, s.ID, c.Name, c.Type, pos+1, time.Now(), time.Now(),
-			)
-		}
-	}
-
-	// Mensagem de boas-vindas
-	_, _ = db.Exec(`
-		INSERT INTO messages (id, channel_id, server_id, author_id, content, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (id) DO NOTHING`,
-		"msg_"+uuid.New().String(), "chn_t1", "srv_1", "usr_dev_1",
-		"Bem-vindo ao ProjectNBX com PostgreSQL! 🚀", time.Now(),
-	)
-
-	log.Println("✨ Seed inicial concluído com sucesso!")
+	log.Println("✨ Seed inicial de usuários de teste concluído com sucesso (sem dados mock de servidores)!")
 	return nil
 }

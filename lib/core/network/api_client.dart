@@ -93,4 +93,50 @@ class ApiClient {
       rethrow;
     }
   }
+
+  Future<List<Map<String, dynamic>>> getServers() async {
+    final url = Uri.parse('$baseUrl/servers');
+    try {
+      final response = await http.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> createServer(
+    String name, {
+    String? iconUrl,
+  }) async {
+    final url = Uri.parse('$baseUrl/servers');
+    final response = await http.post(
+      url,
+      headers: _headers,
+      body: jsonEncode({'name': name, 'icon_url': iconUrl ?? ''}),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  Future<List<Map<String, dynamic>>> getChannels(String serverId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/channels');
+    try {
+      final response = await http.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      return [];
+    }
+  }
 }

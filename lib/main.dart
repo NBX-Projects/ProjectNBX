@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projectnbx/core/theme/app_theme.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
+import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/screens/login_screen.dart';
+import 'package:projectnbx/features/home/screens/home_screen.dart';
 import 'package:window_manager/window_manager.dart';
 
 void main() async {
@@ -23,7 +25,7 @@ void main() async {
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         title: 'ProjectNBX',
-        titleBarStyle: TitleBarStyle.normal,
+        titleBarStyle: TitleBarStyle.hidden,
       );
 
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -44,6 +46,7 @@ class ProjectNBXApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final authState = ref.watch(authControllerProvider);
 
     return MaterialApp(
       title: 'ProjectNBX',
@@ -51,7 +54,9 @@ class ProjectNBXApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      home: const LoginScreen(),
+      home: authState.isAuthenticated
+          ? const HomeScreen()
+          : const LoginScreen(),
     );
   }
 }

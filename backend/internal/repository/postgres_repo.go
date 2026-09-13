@@ -120,7 +120,9 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 	if server.ID == "" {
 		server.ID = "srv_" + uuid.New().String()
 	}
-	server.CreatedAt = time.Now()
+	if server.MemberCount <= 0 {
+		server.MemberCount = 1
+	}
 
 	query := `
 	INSERT INTO servers (id, name, icon_url, owner_id, member_count, created_at, updated_at)
@@ -194,6 +196,9 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 		channels, _ := r.ListChannelsByServer(srv.ID)
 		srv.Channels = channels
 		servers = append(servers, srv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return servers, nil
 }
@@ -270,6 +275,9 @@ func (r *PostgresRepository) ListChannelsByServer(serverID string) ([]*models.Ch
 		}
 		channels = append(channels, ch)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return channels, nil
 }
 
@@ -335,6 +343,9 @@ func (r *PostgresRepository) ListMessagesByChannel(channelID string, limit int) 
 			return nil, err
 		}
 		msgs = append(msgs, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	// Inverter para ordem cronológica crescente
@@ -431,6 +442,9 @@ func (r *PostgresRepository) ListAuditLogs(limit int, source models.AuditSource)
 			_ = json.Unmarshal(metadataBytes, &item.Metadata)
 		}
 		logs = append(logs, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return logs, nil
 }

@@ -56,17 +56,37 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cria canal #geral e canal de voz padrão
-	_ = h.repo.CreateChannel(&models.Channel{
+	chnText := &models.Channel{
 		ServerID: server.ID,
 		Name:     "geral",
 		Type:     models.ChannelTypeText,
 		Position: 1,
-	})
-	_ = h.repo.CreateChannel(&models.Channel{
+	}
+	_ = h.repo.CreateChannel(chnText)
+
+	chnVoice := &models.Channel{
 		ServerID: server.ID,
 		Name:     "Voz Geral",
 		Type:     models.ChannelTypeVoice,
 		Position: 2,
+	}
+	_ = h.repo.CreateChannel(chnVoice)
+
+	server.Channels = []*models.Channel{chnText, chnVoice}
+
+	// Registrar log de auditoria
+	_ = h.repo.CreateAuditLog(&models.AuditLog{
+		ID:        uuid.New().String(),
+		UserID:    &userID,
+		Action:    "SERVER_CREATED",
+		Source:    models.AuditSourceServer,
+		IPAddress: r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+		Metadata: map[string]interface{}{
+			"server_id":   server.ID,
+			"server_name": server.Name,
+		},
+		CreatedAt: time.Now(),
 	})
 
 	w.Header().Set("Content-Type", "application/json")

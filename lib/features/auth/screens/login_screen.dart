@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
+import 'package:projectnbx/core/widgets/window_controls.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
+import 'package:window_manager/window_manager.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -75,10 +76,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _fillDemoCredentials() {
     setState(() {
-      _emailController.text = 'dev@nbx.com';
-      _passwordController.text = 'senha_segura_123';
+      _emailController.text = 'tauisilva@gmail.com';
+      _passwordController.text = 'Minazuki1902*';
       if (_isRegister) {
-        _usernameController.text = 'DevNBX';
+        _usernameController.text = 'Taui Lima';
       }
     });
   }
@@ -122,68 +123,84 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           backgroundColor: Colors.transparent,
           body: Stack(
             children: [
-              // Top Header Bar with Theme Toggle
+              // Top Window Bar with Theme Toggle & Window Controls
               Positioned(
-                top: 20,
-                right: 24,
-                child: Tooltip(
-                  message: isDark
-                      ? 'Mudar para Tema Claro'
-                      : 'Mudar para Tema Escuro',
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(9999),
-                      onTap: () {
-                        ref.read(themeModeProvider.notifier).toggleTheme();
-                      },
-                      child: AnimatedContainer(
-                        duration: _themeAnimDuration,
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cardBg,
-                          borderRadius: BorderRadius.circular(9999),
-                          border: Border.all(color: borderColor),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: isDark ? 0.2 : 0.04,
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 52,
+                child: DragToMoveArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        const Spacer(),
+                        // Theme Toggle Pill
+                        Tooltip(
+                          message: isDark
+                              ? 'Mudar para Tema Claro'
+                              : 'Mudar para Tema Escuro',
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(9999),
+                              onTap: () {
+                                ref.read(themeModeProvider.notifier).toggleTheme();
+                              },
+                              child: AnimatedContainer(
+                                duration: _themeAnimDuration,
+                                curve: Curves.easeInOut,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cardBg,
+                                  borderRadius: BorderRadius.circular(9999),
+                                  border: Border.all(color: borderColor),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: isDark ? 0.2 : 0.04,
+                                      ),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    AnimatedSwitcher(
+                                      duration: _themeAnimDuration,
+                                      transitionBuilder: (child, anim) =>
+                                          ScaleTransition(scale: anim, child: child),
+                                      child: Icon(
+                                        isDark ? LucideIcons.sun : LucideIcons.moon,
+                                        key: ValueKey(isDark),
+                                        size: 16,
+                                        color: primaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isDark ? 'Tema Claro' : 'Tema Escuro',
+                                      style: GoogleFonts.jetBrainsMono(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
                             ),
-                          ],
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedSwitcher(
-                              duration: _themeAnimDuration,
-                              transitionBuilder: (child, anim) =>
-                                  ScaleTransition(scale: anim, child: child),
-                              child: Icon(
-                                isDark ? LucideIcons.sun : LucideIcons.moon,
-                                key: ValueKey(isDark),
-                                size: 16,
-                                color: primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isDark ? 'Tema Claro' : 'Tema Escuro',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                        const SizedBox(width: 12),
+                        // Desktop Window Controls
+                        const WindowControls(),
+                      ],
                     ),
                   ),
                 ),
