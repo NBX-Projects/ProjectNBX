@@ -6,6 +6,7 @@ class VoiceParticipantInfo {
   final String channelId;
   final String device;
   final bool isInVoice;
+  final bool isConnecting;
   final bool isTransmitting;
   final String? streamTitle;
   final String? previewType;
@@ -23,6 +24,7 @@ class VoiceParticipantInfo {
     required this.channelId,
     this.device = 'desktop',
     this.isInVoice = true,
+    this.isConnecting = false,
     this.isTransmitting = false,
     this.streamTitle,
     this.previewType,
@@ -44,6 +46,7 @@ class VoiceParticipantInfo {
       channelId: (json['channel_id'] ?? '').toString(),
       device: (json['device'] ?? 'desktop').toString(),
       isInVoice: json['is_in_voice'] == true,
+      isConnecting: json['is_connecting'] == true,
       isTransmitting: json['is_transmitting'] == true,
       streamTitle: json['stream_title']?.toString(),
       previewType: json['preview_type']?.toString(),
@@ -64,6 +67,7 @@ class VoiceParticipantInfo {
       'channel_id': channelId,
       'device': device,
       'is_in_voice': isInVoice,
+      if (isConnecting) 'is_connecting': true,
       'is_transmitting': isTransmitting,
       if (streamTitle != null) 'stream_title': streamTitle,
       if (previewType != null) 'preview_type': previewType,
@@ -72,5 +76,43 @@ class VoiceParticipantInfo {
       'is_deafened': isDeafened,
       'is_speaking': isSpeaking,
     };
+  }
+
+  VoiceParticipantInfo copyWith({
+    String? sessionId,
+    String? userId,
+    String? username,
+    String? serverId,
+    String? channelId,
+    String? device,
+    bool? isInVoice,
+    bool? isConnecting,
+    bool? isTransmitting,
+    String? streamTitle,
+    String? previewType,
+    String? thumbnail,
+    bool? isMuted,
+    bool? isDeafened,
+    bool? isSpeaking,
+    DateTime? updatedAt,
+  }) {
+    return VoiceParticipantInfo(
+      sessionId: sessionId ?? this.sessionId,
+      userId: userId ?? this.userId,
+      username: username ?? this.username,
+      serverId: serverId ?? this.serverId,
+      channelId: channelId ?? this.channelId,
+      device: device ?? this.device,
+      isInVoice: isInVoice ?? this.isInVoice,
+      isConnecting: isConnecting ?? this.isConnecting,
+      isTransmitting: isTransmitting ?? this.isTransmitting,
+      streamTitle: streamTitle ?? this.streamTitle,
+      previewType: previewType ?? this.previewType,
+      thumbnail: thumbnail ?? this.thumbnail,
+      isMuted: isMuted ?? this.isMuted,
+      isDeafened: isDeafened ?? this.isDeafened,
+      isSpeaking: isSpeaking ?? this.isSpeaking,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 }

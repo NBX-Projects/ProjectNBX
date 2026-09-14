@@ -19,6 +19,8 @@ class ChannelChatView extends StatelessWidget {
   final String? editingMessageId;
   final bool isTransmitting;
   final bool isInVoice;
+  final bool isConnectingVoice;
+  final bool isVoiceConnected;
   final bool isRightSidebarVisible;
   final Color accentColor;
   final VoiceParticipantInfo? activeBroadcaster;
@@ -45,6 +47,8 @@ class ChannelChatView extends StatelessWidget {
     this.editingMessageId,
     required this.isTransmitting,
     required this.isInVoice,
+    this.isConnectingVoice = false,
+    this.isVoiceConnected = false,
     required this.isRightSidebarVisible,
     this.accentColor = const Color(0xFFF5CBA7),
     this.activeBroadcaster,
@@ -119,6 +123,55 @@ class ChannelChatView extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (isInVoice) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isConnectingVoice
+                                ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                                : const Color(0xFF10B981).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isConnectingVoice
+                                  ? const Color(0xFFF59E0B).withValues(alpha: 0.4)
+                                  : const Color(0xFF10B981).withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isConnectingVoice)
+                                const SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFF59E0B),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF10B981),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isConnectingVoice ? 'Conectando ao LiveKit...' : 'Conectado',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isConnectingVoice ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -180,33 +233,54 @@ class ChannelChatView extends StatelessWidget {
                 if (isMobile)
                   IconButton(
                     onPressed: onToggleVoiceChannel,
-                    icon: Icon(
-                      isInVoice ? LucideIcons.phoneOff : LucideIcons.phoneCall,
-                      size: 18,
-                      color: isInVoice
-                          ? const Color(0xFFEF4444)
-                          : const Color(0xFF10B981),
-                    ),
-                    tooltip: isInVoice ? 'Desconectar' : 'Entrar na Voz',
+                    icon: isConnectingVoice
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFFF59E0B),
+                            ),
+                          )
+                        : Icon(
+                            isInVoice ? LucideIcons.phoneOff : LucideIcons.phoneCall,
+                            size: 18,
+                            color: isInVoice
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFF10B981),
+                          ),
+                    tooltip: isConnectingVoice
+                        ? 'Conectando ao LiveKit...'
+                        : (isInVoice ? 'Desconectar' : 'Entrar na Voz'),
                   )
                 else
                   ElevatedButton.icon(
                     onPressed: onToggleVoiceChannel,
-                    icon: Icon(
-                      isInVoice ? LucideIcons.phoneOff : LucideIcons.phoneCall,
-                      size: 13,
-                    ),
+                    icon: isConnectingVoice
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(
+                            isInVoice ? LucideIcons.phoneOff : LucideIcons.phoneCall,
+                            size: 13,
+                          ),
                     label: Text(
-                      isInVoice ? 'Sair da Voz' : 'Conectar Voz',
+                      isConnectingVoice
+                          ? 'Conectando...'
+                          : (isInVoice ? 'Sair da Voz' : 'Conectar Voz'),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isInVoice
-                          ? const Color(0xFFEF4444)
-                          : const Color(0xFF10B981),
+                      backgroundColor: isConnectingVoice
+                          ? const Color(0xFFD97706)
+                          : (isInVoice
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF10B981)),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,

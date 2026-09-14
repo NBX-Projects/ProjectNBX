@@ -9,6 +9,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:livekit_client/livekit_client.dart' hide ChatMessage;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
@@ -66,7 +67,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   bool _isRightSidebarVisible = true;
   bool _isInVoice = false;
+  bool _isConnectingLiveKit = false;
+  bool _isLiveKitConnected = false;
   String? _connectedVoiceChannelId;
+  Room? _liveKitRoom;
 
   late final String _clientSessionId =
       'sess_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
@@ -77,12 +81,144 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     if (_activeChannel == null) return null;
     final map = _voiceParticipants[_activeChannel!.id];
     if (map == null) return null;
+    final currentUserId = ref.read(authControllerProvider).user?.id;
     for (final p in map.values) {
-      if (p.isInVoice && p.isTransmitting && p.sessionId != _clientSessionId) {
+      if (p.isInVoice && p.isTransmitting && p.userId != currentUserId && p.sessionId != _clientSessionId) {
         return p;
       }
     }
     return null;
+  }
+
+  Future<void> _connectToLiveKitVoice(String channelId) async {
+    try {
+      if (mounted) {
+        setState(() {
+          _isConnectingLiveKit = true;
+          _isLiveKitConnected = false;
+        });
+      }
+      await _disconnectFromLiveKitVoice();
+      final apiClient = ref.read(apiClientProvider);
+      final res = await apiClient.getVoiceToken(channelId);
+      final token = res['token'] as String;
+      const defaultLiveKitUrl = String.fromEnvironment('LIVEKIT_URL', defaultValue: 'ws://localhost:7880');
+      var serverUrl = (res['server_url'] as String?) ?? defaultLiveKitUrl;
+      if (serverUrl.isEmpty) {
+        serverUrl = defaultLiveKitUrl;
+      }
+
+      // Garante o uso da porta 7880 do docker-compose alinhada ao host da API
+      try {
+        final apiUri = Uri.parse(ApiClient.baseUrl);
+        final liveKitUri = Uri.parse(serverUrl);
+        if (liveKitUri.host == 'localhost' || liveKitUri.host == '127.0.0.1') {
+          final effectivePort = liveKitUri.hasPort ? liveKitUri.port : 7880;
+          serverUrl = liveKitUri.replace(host: apiUri.host, port: effectivePort).toString();
+        }
+      } catch (_) {}
+
+      final room = Room();
+      _liveKitRoom = room;
+
+      // Escuta os eventos oficiais do LiveKit para sincronizar os participantes da call
+      room.events.listen((event) {
+        if (event is ParticipantConnectedEvent) {
+          _syncLiveKitParticipant(event.participant, channelId, true);
+        } else if (event is ParticipantDisconnectedEvent) {
+          _syncLiveKitParticipant(event.participant, channelId, false);
+        } else if (event is TrackMutedEvent || event is TrackUnmutedEvent) {
+          setState(() {});
+        }
+      });
+
+      await room.connect(
+        serverUrl,
+        token,
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+        ),
+      );
+      try {
+        await room.localParticipant?.setMicrophoneEnabled(true);
+      } catch (_) {}
+
+      // Sincroniza participantes confirmados pelo LiveKit
+      final local = room.localParticipant;
+      if (local != null) {
+        _syncLiveKitParticipant(local, channelId, true);
+      }
+      for (final remote in room.remoteParticipants.values) {
+        _syncLiveKitParticipant(remote, channelId, true);
+      }
+
+      if (mounted) {
+        setState(() {
+          _isConnectingLiveKit = false;
+          _isLiveKitConnected = true;
+          final uid = ref.read(authControllerProvider).user?.id ?? '';
+          if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+            _voiceParticipants[channelId]![uid] = _voiceParticipants[channelId]![uid]!.copyWith(
+              isConnecting: false,
+            );
+          }
+        });
+        _broadcastVoiceState(isInVoice: true, channelId: channelId, isConnecting: false);
+      }
+      debugPrint('[LiveKit] Conectado na sala de voz com sucesso: $channelId');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnectingLiveKit = false;
+          _isLiveKitConnected = false;
+        });
+      }
+      debugPrint('[LiveKit] Erro ao conectar na sala de voz: $e');
+    }
+  }
+
+  Future<void> _disconnectFromLiveKitVoice() async {
+    if (_liveKitRoom != null) {
+      try {
+        await _liveKitRoom?.disconnect();
+        await _liveKitRoom?.dispose();
+        final chId = _connectedVoiceChannelId ?? _activeChannel?.id;
+        if (chId != null && mounted) {
+          final currentUserId = ref.read(authControllerProvider).user?.id;
+          _voiceParticipants[chId]?.removeWhere((k, v) => v.userId == currentUserId || v.sessionId == _clientSessionId);
+        }
+      } catch (e) {
+        debugPrint('[LiveKit] Erro ao desconectar da sala: $e');
+      }
+      _liveKitRoom = null;
+    }
+  }
+
+  void _syncLiveKitParticipant(Participant participant, String channelId, bool joined) {
+    if (!mounted) return;
+    final uid = participant.identity;
+    if (uid.isEmpty) return;
+    final uname = participant.name.isNotEmpty ? participant.name : uid;
+    setState(() {
+      final chMap = _voiceParticipants.putIfAbsent(channelId, () => {});
+      if (joined) {
+        chMap[uid] = VoiceParticipantInfo(
+          sessionId: participant.sid.isNotEmpty ? participant.sid : uid,
+          userId: uid,
+          username: uname,
+          serverId: widget.server.id,
+          channelId: channelId,
+          isInVoice: true,
+          isMuted: participant.isMuted,
+          isSpeaking: participant.isSpeaking,
+          updatedAt: DateTime.now(),
+        );
+      } else {
+        chMap.remove(uid);
+        chMap.removeWhere((k, v) => v.userId == uid || (participant.sid.isNotEmpty && v.sessionId == participant.sid));
+      }
+    });
   }
 
   // Real stream / screen share transmission state
@@ -116,6 +252,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   void _broadcastVoiceState({
     required bool isInVoice,
     bool? isTransmitting,
+    bool? isConnecting,
     String? streamTitle,
     String? previewType,
     String? thumbnail,
@@ -127,6 +264,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final uname = (user?.username ?? '').isNotEmpty ? user!.username : 'Você';
     final uid = user?.id ?? 'user_${_clientSessionId.hashCode.abs()}';
     final transmitting = isTransmitting ?? _isTransmitting;
+    final connecting = isConnecting ?? _isConnectingLiveKit;
     final isMobile = defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
     final deviceStr = isMobile ? 'mobile' : 'desktop';
@@ -139,6 +277,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       'channel_id': cid,
       'device': deviceStr,
       'is_in_voice': isInVoice,
+      if (connecting) 'is_connecting': true,
       'is_transmitting': transmitting,
       if (streamTitle != null || _activeScreenShareConfig?.title != null)
         'stream_title': streamTitle ?? _activeScreenShareConfig?.title,
@@ -152,8 +291,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       setState(() {
         final chMap = _voiceParticipants.putIfAbsent(cid, () => {});
         if (isInVoice) {
-          chMap[_clientSessionId] = VoiceParticipantInfo.fromJson(payload);
+          chMap[uid.isNotEmpty ? uid : _clientSessionId] = VoiceParticipantInfo.fromJson(payload);
         } else {
+          chMap.remove(uid);
           chMap.remove(_clientSessionId);
         }
       });
@@ -187,13 +327,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           serverId: widget.server.id,
         );
       } catch (_) {}
-
-      if (_isInVoice && _connectedVoiceChannelId != null) {
-        _broadcastVoiceState(
-          isInVoice: true,
-          channelId: _connectedVoiceChannelId,
-        );
-      }
     });
   }
 
@@ -232,13 +365,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         setState(() {
           final chMap = _voiceParticipants.putIfAbsent(chId, () => {});
           if (p.isInVoice) {
-            chMap[p.key] = p;
+            chMap.removeWhere((k, v) => v.userId == p.userId || v.sessionId == p.sessionId);
+            chMap[p.userId.isNotEmpty ? p.userId : p.key] = p;
             if (_watchingRemoteStream?.sessionId == p.sessionId ||
                 _watchingRemoteStream?.userId == p.userId) {
               _watchingRemoteStream = p;
             }
           } else {
-            chMap.remove(p.key);
+            chMap.removeWhere((k, v) => v.userId == p.userId || v.sessionId == p.sessionId);
             if (_watchingRemoteStream?.sessionId == p.sessionId ||
                 _watchingRemoteStream?.userId == p.userId) {
               _watchingRemoteStream = null;
@@ -264,7 +398,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           if (item is Map) {
             final p = VoiceParticipantInfo.fromJson(Map<String, dynamic>.from(item));
             if (p.channelId.isNotEmpty && p.isInVoice) {
-              _voiceParticipants.putIfAbsent(p.channelId, () => {})[p.key] = p;
+              final chMap = _voiceParticipants.putIfAbsent(p.channelId, () => {});
+              chMap.removeWhere((k, v) => v.userId == p.userId || v.sessionId == p.sessionId);
+              chMap[p.userId.isNotEmpty ? p.userId : p.key] = p;
             }
           }
         }
@@ -439,6 +575,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     _localScreenShareTrack?.dispose();
     _localScreenShareTrack = null;
     _wsSubscription?.cancel();
+    _disconnectFromLiveKitVoice();
     _messageController.dispose();
     _editMessageController.dispose();
     _scrollController.dispose();
@@ -551,17 +688,39 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   void _openHybridChannel(ChannelModel channel) {
     final prevChannelId = _connectedVoiceChannelId;
     if (prevChannelId != null && prevChannelId != channel.id) {
+      _disconnectFromLiveKitVoice();
       _broadcastVoiceState(isInVoice: false, channelId: prevChannelId);
     }
+    final uid = ref.read(authControllerProvider).user?.id ?? '';
+    final uname = ref.read(authControllerProvider).user?.username ?? 'Usuário';
+
     setState(() {
       _activeChannel = channel;
       _viewMode = ServerViewMode.channel;
       _isInVoice = true;
       _connectedVoiceChannelId = channel.id;
+      _isConnectingLiveKit = true;
+      _isLiveKitConnected = false;
+
+      if (uid.isNotEmpty) {
+        final chMap = _voiceParticipants.putIfAbsent(channel.id, () => {});
+        chMap[uid] = VoiceParticipantInfo(
+          sessionId: _clientSessionId,
+          userId: uid,
+          username: uname,
+          serverId: widget.server.id,
+          channelId: channel.id,
+          isInVoice: true,
+          isConnecting: true,
+          updatedAt: DateTime.now(),
+        );
+      }
     });
+
+    _broadcastVoiceState(isInVoice: true, channelId: channel.id, isConnecting: true);
     ref.read(serversControllerProvider.notifier).selectChannel(channel.id);
     _loadChannelFromApi(channel.id);
-    _broadcastVoiceState(isInVoice: true, channelId: channel.id);
+    _connectToLiveKitVoice(channel.id);
   }
 
   Future<void> _loadChannelFromApi(String channelId) async {
@@ -599,23 +758,24 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     _localScreenShareTrack?.stop();
     _localScreenShareTrack?.dispose();
     _localScreenShareTrack = null;
-    final prevChannelId = _connectedVoiceChannelId ?? _activeChannel?.id;
+    _disconnectFromLiveKitVoice();
     setState(() {
       _isInVoice = false;
+      _isConnectingLiveKit = false;
+      _isLiveKitConnected = false;
       _isTransmitting = false;
       _activeScreenShareConfig = null;
       _connectedVoiceChannelId = null;
       _isRightSidebarVisible = true;
       _viewMode = ServerViewMode.home;
       _watchingRemoteStream = null;
+      final prevChannelId = _connectedVoiceChannelId ?? _activeChannel?.id;
+      final uid = ref.read(authControllerProvider).user?.id ?? '';
+      if (prevChannelId != null) {
+        _voiceParticipants[prevChannelId]?.remove(uid);
+        _voiceParticipants[prevChannelId]?.remove(_clientSessionId);
+      }
     });
-    if (prevChannelId != null && prevChannelId.isNotEmpty) {
-      _broadcastVoiceState(
-        isInVoice: false,
-        isTransmitting: false,
-        channelId: prevChannelId,
-      );
-    }
   }
 
   void _startLiveStreamBroadcaster(ScreenShareConfig config) {
@@ -910,6 +1070,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         editingMessageId: _editingMessageId,
         isTransmitting: _isTransmitting,
         isInVoice: _isInVoice,
+        isConnectingVoice: _isConnectingLiveKit,
+        isVoiceConnected: _isLiveKitConnected,
         isRightSidebarVisible: _isRightSidebarVisible,
         accentColor: _selectedAccentColor,
         activeBroadcaster: _activeBroadcaster,
@@ -1063,6 +1225,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

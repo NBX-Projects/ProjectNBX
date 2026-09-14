@@ -333,6 +333,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 initials: getAuthorInitials(p.username),
                                 name: displayName,
                                 color: resolveAuthorColor(p.username, isDark),
+                                isConnecting: p.isConnecting,
                                 isLive: p.isTransmitting,
                                 isDark: isDark,
                               ),
@@ -438,6 +439,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 name:
                                     '${p.username}$devLabel${isMe ? " (Você)" : ""}',
                                 color: resolveAuthorColor(p.username, isDark),
+                                isConnecting: p.isConnecting,
                                 isLive: p.isTransmitting,
                                 isDark: isDark,
                               ),
@@ -606,6 +608,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
     required String initials,
     required String name,
     required Color color,
+    bool isConnecting = false,
     required bool isLive,
     required bool isDark,
   }) {
@@ -632,6 +635,48 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
               ),
             ),
           ),
+          if (isConnecting)
+            Tooltip(
+              message: 'Conectando ao canal de voz...',
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1.5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                    width: 0.8,
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 7,
+                      height: 7,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: Color(0xFFF59E0B),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'CONECTANDO',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                        color: Color(0xFFF59E0B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (isLive)
           const SizedBox(width: 8),
           Expanded(
             child: Text(

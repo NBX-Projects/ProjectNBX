@@ -1225,7 +1225,7 @@ class TerminalStreamViewport extends StatelessWidget {
           Text('[INFO] Initializing PostgreSQL 16 migration cluster...',
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 12, color: Colors.white60)),
-          Text('[INFO] LiveKit SFU running on udp://0.0.0.0:7880',
+          Text('[INFO] LiveKit SFU running on ${const String.fromEnvironment('LIVEKIT_URL', defaultValue: 'ws://localhost:7880')}',
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 12, color: const Color(0xFF38BDF8))),
           Text('[SUCCESS] WebSocket broadcast stream online on :8080/ws',

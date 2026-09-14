@@ -358,4 +358,19 @@ class ApiClient {
       return [];
     }
   }
+
+  Future<Map<String, dynamic>> getVoiceToken(String channelId) async {
+    final url = Uri.parse('$baseUrl/voice/token');
+    final response = await _client.post(
+      url,
+      headers: _headers,
+      body: jsonEncode({'room_name': channelId}),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      final data = jsonDecode(response.body) as Map<String, dynamic>?;
+      throw Exception(data?['error'] ?? 'Falha ao obter token do LiveKit');
+    }
+  }
 }
