@@ -270,24 +270,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     });
   }
 
-  void _startPeriodicSync() {
-    _pollTimer?.cancel();
-    // Fallback sync every 3s to guarantee real-time updates across platforms even during network shifts
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
-      final activeChId = _activeChannel?.id;
-      if (activeChId != null && activeChId.isNotEmpty) {
-        _syncChannelMessagesQuietly(activeChId);
-      }
-      if (_isInVoice && _connectedVoiceChannelId != null) {
-        _broadcastVoiceState(
-          isInVoice: true,
-          channelId: _connectedVoiceChannelId,
-        );
-      }
-    });
-  }
-
   Future<void> _syncChannelMessagesQuietly(String channelId) async {
     try {
       final apiClient = ref.read(apiClientProvider);
@@ -6503,4 +6485,3 @@ class _RacingStreamCanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
