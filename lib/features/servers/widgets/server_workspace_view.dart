@@ -270,38 +270,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     });
   }
 
-  Future<void> _syncChannelMessagesQuietly(String channelId) async {
-    try {
-      final apiClient = ref.read(apiClientProvider);
-      final apiMsgs = await apiClient.getMessages(widget.server.id, channelId);
-      if (!mounted || apiMsgs.isEmpty) return;
-
-      final mapped = apiMsgs
-          .map((m) => _ChatMessage.fromApi(m, _selectedAccentColor))
-          .toList();
-      final currentList = _channelMessages[channelId] ?? [];
-
-      var hasChanges = currentList.length != mapped.length;
-      if (!hasChanges) {
-        for (var i = 0; i < mapped.length; i++) {
-          if (currentList[i].id != mapped[i].id ||
-              currentList[i].content != mapped[i].content ||
-              currentList[i].isEdited != mapped[i].isEdited) {
-            hasChanges = true;
-            break;
-          }
-        }
-      }
-
-      if (hasChanges) {
-        setState(() {
-          _channelMessages[channelId] = mapped;
-        });
-        _saveChannelMessages(channelId);
-      }
-    } catch (_) {}
-  }
-
   void _handleWebSocketEvent(Map<String, dynamic> event) {
     if (!mounted) return;
 
