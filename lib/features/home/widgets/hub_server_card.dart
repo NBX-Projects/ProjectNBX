@@ -23,20 +23,8 @@ class HubServerCard extends StatefulWidget {
 class _HubServerCardState extends State<HubServerCard> {
   bool _isHovered = false;
 
-  static const List<List<Color>> _bannerPresets = [
-    [Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)],
-    [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155)],
-    [Color(0xFF064E3B), Color(0xFF047857), Color(0xFF059669)],
-    [Color(0xFF450A0A), Color(0xFF7F1D1D), Color(0xFF991B1B)],
-    [Color(0xFF3B0764), Color(0xFF581C87), Color(0xFF6B21A8)],
-  ];
-
   List<Color> _getGradientForServer(ServerModel server) {
-    if (server.bannerPreset >= 0 && server.bannerPreset < _bannerPresets.length) {
-      return _bannerPresets[server.bannerPreset];
-    }
-    final hash = server.id.hashCode.abs() % _bannerPresets.length;
-    return _bannerPresets[hash];
+    return AppColors.getBannerGradient(server.bannerPreset, server.id);
   }
 
   String _getCategoryForServer(ServerModel server) {

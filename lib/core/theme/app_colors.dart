@@ -55,10 +55,40 @@ class AppColors {
   static const Color lightPeach = Color(0xFFA05022); // Terracotta Peach
   static const Color lightDanger = Color(0xFFDC2626); // Deep Crimson
 
-  // Light Typography
   static const Color lightTextPrimary = Color(
     0xFF1E293B,
   ); // Deep Slate Graphite
   static const Color lightTextSecondary = Color(0xFF475569); // Muted Slate Gray
   static const Color lightTextMuted = Color(0xFF64748B); // Secondary Slate
+
+  // ==========================================
+  // 🎨 SERVER BANNER & ACCENT PRESETS
+  // ==========================================
+  static const List<List<Color>> bannerPresets = [
+    [Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)],
+    [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155)],
+    [Color(0xFF064E3B), Color(0xFF047857), Color(0xFF059669)],
+    [Color(0xFF450A0A), Color(0xFF7F1D1D), Color(0xFF991B1B)],
+    [Color(0xFF3B0764), Color(0xFF581C87), Color(0xFF6B21A8)],
+  ];
+
+  static const List<Color> serverAccentPalette = [
+    Color(0xFFF5CBA7), // Pastel Peach
+    Color(0xFF4ADE80), // Pastel Sage
+    Color(0xFF38BDF8), // Cyan Blue
+    Color(0xFFF87171), // Coral Red
+    Color(0xFFC084FC), // Soft Lavender
+  ];
+
+  static List<Color> getBannerGradient(int presetIndex, [String fallbackId = '']) {
+    if (presetIndex >= 0 && presetIndex < bannerPresets.length) {
+      return bannerPresets[presetIndex];
+    }
+    if (fallbackId.isNotEmpty) {
+      final hash = fallbackId.hashCode.abs() % bannerPresets.length;
+      return bannerPresets[hash];
+    }
+    return bannerPresets[0];
+  }
 }
+

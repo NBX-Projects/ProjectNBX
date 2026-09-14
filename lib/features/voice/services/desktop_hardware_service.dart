@@ -231,6 +231,57 @@ class DesktopHardwareService {
     );
   }
 
+  Future<String?> captureSingleSource({
+    required String type,
+    String? sourceId,
+    String? title,
+  }) async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        final scriptFile = io.File('scripts/capture_live_frame.ps1');
+        final scriptPath = scriptFile.existsSync()
+            ? scriptFile.absolute.path
+            : 'scripts/capture_live_frame.ps1';
+
+        final result = await io.Process.run(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            scriptPath,
+            '-Type',
+            type,
+            '-SourceId',
+            sourceId ?? '',
+            '-Title',
+            title ?? '',
+            '-Width',
+            '800',
+            '-Height',
+            '450',
+            '-Quality',
+            '65',
+          ],
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        ).timeout(const Duration(milliseconds: 1800));
+
+        if (result.exitCode == 0) {
+          final out = (result.stdout as String).trim();
+          if (out.isNotEmpty && out.length > 50) {
+            return out;
+          }
+        }
+      } catch (e) {
+        debugPrint('[DesktopHardwareService] Erro ao capturar frame: $e');
+      }
+    }
+    return null;
+  }
+
   Future<List<RealScreenInfo>> getRealScreens() async {
     final res = await getAllSources();
     return res.screens;

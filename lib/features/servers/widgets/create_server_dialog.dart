@@ -41,21 +41,6 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
     'Música & Arte',
   ];
 
-  final List<List<Color>> _bannerPresets = [
-    [const Color(0xFF1E1B4B), const Color(0xFF312E81), const Color(0xFF4338CA)],
-    [const Color(0xFF0F172A), const Color(0xFF1E293B), const Color(0xFF334155)],
-    [const Color(0xFF064E3B), const Color(0xFF047857), const Color(0xFF059669)],
-    [const Color(0xFF450A0A), const Color(0xFF7F1D1D), const Color(0xFF991B1B)],
-    [const Color(0xFF3B0764), const Color(0xFF581C87), const Color(0xFF6B21A8)],
-  ];
-
-  final List<Color> _accentPalette = [
-    const Color(0xFFF5CBA7), // Pastel Peach
-    const Color(0xFF4ADE80), // Pastel Sage
-    const Color(0xFF38BDF8), // Cyan Blue
-    const Color(0xFFF87171), // Coral Red
-    const Color(0xFFC084FC), // Soft Lavender
-  ];
 
   @override
   void initState() {
@@ -165,7 +150,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final strings = ref.watch(stringsProvider);
-    final currentGradient = _bannerPresets[_selectedBannerPreset];
+    final currentGradient = AppColors.bannerPresets[_selectedBannerPreset];
 
     return AlertDialog(
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
@@ -622,8 +607,8 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          ...List.generate(_bannerPresets.length, (idx) {
-                            final preset = _bannerPresets[idx];
+                          ...List.generate(AppColors.bannerPresets.length, (idx) {
+                            final preset = AppColors.bannerPresets[idx];
                             final isSelected = _selectedBannerPreset == idx;
                             return InkWell(
                               onTap: () => setState(() => _selectedBannerPreset = idx),
@@ -673,7 +658,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                             ),
                           ),
                           const SizedBox(width: 26),
-                          ..._accentPalette.map((color) {
+                          ...AppColors.serverAccentPalette.map((color) {
                             final isSelected = _selectedAccentColor.toARGB32() == color.toARGB32();
                             return InkWell(
                               onTap: () => setState(() => _selectedAccentColor = color),
