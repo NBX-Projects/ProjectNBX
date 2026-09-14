@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
 import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
+import 'package:projectnbx/features/chat/widgets/components/chat_bubble_components.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/widgets/immersive_stream_player.dart';
 
@@ -252,303 +253,161 @@ class ChannelChatView extends StatelessWidget {
           Expanded(
             child: messages.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            color: accentColor.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Icon(
-                              LucideIcons.hash,
-                              size: 26,
-                              color: accentColor,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E2030)
+                                  : const Color(0xFFE2E8F0),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: accentColor.withValues(alpha: 0.4),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                LucideIcons.hash,
+                                size: 28,
+                                color: accentColor,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'Bem-vindo a #$activeChannelName!',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? AppColors.darkTextPrimary
-                                : AppColors.lightTextPrimary,
+                          const SizedBox(height: 16),
+                          Text(
+                            'Bem-vindo ao #$activeChannelName!',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Este é o início do canal de texto e transmissão.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12.5,
-                            color: isDark
-                                ? const Color(0xFF64748B)
-                                : AppColors.lightTextMuted,
+                          const SizedBox(height: 6),
+                          Text(
+                            'Este é o início do canal #$activeChannelName.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Envie uma mensagem abaixo para começar a conversar!',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: isDark
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   )
-                : ListView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
+                : Align(
+                    alignment: Alignment.bottomCenter,
+                    child: ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shrinkWrap: true,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = messages[index];
+                        final isEditing = editingMessageId == msg.id;
+                        final isMine =
+                            msg.author == username || msg.author == 'Você';
+                        final initials = getAuthorInitials(msg.author);
+                        final authorColor = resolveAuthorColor(
+                          msg.author,
+                          isDark,
+                        );
+
+                        if (isMine) {
+                          // MY MESSAGE (WhatsApp Style -> Aligned to the Right)
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // Action Icons (Edit / Delete) to the left of the sent bubble
+                                if (!isEditing)
+                                  ChatMessageActions(
+                                    isDark: isDark,
+                                    onEdit: () => onStartEditing(msg.id),
+                                    onDelete: () => onDeleteMessage(msg.id),
+                                  ),
+
+                                // WhatsApp Message Bubble
+                                WhatsAppChatBubble(
+                                  msg: msg,
+                                  isMine: true,
+                                  isDark: isDark,
+                                  isEditing: isEditing,
+                                  isMobile: isMobile,
+                                  screenWidth: screenWidth,
+                                  accentColor: accentColor,
+                                  editController: editMessageController,
+                                  onCancelEdit: onCancelEditing,
+                                  onSaveEdit: onSaveEditing,
+                                ),
+                                const SizedBox(width: 8),
+
+                                // Sender Avatar on the Right with Initials
+                                ChatAvatar(
+                                  initials: initials,
+                                  color: authorColor,
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          // RECEIVED MESSAGE (From others -> Aligned to the Left)
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // Author Avatar on the Left with Initials
+                                ChatAvatar(
+                                  initials: initials,
+                                  color: authorColor,
+                                  isDark: isDark,
+                                ),
+                                const SizedBox(width: 8),
+
+                                // WhatsApp Message Bubble
+                                WhatsAppChatBubble(
+                                  msg: msg,
+                                  isMine: false,
+                                  isDark: isDark,
+                                  isMobile: isMobile,
+                                  screenWidth: screenWidth,
+                                  authorColor: authorColor,
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      },
                     ),
-                    itemCount: messages.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 24),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF181926)
-                                : const Color(0xFFFFFFFF),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark
-                                  ? const Color(0xFF26283D)
-                                  : const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          accentColor.withValues(alpha: 0.15),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Icon(
-                                        LucideIcons.hash,
-                                        size: 18,
-                                        color: accentColor,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Canal #$activeChannelName',
-                                        style: GoogleFonts.spaceGrotesk(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          color: isDark
-                                              ? Colors.white
-                                              : const Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      Text(
-                                        'Criado para mensagens e colaboração em tempo real',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11.5,
-                                          color: isDark
-                                              ? Colors.white60
-                                              : const Color(0xFF64748B),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final msg = messages[index - 1];
-                      final isEditing = editingMessageId == msg.id;
-                      final isCurrentUser = msg.author == username;
-                      final authorColor = resolveAuthorColor(msg.author, isDark);
-                      final initials = getAuthorInitials(msg.author);
-
-                      if (isEditing) {
-                        return Container(
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF1E2030)
-                                : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: accentColor,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    'Editando mensagem',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: accentColor,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  TextButton(
-                                    onPressed: onCancelEditing,
-                                    child: const Text('Cancelar',
-                                        style: TextStyle(fontSize: 11)),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  ElevatedButton(
-                                    onPressed: () => onSaveEditing(msg.id),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: accentColor,
-                                      foregroundColor: const Color(0xFF181926),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                    ),
-                                    child: const Text('Salvar',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              TextField(
-                                controller: editMessageController,
-                                autofocus: true,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                onSubmitted: (_) => onSaveEditing(msg.id),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ChatAvatar(
-                              initials: initials,
-                              color: authorColor,
-                              isDark: isDark,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        msg.author,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: authorColor,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      if (msg.timestamp != null)
-                                        Text(
-                                          '${msg.timestamp!.hour.toString().padLeft(2, '0')}:${msg.timestamp!.minute.toString().padLeft(2, '0')}',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 10.5,
-                                            color: isDark
-                                                ? const Color(0xFF64748B)
-                                                : const Color(0xFF94A3B8),
-                                          ),
-                                        ),
-                                      if (msg.isEdited) ...[
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '(editada)',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 9.5,
-                                            fontStyle: FontStyle.italic,
-                                            color: isDark
-                                                ? const Color(0xFF64748B)
-                                                : const Color(0xFF94A3B8),
-                                          ),
-                                        ),
-                                      ],
-                                      const Spacer(),
-                                      if (isCurrentUser)
-                                        PopupMenuButton<String>(
-                                          padding: EdgeInsets.zero,
-                                          iconSize: 14,
-                                          icon: Icon(
-                                            LucideIcons.moreHorizontal,
-                                            size: 14,
-                                            color: isDark
-                                                ? Colors.white38
-                                                : Colors.black38,
-                                          ),
-                                          onSelected: (val) {
-                                            if (val == 'edit') {
-                                              onStartEditing(msg.id);
-                                            } else if (val == 'delete') {
-                                              onDeleteMessage(msg.id);
-                                            }
-                                          },
-                                          itemBuilder: (_) => [
-                                            const PopupMenuItem(
-                                              value: 'edit',
-                                              child: Text('Editar Mensagem',
-                                                  style:
-                                                      TextStyle(fontSize: 12)),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'delete',
-                                              child: Text('Excluir Mensagem',
-                                                  style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: Colors.redAccent)),
-                                            ),
-                                          ],
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    msg.content,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13.5,
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.92)
-                                          : const Color(0xFF1E293B),
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
                   ),
           ),
 
