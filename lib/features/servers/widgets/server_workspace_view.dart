@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:livekit_client/livekit_client.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
@@ -14,12 +18,71 @@ import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
 import 'package:projectnbx/features/servers/widgets/invite_member_dialog.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
+import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum ServerViewMode { home, channel }
 
 enum ServerSidebarTab { canais, membros, resumo }
+
+class _VoiceParticipantInfo {
+  final String sessionId;
+  final String userId;
+  final String username;
+  final String serverId;
+  final String channelId;
+  final String device;
+  final bool isInVoice;
+  final bool isTransmitting;
+  final String? streamTitle;
+  final String? previewType;
+  final String? thumbnail;
+  final bool isMuted;
+  final bool isDeafened;
+  final bool isSpeaking;
+  final DateTime updatedAt;
+
+  const _VoiceParticipantInfo({
+    required this.sessionId,
+    required this.userId,
+    required this.username,
+    required this.serverId,
+    required this.channelId,
+    this.device = 'desktop',
+    this.isInVoice = true,
+    this.isTransmitting = false,
+    this.streamTitle,
+    this.previewType,
+    this.thumbnail,
+    this.isMuted = false,
+    this.isDeafened = false,
+    this.isSpeaking = false,
+    required this.updatedAt,
+  });
+
+  String get key => sessionId.isNotEmpty ? sessionId : userId;
+
+  factory _VoiceParticipantInfo.fromJson(Map<String, dynamic> json) {
+    return _VoiceParticipantInfo(
+      sessionId: (json['session_id'] ?? json['user_id'] ?? '').toString(),
+      userId: (json['user_id'] ?? '').toString(),
+      username: (json['username'] ?? 'Usuário').toString(),
+      serverId: (json['server_id'] ?? '').toString(),
+      channelId: (json['channel_id'] ?? '').toString(),
+      device: (json['device'] ?? 'desktop').toString(),
+      isInVoice: json['is_in_voice'] == true,
+      isTransmitting: json['is_transmitting'] == true,
+      streamTitle: json['stream_title']?.toString(),
+      previewType: json['preview_type']?.toString(),
+      thumbnail: json['thumbnail']?.toString(),
+      isMuted: json['is_muted'] == true,
+      isDeafened: json['is_deafened'] == true,
+      isSpeaking: json['is_speaking'] == true,
+      updatedAt: DateTime.now(),
+    );
+  }
+}
 
 class ServerWorkspaceView extends ConsumerStatefulWidget {
   final ServerModel server;
@@ -57,11 +120,36 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   bool _isInVoice = false;
   String? _connectedVoiceChannelId;
 
+  late final String _clientSessionId =
+      'sess_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+  final Map<String, Map<String, _VoiceParticipantInfo>> _voiceParticipants = {};
+  _VoiceParticipantInfo? _watchingRemoteStream;
+
+  List<_VoiceParticipantInfo> _getChannelVoiceParticipants(String channelId) {
+    final map = _voiceParticipants[channelId];
+    if (map == null) return [];
+    return map.values.where((p) => p.isInVoice).toList();
+  }
+
+  _VoiceParticipantInfo? get _activeBroadcaster {
+    if (_activeChannel == null) return null;
+    final map = _voiceParticipants[_activeChannel!.id];
+    if (map == null) return null;
+    for (final p in map.values) {
+      if (p.isInVoice && p.isTransmitting && p.sessionId != _clientSessionId) {
+        return p;
+      }
+    }
+    return null;
+  }
+
   // Real stream / screen share transmission state
   bool _isTransmitting = false;
   ScreenShareConfig? _activeScreenShareConfig;
+  LocalVideoTrack? _localScreenShareTrack;
+  Timer? _streamRefreshTimer;
   double _streamVolume = 0.75;
-  bool _isChatVisible = true;
+  bool _isChatVisible = false;
   bool _isFullscreen = false;
 
   List<Map<String, dynamic>> _serverMembers = [];
@@ -98,6 +186,64 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     _initWebSocketAndSync();
   }
 
+  void _broadcastVoiceState({
+    required bool isInVoice,
+    bool? isTransmitting,
+    String? streamTitle,
+    String? previewType,
+    String? thumbnail,
+    String? channelId,
+  }) {
+    final user = ref.read(authControllerProvider).user;
+    final cid =
+        channelId ?? _connectedVoiceChannelId ?? _activeChannel?.id ?? '';
+    final uname = (user?.username ?? '').isNotEmpty ? user!.username : 'Você';
+    final uid = user?.id ?? 'user_${_clientSessionId.hashCode.abs()}';
+    final transmitting = isTransmitting ?? _isTransmitting;
+    final isMobile = defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    final deviceStr = isMobile ? 'mobile' : 'desktop';
+
+    final payload = <String, dynamic>{
+      'session_id': _clientSessionId,
+      'user_id': uid,
+      'username': uname,
+      'server_id': widget.server.id,
+      'channel_id': cid,
+      'device': deviceStr,
+      'is_in_voice': isInVoice,
+      'is_transmitting': transmitting,
+      if (streamTitle != null || _activeScreenShareConfig?.title != null)
+        'stream_title': streamTitle ?? _activeScreenShareConfig?.title,
+      if (previewType != null || _activeScreenShareConfig?.previewType != null)
+        'preview_type': previewType ?? _activeScreenShareConfig?.previewType,
+      if (thumbnail != null || _activeScreenShareConfig?.thumbnail != null)
+        'thumbnail': thumbnail ?? _activeScreenShareConfig?.thumbnail,
+    };
+
+    if (cid.isNotEmpty) {
+      setState(() {
+        final chMap = _voiceParticipants.putIfAbsent(cid, () => {});
+        if (isInVoice) {
+          chMap[_clientSessionId] = _VoiceParticipantInfo.fromJson(payload);
+        } else {
+          chMap.remove(_clientSessionId);
+        }
+      });
+    }
+
+    try {
+      ref.read(websocketClientProvider).sendEvent(
+            'VOICE_STATE',
+            payload,
+            channelId: cid,
+            serverId: widget.server.id,
+          );
+    } catch (e) {
+      debugPrint('[WebSocket] Erro ao enviar VOICE_STATE: $e');
+    }
+  }
+
   void _initWebSocketAndSync() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -106,9 +252,77 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
       _wsSubscription?.cancel();
       _wsSubscription = wsClient.eventStream.listen(_handleWebSocketEvent);
+
+      try {
+        wsClient.sendEvent(
+          'VOICE_SYNC',
+          <String, dynamic>{},
+          serverId: widget.server.id,
+        );
+      } catch (_) {}
+
+      if (_isInVoice && _connectedVoiceChannelId != null) {
+        _broadcastVoiceState(
+          isInVoice: true,
+          channelId: _connectedVoiceChannelId,
+        );
+      }
     });
   }
 
+<<<<<<< HEAD
+=======
+  void _startPeriodicSync() {
+    _pollTimer?.cancel();
+    // Fallback sync every 3s to guarantee real-time updates across platforms even during network shifts
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      final activeChId = _activeChannel?.id;
+      if (activeChId != null && activeChId.isNotEmpty) {
+        _syncChannelMessagesQuietly(activeChId);
+      }
+      if (_isInVoice && _connectedVoiceChannelId != null) {
+        _broadcastVoiceState(
+          isInVoice: true,
+          channelId: _connectedVoiceChannelId,
+        );
+      }
+    });
+  }
+
+  Future<void> _syncChannelMessagesQuietly(String channelId) async {
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final apiMsgs = await apiClient.getMessages(widget.server.id, channelId);
+      if (!mounted || apiMsgs.isEmpty) return;
+
+      final mapped = apiMsgs
+          .map((m) => _ChatMessage.fromApi(m, _selectedAccentColor))
+          .toList();
+      final currentList = _channelMessages[channelId] ?? [];
+
+      var hasChanges = currentList.length != mapped.length;
+      if (!hasChanges) {
+        for (var i = 0; i < mapped.length; i++) {
+          if (currentList[i].id != mapped[i].id ||
+              currentList[i].content != mapped[i].content ||
+              currentList[i].isEdited != mapped[i].isEdited) {
+            hasChanges = true;
+            break;
+          }
+        }
+      }
+
+      if (hasChanges) {
+        setState(() {
+          _channelMessages[channelId] = mapped;
+        });
+        _saveChannelMessages(channelId);
+      }
+    } catch (_) {}
+  }
+
+>>>>>>> 2f8525c7ec68eed54353fd18988c751428c58fac
   void _handleWebSocketEvent(Map<String, dynamic> event) {
     if (!mounted) return;
 
@@ -133,6 +347,55 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           payload = decoded;
         }
       } catch (_) {}
+    }
+
+    if (type == 'VOICE_STATE') {
+      final p = _VoiceParticipantInfo.fromJson(payload);
+      final chId = p.channelId.isNotEmpty
+          ? p.channelId
+          : (event['channel_id'] ?? _activeChannel?.id ?? '').toString();
+      if (chId.isNotEmpty) {
+        setState(() {
+          final chMap = _voiceParticipants.putIfAbsent(chId, () => {});
+          if (p.isInVoice) {
+            chMap[p.key] = p;
+            if (_watchingRemoteStream?.sessionId == p.sessionId ||
+                _watchingRemoteStream?.userId == p.userId) {
+              _watchingRemoteStream = p;
+            }
+          } else {
+            chMap.remove(p.key);
+            if (_watchingRemoteStream?.sessionId == p.sessionId ||
+                _watchingRemoteStream?.userId == p.userId) {
+              _watchingRemoteStream = null;
+            }
+          }
+        });
+      }
+      return;
+    } else if (type == 'VOICE_SYNC') {
+      List<dynamic> list = [];
+      if (rawPayload is List) {
+        list = rawPayload;
+      } else if (payload['states'] is List) {
+        list = payload['states'] as List<dynamic>;
+      } else if (rawPayload is String) {
+        try {
+          final decoded = jsonDecode(rawPayload);
+          if (decoded is List) list = decoded;
+        } catch (_) {}
+      }
+      setState(() {
+        for (final item in list) {
+          if (item is Map<String, dynamic>) {
+            final p = _VoiceParticipantInfo.fromJson(item);
+            if (p.channelId.isNotEmpty && p.isInVoice) {
+              _voiceParticipants.putIfAbsent(p.channelId, () => {})[p.key] = p;
+            }
+          }
+        }
+      });
+      return;
     }
 
     final channelId = (event['channel_id'] ??
@@ -297,6 +560,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   @override
   void dispose() {
+    _streamRefreshTimer?.cancel();
+    _localScreenShareTrack?.stop();
+    _localScreenShareTrack?.dispose();
+    _localScreenShareTrack = null;
     _wsSubscription?.cancel();
     _messageController.dispose();
     _editMessageController.dispose();
@@ -514,6 +781,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   void _openHybridChannel(ChannelModel channel) {
+    final prevChannelId = _connectedVoiceChannelId;
+    if (prevChannelId != null && prevChannelId != channel.id) {
+      _broadcastVoiceState(isInVoice: false, channelId: prevChannelId);
+    }
     setState(() {
       _activeChannel = channel;
       _viewMode = ServerViewMode.channel;
@@ -522,6 +793,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     });
     ref.read(serversControllerProvider.notifier).selectChannel(channel.id);
     _loadChannelFromApi(channel.id);
+    _broadcastVoiceState(isInVoice: true, channelId: channel.id);
   }
 
   Future<void> _loadChannelFromApi(String channelId) async {
@@ -555,29 +827,94 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   void _leaveVoice() {
+    _streamRefreshTimer?.cancel();
+    _localScreenShareTrack?.stop();
+    _localScreenShareTrack?.dispose();
+    _localScreenShareTrack = null;
+    final prevChannelId = _connectedVoiceChannelId ?? _activeChannel?.id;
     setState(() {
       _isInVoice = false;
       _isTransmitting = false;
       _activeScreenShareConfig = null;
       _connectedVoiceChannelId = null;
+      _isRightSidebarVisible = true;
       _viewMode = ServerViewMode.home;
+      _watchingRemoteStream = null;
+    });
+    if (prevChannelId != null && prevChannelId.isNotEmpty) {
+      _broadcastVoiceState(
+        isInVoice: false,
+        isTransmitting: false,
+        channelId: prevChannelId,
+      );
+    }
+  }
+
+  void _startLiveStreamPollingFallback(ScreenShareConfig config) {
+    _streamRefreshTimer?.cancel();
+    _streamRefreshTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+      if (!mounted || !_isTransmitting || _localScreenShareTrack != null) {
+        _streamRefreshTimer?.cancel();
+        return;
+      }
+      try {
+        const hardwareService = DesktopHardwareService();
+        final all = await hardwareService.getAllSources();
+        if (!mounted || !_isTransmitting) return;
+        final list = config.type == 'screen' ? all.screens : all.windows;
+        String? newThumb;
+        for (final item in list) {
+          final title = item is RealScreenInfo ? item.title : (item as RealWindowInfo).title;
+          final thumb = item is RealScreenInfo ? item.thumbnail : (item as RealWindowInfo).thumbnail;
+          final itemId = item is RealScreenInfo ? item.id : (item as RealWindowInfo).id;
+          if (title.toLowerCase().trim() == config.title.toLowerCase().trim() ||
+              (config.sourceId != null && itemId == config.sourceId)) {
+            newThumb = thumb;
+            break;
+          }
+        }
+        if (newThumb != null && newThumb != _activeScreenShareConfig?.thumbnail && mounted) {
+          setState(() {
+            _activeScreenShareConfig = ScreenShareConfig(
+              title: config.title,
+              type: config.type,
+              resolution: config.resolution,
+              fps: config.fps,
+              shareAudio: config.shareAudio,
+              previewType: config.previewType,
+              thumbnail: newThumb,
+              sourceId: config.sourceId,
+            );
+          });
+          _broadcastVoiceState(
+            isInVoice: true,
+            isTransmitting: true,
+            streamTitle: config.title,
+            previewType: config.previewType,
+            thumbnail: newThumb,
+            channelId: _activeChannel?.id,
+          );
+        }
+      } catch (_) {}
     });
   }
 
   Future<void> _toggleTransmission() async {
-    final user = ref.read(authControllerProvider).user;
     if (_isTransmitting) {
+      _streamRefreshTimer?.cancel();
+      await _localScreenShareTrack?.stop();
+      await _localScreenShareTrack?.dispose();
+      _localScreenShareTrack = null;
       setState(() {
         _isTransmitting = false;
         _activeScreenShareConfig = null;
+        _isRightSidebarVisible = true;
       });
-      try {
-        ref.read(websocketClientProvider).sendEvent('VOICE_STATE', <String, dynamic>{
-          'user_id': user?.id ?? '',
-          'channel_id': _activeChannel?.id ?? '',
-          'is_transmitting': false,
-        });
-      } catch (_) {}
+      _broadcastVoiceState(
+        isInVoice: true,
+        isTransmitting: false,
+        channelId: _activeChannel?.id,
+      );
       return;
     }
 
@@ -589,23 +926,77 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
 
     if (config != null && mounted) {
+      LocalVideoTrack? screenTrack;
+      try {
+        String? targetSourceId = config.sourceId;
+        try {
+          final webrtcSources = await rtc.desktopCapturer.getSources(
+            types: config.type == 'screen'
+                ? [rtc.SourceType.Screen]
+                : [rtc.SourceType.Window, rtc.SourceType.Screen],
+          );
+
+          if (webrtcSources.isNotEmpty) {
+            rtc.DesktopCapturerSource? match;
+            if (targetSourceId != null && targetSourceId.isNotEmpty) {
+              match = webrtcSources.cast<rtc.DesktopCapturerSource?>().firstWhere(
+                (s) => s?.id == targetSourceId,
+                orElse: () => null,
+              );
+            }
+            if (match == null) {
+              final targetTitle = config.title.toLowerCase().trim();
+              match = webrtcSources.cast<rtc.DesktopCapturerSource?>().firstWhere(
+                (s) {
+                  final name = s?.name.toLowerCase().trim() ?? '';
+                  return name == targetTitle ||
+                      name.contains(targetTitle) ||
+                      targetTitle.contains(name);
+                },
+                orElse: () => webrtcSources.first,
+              );
+            }
+            if (match != null) {
+              targetSourceId = match.id;
+            }
+          }
+        } catch (e) {
+          debugPrint('[ScreenShare] WebRTC sources lookup notice: $e');
+        }
+
+        screenTrack = await LocalVideoTrack.createScreenShareTrack(
+          ScreenShareCaptureOptions(
+            sourceId: targetSourceId,
+            params: VideoParametersPresets.screenShareH1080FPS30,
+          ),
+        );
+      } catch (e) {
+        debugPrint('[ScreenShare] Erro ao criar track WebRTC: $e');
+      }
+
+      if (screenTrack == null) {
+        _startLiveStreamPollingFallback(config);
+      }
+
       setState(() {
         _isTransmitting = true;
         _activeScreenShareConfig = config;
+        _localScreenShareTrack = screenTrack;
         _isInVoice = true;
+        _isChatVisible = false;
+        _isRightSidebarVisible = false;
         if (_activeChannel != null) {
           _connectedVoiceChannelId = _activeChannel!.id;
         }
       });
-      try {
-        ref.read(websocketClientProvider).sendEvent('VOICE_STATE', <String, dynamic>{
-          'user_id': user?.id ?? '',
-          'channel_id': _activeChannel?.id ?? '',
-          'is_transmitting': true,
-          'stream_title': config.title,
-          'preview_type': config.previewType,
-        });
-      } catch (_) {}
+      _broadcastVoiceState(
+        isInVoice: true,
+        isTransmitting: true,
+        streamTitle: config.title,
+        previewType: config.previewType,
+        thumbnail: config.thumbnail,
+        channelId: _activeChannel?.id,
+      );
     }
   }
 
@@ -1058,8 +1449,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final channelKey = _activeChannel?.id ?? 'default';
     final messages = _channelMessages[channelKey] ?? [];
 
-    // CASO 1: SEM TRANSMISSÃO -> Mostra o Chat diretamente em tela inteira
-    if (!_isTransmitting) {
+    final isStreamingOrWatching =
+        _isTransmitting || _watchingRemoteStream != null;
+
+    // CASO 1: SEM TRANSMISSÃO NEM ASSISTINDO -> Mostra o Chat diretamente em tela inteira
+    if (!isStreamingOrWatching) {
       return _buildDirectChatView(
         context,
         isDark,
@@ -1070,20 +1464,30 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       );
     }
 
-    // CASO 2: COM TRANSMISSÃO -> Mostra Palco de Vídeo/Tela + Chat Flutuante HUD
+    // CASO 2: COM TRANSMISSÃO ATIVA OU ASSISTINDO -> Mostra Palco de Vídeo/Tela + Chat Flutuante HUD
     return Container(
       color: const Color(0xFF0C0D14),
       child: Stack(
         children: [
           // A. Palco Imersivo de Transmissão / Screen Share
-          Positioned.fill(child: _buildImmersiveStreamPlayer(isDark, username)),
+          Positioned.fill(
+            child: _buildImmersiveStreamPlayer(
+              isDark,
+              username,
+              remoteParticipant: _watchingRemoteStream,
+            ),
+          ),
 
           // B. Barra Inferior da Transmissão (Volume, Tela Cheia, PiP)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _buildStageBottomControlBar(isDark, username),
+            child: _buildStageBottomControlBar(
+              isDark,
+              username,
+              remoteParticipant: _watchingRemoteStream,
+            ),
           ),
 
           // C. Chat Flutuante HUD (Glassmorphism Overlay) ou Botão Circular Flutuante de Abrir
@@ -1275,6 +1679,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               ],
             ),
           ),
+
+          // Active Live Stream Banner if someone is transmitting
+          if (_activeBroadcaster != null)
+            _buildActiveLiveStreamBanner(isDark, _activeBroadcaster!),
 
           // Message Feed (Real messages or welcome empty state)
           Expanded(
@@ -1888,13 +2296,139 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
+  Widget _buildActiveLiveStreamBanner(
+    bool isDark,
+    _VoiceParticipantInfo broadcaster,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1428) : const Color(0xFFFAF5FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFFA855F7).withValues(alpha: isDark ? 0.6 : 0.4),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFA855F7).withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(9999),
+              border: Border.all(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.6),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'AO VIVO',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFEF4444),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${broadcaster.username} está transmitindo',
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  broadcaster.streamTitle ?? 'Tela Principal',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: () {
+              setState(() {
+                _watchingRemoteStream = broadcaster;
+                _isChatVisible = false;
+                _isRightSidebarVisible = false;
+              });
+            },
+            icon: const Icon(LucideIcons.play, size: 13),
+            label: const Text(
+              'Assistir Live',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9333EA),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Palco de Transmissão Imersiva com Vídeo ao Vivo, Som e Telemetria
-  Widget _buildImmersiveStreamPlayer(bool isDark, String username) {
-    final title = _activeScreenShareConfig?.title ?? 'Tela Principal';
+  Widget _buildImmersiveStreamPlayer(
+    bool isDark,
+    String username, {
+    _VoiceParticipantInfo? remoteParticipant,
+  }) {
+    final isRemote = remoteParticipant != null;
+    final title = isRemote
+        ? (remoteParticipant.streamTitle ?? 'Transmissão')
+        : (_activeScreenShareConfig?.title ?? 'Tela Principal');
     final resolution = _activeScreenShareConfig?.resolution ?? '1080p';
     final fps = _activeScreenShareConfig?.fps ?? 60;
-    final previewType = _activeScreenShareConfig?.previewType ?? 'nbx';
-    final shareAudio = _activeScreenShareConfig?.shareAudio ?? true;
+    final previewType = isRemote
+        ? (remoteParticipant.previewType ?? 'nbx')
+        : (_activeScreenShareConfig?.previewType ?? 'nbx');
+    final shareAudio = isRemote
+        ? true
+        : (_activeScreenShareConfig?.shareAudio ?? true);
+    final broadcasterName = isRemote ? remoteParticipant.username : username;
+    final thumb = isRemote
+        ? remoteParticipant.thumbnail
+        : _activeScreenShareConfig?.thumbnail;
 
     return Container(
       decoration: const BoxDecoration(color: Color(0xFF090A10)),
@@ -1903,7 +2437,13 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         children: [
           // 1. Live Screen / Window Video Feed Canvas
           Positioned.fill(
-            child: _buildLiveStreamContent(previewType, title, username, isDark),
+            child: _buildLiveStreamContent(
+              previewType,
+              title,
+              broadcasterName,
+              isDark,
+              remoteThumbnail: thumb,
+            ),
           ),
 
           // 2. Top HUD Overlay (Live Badge, App Name, Telemetry, Audio Meter)
@@ -2071,6 +2611,49 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                           ],
                         ),
                       ),
+
+                    if (isRemote) ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _watchingRemoteStream = null;
+                            _isRightSidebarVisible = true;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(9999),
+                            border: Border.all(color: Colors.white30),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                LucideIcons.arrowLeft,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Voltar ao Chat',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 );
               },
@@ -2100,15 +2683,31 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  // Live Screen Content Simulation
+  // Live Screen Content Stream (Real-Time WebRTC Video Track or Active Capture Fallback)
   Widget _buildLiveStreamContent(
     String previewType,
     String title,
     String username,
-    bool isDark,
-  ) {
-    // If we have a real captured thumbnail from PrintWindow or CopyFromScreen, display it in the player!
-    final thumbB64 = _activeScreenShareConfig?.thumbnail;
+    bool isDark, {
+    String? remoteThumbnail,
+  }) {
+    if (_localScreenShareTrack != null) {
+      return Container(
+        color: const Color(0xFF090A10),
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: VideoTrackRenderer(
+              _localScreenShareTrack!,
+              fit: VideoViewFit.contain,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Fallback: If we have a real captured thumbnail from PrintWindow or CopyFromScreen, display it in the player!
+    final thumbB64 = remoteThumbnail ?? _activeScreenShareConfig?.thumbnail;
     if (thumbB64 != null && thumbB64.isNotEmpty) {
       try {
         final bytes = base64Decode(thumbB64);
@@ -3359,11 +3958,21 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   // Barra Inferior da Transmissão
-  Widget _buildStageBottomControlBar(bool isDark, String username) {
-    final title = _activeScreenShareConfig?.title ?? 'Transmissão de Tela';
+  Widget _buildStageBottomControlBar(
+    bool isDark,
+    String username, {
+    _VoiceParticipantInfo? remoteParticipant,
+  }) {
+    final isRemote = remoteParticipant != null;
+    final title = isRemote
+        ? (remoteParticipant.streamTitle ?? 'Transmissão de Tela')
+        : (_activeScreenShareConfig?.title ?? 'Transmissão de Tela');
     final resolution = _activeScreenShareConfig?.resolution ?? '1080p';
     final fps = _activeScreenShareConfig?.fps ?? 60;
-    final shareAudio = _activeScreenShareConfig?.shareAudio ?? true;
+    final shareAudio = isRemote
+        ? true
+        : (_activeScreenShareConfig?.shareAudio ?? true);
+    final displayName = isRemote ? remoteParticipant.username : username;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -3410,7 +4019,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
-                  '$username — $title',
+                  '$displayName — $title',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -3520,12 +4129,26 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
               const SizedBox(width: 8),
 
-              // Stop Stream Red Pill Button
+              // Stop Stream or Leave Stream Button
               ElevatedButton.icon(
-                onPressed: _toggleTransmission,
-                icon: const Icon(LucideIcons.screenShareOff, size: 14),
+                onPressed: () {
+                  if (isRemote) {
+                    setState(() {
+                      _watchingRemoteStream = null;
+                      _isRightSidebarVisible = true;
+                    });
+                  } else {
+                    _toggleTransmission();
+                  }
+                },
+                icon: Icon(
+                  isRemote ? LucideIcons.logOut : LucideIcons.screenShareOff,
+                  size: 14,
+                ),
                 label: Text(
-                  isCompact ? 'Parar' : 'Parar Transmissão',
+                  isRemote
+                      ? (isCompact ? 'Sair' : 'Sair da Live')
+                      : (isCompact ? 'Parar' : 'Parar Transmissão'),
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -4769,7 +5392,13 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isInVoice ? '1' : '0',
+                      _voiceParticipants.values
+                          .fold<int>(
+                            0,
+                            (sum, m) =>
+                                sum + m.values.where((p) => p.isInVoice).length,
+                          )
+                          .toString(),
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -5066,6 +5695,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
     switch (_activeSidebarTab) {
       case ServerSidebarTab.canais:
+        final activeParticipants = activeCh != null
+            ? _getChannelVoiceParticipants(activeCh.id)
+            : <_VoiceParticipantInfo>[];
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           children: [
@@ -5129,7 +5761,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                                 ),
                               ),
                             ),
-                            if (_isInVoice)
+                            if (activeParticipants.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 7,
@@ -5141,9 +5773,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                                   ).withValues(alpha: isDark ? 0.6 : 0.15),
                                   borderRadius: BorderRadius.circular(9999),
                                 ),
-                                child: const Text(
-                                  '1',
-                                  style: TextStyle(
+                                child: Text(
+                                  activeParticipants.length.toString(),
+                                  style: const TextStyle(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF22C55E),
@@ -5156,19 +5788,43 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                     ),
 
                     // Real Connected Participants list
-                    if (_isInVoice)
+                    if (activeParticipants.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(
                           left: 12,
                           right: 10,
                           bottom: 8,
                         ),
-                        child: _buildNestedMemberRow(
-                          initials: _getAuthorInitials(username),
-                          name: username,
-                          color: _resolveAuthorColor(username, isDark),
-                          isLive: _isTransmitting,
-                          isDark: isDark,
+                        child: Column(
+                          children: activeParticipants.map((p) {
+                            final isMe = p.sessionId == _clientSessionId;
+                            final devLabel = p.device == 'mobile'
+                                ? ' (Celular)'
+                                : p.device == 'desktop'
+                                    ? ' (Desktop)'
+                                    : '';
+                            final displayName =
+                                '${p.username}$devLabel${isMe ? " (Você)" : ""}';
+                            return InkWell(
+                              onTap: () {
+                                if (p.isTransmitting && !isMe) {
+                                  setState(() {
+                                    _watchingRemoteStream = p;
+                                    _isChatVisible = false;
+                                    _isRightSidebarVisible = false;
+                                  });
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: _buildNestedMemberRow(
+                                initials: _getAuthorInitials(p.username),
+                                name: displayName,
+                                color: _resolveAuthorColor(p.username, isDark),
+                                isLive: p.isTransmitting,
+                                isDark: isDark,
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ),
                   ],
@@ -5177,39 +5833,110 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
             // 2. Real Other Channels from Server
             ...otherChannels.map((c) {
-              return InkWell(
-                onTap: () => _openHybridChannel(c),
-                mouseCursor: SystemMouseCursors.click,
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        LucideIcons.hash,
-                        size: 14,
-                        color: isDark
-                            ? Colors.white54
-                            : const Color(0xFF64748B),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          c.name,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: isDark
-                                ? Colors.white70
-                                : const Color(0xFF334155),
-                          ),
+              final chParticipants = _getChannelVoiceParticipants(c.id);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 2),
+                child: Column(
+                  children: [
+                    InkWell(
+                      onTap: () => _openHybridChannel(c),
+                      mouseCursor: SystemMouseCursors.click,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              chParticipants.isNotEmpty
+                                  ? LucideIcons.volume2
+                                  : LucideIcons.hash,
+                              size: 14,
+                              color: chParticipants.isNotEmpty
+                                  ? const Color(0xFF22C55E)
+                                  : (isDark
+                                      ? Colors.white54
+                                      : const Color(0xFF64748B)),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                c.name,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : const Color(0xFF334155),
+                                ),
+                              ),
+                            ),
+                            if (chParticipants.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF14532D)
+                                      .withValues(alpha: isDark ? 0.6 : 0.15),
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: Text(
+                                  chParticipants.length.toString(),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF22C55E),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    if (chParticipants.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          left: 24,
+                          right: 10,
+                          bottom: 4,
+                        ),
+                        child: Column(
+                          children: chParticipants.map((p) {
+                            final isMe = p.sessionId == _clientSessionId;
+                            final devLabel = p.device == 'mobile'
+                                ? ' (Celular)'
+                                : p.device == 'desktop'
+                                    ? ' (Desktop)'
+                                    : '';
+                            return InkWell(
+                              onTap: () {
+                                if (p.isTransmitting && !isMe) {
+                                  _openHybridChannel(c);
+                                  setState(() {
+                                    _watchingRemoteStream = p;
+                                    _isChatVisible = false;
+                                    _isRightSidebarVisible = false;
+                                  });
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: _buildNestedMemberRow(
+                                initials: _getAuthorInitials(p.username),
+                                name:
+                                    '${p.username}$devLabel${isMe ? " (Você)" : ""}',
+                                color: _resolveAuthorColor(p.username, isDark),
+                                isLive: p.isTransmitting,
+                                isDark: isDark,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                  ],
                 ),
               );
             }),
@@ -5333,7 +6060,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               ),
               const SizedBox(height: 4),
               Text(
-                '• Membros em Chamada: ${_isInVoice ? 1 : 0}',
+                '• Membros em Chamada: ${_voiceParticipants.values.fold<int>(0, (sum, m) => sum + m.values.where((p) => p.isInVoice).length)}',
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: isDark ? Colors.white70 : const Color(0xFF475569),
@@ -5341,7 +6068,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               ),
               const SizedBox(height: 4),
               Text(
-                '• Transmissão: ${_isTransmitting ? "Ao Vivo (Transmitindo tela)" : "Inativa"}',
+                '• Transmissão: ${_voiceParticipants.values.expand((m) => m.values).any((p) => p.isInVoice && p.isTransmitting) ? "Ao Vivo (Transmitindo tela)" : "Inativa"}',
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: isDark ? Colors.white70 : const Color(0xFF475569),

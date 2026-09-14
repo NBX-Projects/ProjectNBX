@@ -36,6 +36,7 @@ class RealScreenInfo {
 }
 
 class RealWindowInfo {
+  final String? id;
   final String title;
   final String app;
   final IconData icon;
@@ -44,6 +45,7 @@ class RealWindowInfo {
   final String? thumbnail;
 
   const RealWindowInfo({
+    this.id,
     required this.title,
     required this.app,
     required this.icon,
@@ -53,6 +55,7 @@ class RealWindowInfo {
   });
 
   Map<String, dynamic> toMap() => {
+        'id': id,
         'title': title,
         'app': app,
         'icon': icon,
@@ -152,8 +155,11 @@ class DesktopHardwareService {
 
             seenTitles.add(title);
 
+            final handle = w['handle'];
+            final windowId = handle?.toString();
             final visuals = _resolveAppVisuals(app, title);
             windows.add(RealWindowInfo(
+              id: windowId,
               title: title,
               app: app,
               icon: visuals.$1,

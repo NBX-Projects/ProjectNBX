@@ -16,6 +16,7 @@ class ScreenShareConfig {
   final bool shareAudio;
   final String previewType;
   final String? thumbnail;
+  final String? sourceId;
 
   const ScreenShareConfig({
     required this.title,
@@ -25,6 +26,7 @@ class ScreenShareConfig {
     this.shareAudio = true,
     this.previewType = 'nbx',
     this.thumbnail,
+    this.sourceId,
   });
 }
 
@@ -727,6 +729,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                               shareAudio: _shareAudio,
                               previewType: previewType,
                               thumbnail: selectedItem['thumbnail'] as String?,
+                              sourceId: selectedItem['id'] as String?,
                             );
                             Navigator.of(context).pop(config);
                           },
