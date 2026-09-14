@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
+import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/core/widgets/window_controls.dart';
@@ -36,6 +37,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Eagerly initialize and watch WebSocket client so it connects on login/restore session
+    ref.watch(websocketClientProvider);
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authControllerProvider);

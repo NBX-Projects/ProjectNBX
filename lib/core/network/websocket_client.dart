@@ -10,6 +10,26 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 final websocketClientProvider = Provider<WebSocketClient>((ref) {
   final apiClient = ref.watch<ApiClient>(apiClientProvider);
   final client = WebSocketClient(apiClient);
+
+  final initialAuth = ref.read(authControllerProvider);
+  if (initialAuth.isAuthenticated) {
+    if (initialAuth.token != null) {
+      apiClient.setAuthToken(initialAuth.token);
+    }
+    client.connect();
+  }
+
+  ref.listen<AuthState>(authControllerProvider, (previous, next) {
+    if (next.isAuthenticated) {
+      if (next.token != null) {
+        apiClient.setAuthToken(next.token);
+      }
+      client.connect();
+    } else {
+      client.disconnect();
+    }
+  });
+
   ref.onDispose(() {
     client.dispose();
   });
@@ -25,6 +45,7 @@ class WebSocketClient {
 
   bool _isDisposed = false;
   bool _isConnected = false;
+  bool _isConnecting = false;
   String? _currentServerId;
 
   final _eventController = StreamController<Map<String, dynamic>>.broadcast();
@@ -36,32 +57,51 @@ class WebSocketClient {
 
   void connect({String? serverId}) {
     if (_isDisposed) return;
-    _currentServerId = serverId;
+
+    if (serverId != null && serverId.isNotEmpty) {
+      _currentServerId = serverId;
+    }
+
+    final token = _apiClient.authToken ?? '';
+    if (token.isEmpty) {
+      dev.log('[WebSocket] Conexão cancelada: token de autenticação ausente.',
+          name: 'WebSocketClient');
+      return;
+    }
+
+    // Se a conexão já estiver ativa OU em andamento, apenas atualiza o servidor atual e mantém a conexão aberta
+    if (_isConnected || _isConnecting) {
+      return;
+    }
+
     _reconnectTimer?.cancel();
     _disconnectInternal();
+    _isConnecting = true;
 
     try {
-      final base = ApiClient.baseUrl;
-      final wsScheme = base.startsWith('https://') ? 'wss://' : 'ws://';
-      final cleanHost = base
-          .replaceFirst('https://', '')
-          .replaceFirst('http://', '')
-          .replaceFirst('/api', '');
+      final baseUri = Uri.parse(ApiClient.baseUrl);
+      final wsScheme = baseUri.scheme == 'https' ? 'wss' : 'ws';
 
-      final token = _apiClient.authToken ?? '';
-      var query = 'token=$token';
-      if (serverId != null && serverId.isNotEmpty) {
-        query += '&server_id=$serverId';
-      }
+      final wsUri = Uri(
+        scheme: wsScheme,
+        host: baseUri.host,
+        port: baseUri.hasPort ? baseUri.port : null,
+        path: '/ws',
+        queryParameters: {
+          'token': token,
+          if (_currentServerId != null && _currentServerId!.isNotEmpty)
+            'server_id': _currentServerId!,
+        },
+      );
 
-      final uri = Uri.parse('$wsScheme$cleanHost/ws?$query');
-      dev.log('[WebSocket] Conectando a $uri', name: 'WebSocketClient');
+      dev.log('[WebSocket] Conectando a $wsUri', name: 'WebSocketClient');
 
-      _channel = WebSocketChannel.connect(uri);
-      _isConnected = true;
+      _channel = WebSocketChannel.connect(wsUri);
 
       _subscription = _channel!.stream.listen(
         (data) {
+          _isConnecting = false;
+          _isConnected = true;
           try {
             final decoded = jsonDecode(data.toString());
             if (decoded is Map<String, dynamic>) {
@@ -73,19 +113,22 @@ class WebSocketClient {
           }
         },
         onError: (Object error) {
+          _isConnecting = false;
           dev.log('[WebSocket] Erro na conexão: $error',
               name: 'WebSocketClient');
           _handleDisconnect();
         },
         onDone: () {
+          _isConnecting = false;
           dev.log('[WebSocket] Conexão encerrada', name: 'WebSocketClient');
           _handleDisconnect();
         },
-        cancelOnError: true,
+        cancelOnError: false,
       );
 
       _startPing();
     } catch (e) {
+      _isConnecting = false;
       dev.log('[WebSocket] Falha ao conectar: $e', name: 'WebSocketClient');
       _handleDisconnect();
     }
@@ -101,8 +144,7 @@ class WebSocketClient {
   }
 
   void _handleDisconnect() {
-    _isConnected = false;
-    _pingTimer?.cancel();
+    _disconnectInternal();
     if (_isDisposed) return;
 
     _reconnectTimer?.cancel();
@@ -139,6 +181,7 @@ class WebSocketClient {
 
   void _disconnectInternal() {
     _isConnected = false;
+    _isConnecting = false;
     _pingTimer?.cancel();
     _subscription?.cancel();
     _subscription = null;

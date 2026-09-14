@@ -43,7 +43,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   final Map<String, List<_ChatMessage>> _channelMessages = {};
 
   StreamSubscription<Map<String, dynamic>>? _wsSubscription;
-  Timer? _pollTimer;
 
   String? _editingMessageId;
   ServerViewMode _viewMode = ServerViewMode.home;
@@ -91,10 +90,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _bannerPresets.length - 1,
     );
     _selectedAccentColor = Color(widget.server.accentColor);
+    if (widget.server.channels.isNotEmpty) {
+      _activeChannel = widget.server.channels.first;
+    }
     _loadPersistedMessages();
     _loadServerMembers();
     _initWebSocketAndSync();
-    _startPeriodicSync();
   }
 
   void _initWebSocketAndSync() {
@@ -106,50 +107,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _wsSubscription?.cancel();
       _wsSubscription = wsClient.eventStream.listen(_handleWebSocketEvent);
     });
-  }
-
-  void _startPeriodicSync() {
-    _pollTimer?.cancel();
-    // Fallback sync every 3s to guarantee real-time updates across platforms even during network shifts
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
-      final activeChId = _activeChannel?.id;
-      if (activeChId != null && activeChId.isNotEmpty) {
-        _syncChannelMessagesQuietly(activeChId);
-      }
-    });
-  }
-
-  Future<void> _syncChannelMessagesQuietly(String channelId) async {
-    try {
-      final apiClient = ref.read(apiClientProvider);
-      final apiMsgs = await apiClient.getMessages(widget.server.id, channelId);
-      if (!mounted || apiMsgs.isEmpty) return;
-
-      final mapped = apiMsgs
-          .map((m) => _ChatMessage.fromApi(m, _selectedAccentColor))
-          .toList();
-      final currentList = _channelMessages[channelId] ?? [];
-
-      var hasChanges = currentList.length != mapped.length;
-      if (!hasChanges) {
-        for (var i = 0; i < mapped.length; i++) {
-          if (currentList[i].id != mapped[i].id ||
-              currentList[i].content != mapped[i].content ||
-              currentList[i].isEdited != mapped[i].isEdited) {
-            hasChanges = true;
-            break;
-          }
-        }
-      }
-
-      if (hasChanges) {
-        setState(() {
-          _channelMessages[channelId] = mapped;
-        });
-        _saveChannelMessages(channelId);
-      }
-    } catch (_) {}
   }
 
   void _handleWebSocketEvent(Map<String, dynamic> event) {
@@ -195,8 +152,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           final tempIdx = list.indexWhere(
             (m) =>
                 m.id.startsWith('msg_') &&
-                m.content == newMsg.content &&
-                m.author == newMsg.author,
+                m.content == newMsg.content,
           );
           if (tempIdx != -1) {
             list[tempIdx] = newMsg;
@@ -207,7 +163,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       });
       _saveChannelMessages(channelId);
 
-      if (_activeChannel?.id == channelId) {
+      if (_activeChannel?.id == channelId || _activeChannel == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients) {
             _scrollController.animateTo(
@@ -342,7 +298,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   @override
   void dispose() {
     _wsSubscription?.cancel();
-    _pollTimer?.cancel();
     _messageController.dispose();
     _editMessageController.dispose();
     _scrollController.dispose();
@@ -433,6 +388,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
+    final targetChannelId = _activeChannel?.id ?? channelKey;
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tempId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
     final newMsg = _ChatMessage(
@@ -444,11 +401,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
 
     setState(() {
-      _channelMessages.putIfAbsent(channelKey, () => []).add(newMsg);
+      _channelMessages.putIfAbsent(targetChannelId, () => []).add(newMsg);
       _messageController.clear();
     });
 
-    await _saveChannelMessages(channelKey);
+    await _saveChannelMessages(targetChannelId);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -460,28 +417,38 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
     });
 
-    // Call API to persist in database and replace temp ID with real server UUID
-    try {
-      final apiClient = ref.read(apiClientProvider);
-      final res = await apiClient.sendMessage(
-        widget.server.id,
-        channelKey,
-        text,
+    // Send via WebSocket if connected, otherwise fallback to HTTP REST API
+    final wsClient = ref.read(websocketClientProvider);
+    if (wsClient.isConnected) {
+      wsClient.sendEvent(
+        'CHAT_MESSAGE',
+        {'content': text},
+        channelId: targetChannelId,
+        serverId: widget.server.id,
       );
-      if (res != null && res['id'] != null && mounted) {
-        final realId = res['id'].toString();
-        setState(() {
-          final list = _channelMessages[channelKey];
-          if (list != null) {
-            final idx = list.indexWhere((m) => m.id == tempId);
-            if (idx != -1) {
-              list[idx] = list[idx].copyWith(id: realId);
+    } else {
+      try {
+        final apiClient = ref.read(apiClientProvider);
+        final res = await apiClient.sendMessage(
+          widget.server.id,
+          targetChannelId,
+          text,
+        );
+        if (res != null && res['id'] != null && mounted) {
+          final realId = res['id'].toString();
+          setState(() {
+            final list = _channelMessages[targetChannelId];
+            if (list != null) {
+              final idx = list.indexWhere((m) => m.id == tempId);
+              if (idx != -1) {
+                list[idx] = list[idx].copyWith(id: realId);
+              }
             }
-          }
-        });
-        await _saveChannelMessages(channelKey);
-      }
-    } catch (_) {}
+          });
+          await _saveChannelMessages(targetChannelId);
+        }
+      } catch (_) {}
+    }
   }
 
   void _startEditingMessage(_ChatMessage msg) {
@@ -5742,12 +5709,20 @@ class _ChatMessage {
   );
 
   factory _ChatMessage.fromApi(Map<String, dynamic> m, Color defaultColor) {
-    final authorName = (m['author'] is Map)
-        ? (m['author']['username'] ?? 'Usuário')
-        : (m['author_id'] ?? 'Usuário');
+    var authorName = 'Usuário';
+    if (m['author'] is Map) {
+      authorName = m['author']['username']?.toString() ?? 'Usuário';
+    } else if (m['author_name'] != null && m['author_name'].toString().isNotEmpty) {
+      authorName = m['author_name'].toString();
+    } else if (m['author'] != null && m['author'].toString().isNotEmpty) {
+      authorName = m['author'].toString();
+    } else if (m['author_id'] != null && m['author_id'].toString().isNotEmpty) {
+      authorName = m['author_id'].toString();
+    }
+
     return _ChatMessage(
       id: (m['id'] ?? 'msg_${DateTime.now().microsecondsSinceEpoch}').toString(),
-      author: authorName.toString(),
+      author: authorName,
       authorColor: defaultColor,
       content: (m['content'] ?? '').toString(),
       isEdited: m['is_edited'] == true,

@@ -28,7 +28,7 @@ func NewHub(repo repository.Repository) *Hub {
 		userConns:  make(map[string][]*Client),
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
-		Broadcast:  make(chan *models.WSEvent),
+		Broadcast:  make(chan *models.WSEvent, 256),
 		Repo:       repo,
 	}
 }
@@ -155,8 +155,8 @@ func (h *Hub) broadcastPresence(userID, status string) {
 		Status: status,
 	})
 
-	h.Broadcast <- &models.WSEvent{
+	h.BroadcastEvent(&models.WSEvent{
 		Type:    models.EventUserPresence,
 		Payload: payload,
-	}
+	})
 }
