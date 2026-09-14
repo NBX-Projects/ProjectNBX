@@ -873,55 +873,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               },
             ),
           ] else ...[
-            // User Pill (Desktop)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1E2030)
-                    : const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: _selectedAccentColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    username,
-                    style: GoogleFonts.inter(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-
             // Right Sidebar Collapse/Expand Toggle (Desktop)
             Tooltip(
               message: _isRightSidebarVisible
@@ -4819,25 +4770,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   tab: ServerSidebarTab.resumo,
                   icon: LucideIcons.barChart2,
                   isDark: isDark,
-                ),
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: 'Recolher painel lateral',
-                  child: InkWell(
-                    onTap: () => setState(() => _isRightSidebarVisible = false),
-                    mouseCursor: SystemMouseCursors.click,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        LucideIcons.panelRightClose,
-                        size: 15,
-                        color: isDark
-                            ? AppColors.darkTextMuted
-                            : AppColors.lightTextMuted,
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
