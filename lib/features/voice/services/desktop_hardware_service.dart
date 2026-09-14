@@ -128,10 +128,7 @@ class DesktopHardwareService {
             final titleLower = title.toLowerCase();
 
             // 1. Never capture ProjectNBX itself (current process / app)
-            if ((pid != null && pid == io.pid) ||
-                appLower.contains('projectnbx') ||
-                titleLower == 'projectnbx' ||
-                titleLower.startsWith('projectnbx ')) {
+            if ((pid != null && pid == io.pid) || appLower == 'projectnbx.exe') {
               continue;
             }
 

@@ -156,8 +156,7 @@ public class NativeSourceDetector {
                             lower.Contains("desktopwindowxaml") || lower.Contains("overlay input trap") ||
                             lower == "settings" || lower.Contains("configura") ||
                             lower.Contains("janela de estouro") || lower.Contains("experi") ||
-                            lower.Contains("input experience") || lower == "projectnbx" ||
-                            lower.StartsWith("projectnbx ") || lower == "dwm notification window" ||
+                            lower.Contains("input experience") || lower == "dwm notification window" ||
                             lower.Contains("powertoys") || lower.Contains("spotifylauncher") ||
                             lower.Contains("quick access")) return true;
 
@@ -169,8 +168,8 @@ public class NativeSourceDetector {
                         } catch {}
 
                         string appLower = app.ToLower();
-                        // Filter out ProjectNBX itself (current app)
-                        if (appLower.Contains("projectnbx")) return true;
+                        // Filter out ProjectNBX itself (only the exact projectnbx.exe process, preserving IDEs/terminals/editors working on projectNBX)
+                        if (appLower == "projectnbx.exe") return true;
 
                         // Filter out Windows internal background/system hosts
                         if (appLower.Contains("textinputhost") ||

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -70,11 +71,63 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
 
   List<Map<String, dynamic>> _screens = [];
   List<Map<String, dynamic>> _windows = [];
+  Timer? _autoRefreshTimer;
+  bool _isAutoRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     _loadRealHardwareSources();
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _pollSourcesSilently();
+    });
+  }
+
+  Future<void> _pollSourcesSilently() async {
+    if (!mounted || _isAutoRefreshing) return;
+    _isAutoRefreshing = true;
+    try {
+      final all = await _hardwareService.getAllSources();
+      if (!mounted) return;
+
+      final newScreens = all.screens.map((s) => s.toMap()).toList();
+      final newWindows = all.windows.map((w) => w.toMap()).toList();
+
+      final currentList = _selectedTab == 0 ? _screens : _windows;
+      final newList = _selectedTab == 0 ? newScreens : newWindows;
+
+      bool hasChanged = currentList.length != newList.length;
+      if (!hasChanged) {
+        for (var i = 0; i < currentList.length; i++) {
+          if (currentList[i]['title'] != newList[i]['title'] ||
+              currentList[i]['thumbnail'] != newList[i]['thumbnail']) {
+            hasChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (hasChanged) {
+        setState(() {
+          _screens = newScreens;
+          _windows = newWindows;
+          final updatedSources = _selectedTab == 0 ? _screens : _windows;
+          if (_selectedSourceIndex >= updatedSources.length) {
+            _selectedSourceIndex =
+                (updatedSources.length - 1).clamp(0, 9999);
+          }
+        });
+      }
+    } catch (_) {
+      // Silent catch
+    } finally {
+      _isAutoRefreshing = false;
+    }
   }
 
   Future<void> _loadRealHardwareSources() async {
@@ -92,6 +145,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
 
   @override
   void dispose() {
+    _autoRefreshTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -269,9 +323,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                   const Icon(LucideIcons.checkCircle2, size: 12, color: Color(0xFF4ADE80)),
                   const SizedBox(width: 6),
                   Text(
-                    _selectedTab == 0
-                        ? '${_screens.length} monitores reais detectados no seu computador'
-                        : '${_windows.length} janelas reais em execução • Selecione uma para transmitir',
+                    'Selecione uma janela/tela para transmitir',
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
