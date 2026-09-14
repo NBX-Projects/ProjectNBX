@@ -17,6 +17,7 @@ type MemoryRepository struct {
 	channels map[string]*models.Channel
 	messages map[string][]*models.Message // channelID -> messages
 	members  map[string]map[string]time.Time // serverID -> userID -> joinedAt
+	invites  map[string]*models.ServerInvite // code -> invite
 }
 
 // NewMemoryRepository inicializa o repositório com dados padrão de demonstração
@@ -27,6 +28,7 @@ func NewMemoryRepository() *MemoryRepository {
 		channels: make(map[string]*models.Channel),
 		messages: make(map[string][]*models.Message),
 		members:  make(map[string]map[string]time.Time),
+		invites:  make(map[string]*models.ServerInvite),
 	}
 
 	repo.seedInitialData()
@@ -509,5 +511,94 @@ func (r *MemoryRepository) SearchUsers(query string, limit int) ([]*models.User,
 		res = append(res, u)
 	}
 	return res, nil
+}
+
+// Invite Methods
+func (r *MemoryRepository) CreateInvite(invite *models.ServerInvite) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if invite.CreatedAt.IsZero() {
+		invite.CreatedAt = time.Now()
+	}
+	r.invites[invite.Code] = invite
+	return nil
+}
+
+func (r *MemoryRepository) GetInviteByCode(code string) (*models.ServerInvite, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	invite, ok := r.invites[code]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	invCopy := *invite
+	if invCopy.Creator == nil {
+		if creator, exists := r.users[invCopy.CreatorID]; exists {
+			invCopy.Creator = creator
+		}
+	}
+
+	now := time.Now()
+	if invCopy.ExpiresAt != nil && now.After(*invCopy.ExpiresAt) {
+		invCopy.IsExpired = true
+	}
+	if invCopy.MaxUses > 0 && invCopy.UsesCount >= invCopy.MaxUses {
+		invCopy.IsExhausted = true
+	}
+
+	return &invCopy, nil
+}
+
+func (r *MemoryRepository) IncrementInviteUses(code string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	invite, ok := r.invites[code]
+	if !ok {
+		return ErrNotFound
+	}
+	if invite.MaxUses > 0 && invite.UsesCount >= invite.MaxUses {
+		return ErrMaxUsesReached
+	}
+	invite.UsesCount++
+	return nil
+}
+
+func (r *MemoryRepository) ListServerInvites(serverID string) ([]*models.ServerInvite, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	res := make([]*models.ServerInvite, 0)
+	now := time.Now()
+
+	for _, inv := range r.invites {
+		if inv.ServerID == serverID {
+			invCopy := *inv
+			if invCopy.Creator == nil {
+				if creator, exists := r.users[invCopy.CreatorID]; exists {
+					invCopy.Creator = creator
+				}
+			}
+			if invCopy.ExpiresAt != nil && now.After(*invCopy.ExpiresAt) {
+				invCopy.IsExpired = true
+			}
+			if invCopy.MaxUses > 0 && invCopy.UsesCount >= invCopy.MaxUses {
+				invCopy.IsExhausted = true
+			}
+			res = append(res, &invCopy)
+		}
+	}
+	return res, nil
+}
+
+func (r *MemoryRepository) DeleteInvite(code string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.invites, code)
+	return nil
 }
 

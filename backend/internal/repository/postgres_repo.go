@@ -651,4 +651,153 @@ func (r *PostgresRepository) SearchUsers(query string, limit int) ([]*models.Use
 	return users, nil
 }
 
+// Invite Methods
+func (r *PostgresRepository) CreateInvite(invite *models.ServerInvite) error {
+	if invite.CreatedAt.IsZero() {
+		invite.CreatedAt = time.Now()
+	}
+	query := `
+	INSERT INTO server_invites (code, server_id, creator_id, max_uses, uses_count, expires_at, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+	_, err := r.db.Exec(
+		query,
+		invite.Code,
+		invite.ServerID,
+		invite.CreatorID,
+		invite.MaxUses,
+		invite.UsesCount,
+		invite.ExpiresAt,
+		invite.CreatedAt,
+	)
+	return err
+}
+
+func (r *PostgresRepository) GetInviteByCode(code string) (*models.ServerInvite, error) {
+	query := `
+	SELECT i.code, i.server_id, i.creator_id, i.max_uses, i.uses_count, i.expires_at, i.created_at,
+	       u.id, u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
+	FROM server_invites i
+	JOIN users u ON i.creator_id = u.id
+	WHERE i.code = $1`
+
+	invite := &models.ServerInvite{Creator: &models.User{}}
+	var expiresAt sql.NullTime
+
+	err := r.db.QueryRow(query, code).Scan(
+		&invite.Code,
+		&invite.ServerID,
+		&invite.CreatorID,
+		&invite.MaxUses,
+		&invite.UsesCount,
+		&expiresAt,
+		&invite.CreatedAt,
+		&invite.Creator.ID,
+		&invite.Creator.Username,
+		&invite.Creator.Email,
+		&invite.Creator.AvatarURL,
+		&invite.Creator.Status,
+		&invite.Creator.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	if expiresAt.Valid {
+		invite.ExpiresAt = &expiresAt.Time
+		if time.Now().After(expiresAt.Time) {
+			invite.IsExpired = true
+		}
+	}
+	if invite.MaxUses > 0 && invite.UsesCount >= invite.MaxUses {
+		invite.IsExhausted = true
+	}
+
+	return invite, nil
+}
+
+func (r *PostgresRepository) IncrementInviteUses(code string) error {
+	query := `UPDATE server_invites SET uses_count = uses_count + 1 WHERE code = $1 AND (max_uses = 0 OR uses_count < max_uses)`
+	res, err := r.db.Exec(query, code)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMaxUsesReached
+	}
+	return nil
+}
+
+func (r *PostgresRepository) ListServerInvites(serverID string) ([]*models.ServerInvite, error) {
+	query := `
+	SELECT i.code, i.server_id, i.creator_id, i.max_uses, i.uses_count, i.expires_at, i.created_at,
+	       u.id, u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
+	FROM server_invites i
+	JOIN users u ON i.creator_id = u.id
+	WHERE i.server_id = $1
+	ORDER BY i.created_at DESC`
+
+	rows, err := r.db.Query(query, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	invites := make([]*models.ServerInvite, 0)
+	now := time.Now()
+
+	for rows.Next() {
+		invite := &models.ServerInvite{Creator: &models.User{}}
+		var expiresAt sql.NullTime
+
+		if err := rows.Scan(
+			&invite.Code,
+			&invite.ServerID,
+			&invite.CreatorID,
+			&invite.MaxUses,
+			&invite.UsesCount,
+			&expiresAt,
+			&invite.CreatedAt,
+			&invite.Creator.ID,
+			&invite.Creator.Username,
+			&invite.Creator.Email,
+			&invite.Creator.AvatarURL,
+			&invite.Creator.Status,
+			&invite.Creator.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		if expiresAt.Valid {
+			invite.ExpiresAt = &expiresAt.Time
+			if now.After(expiresAt.Time) {
+				invite.IsExpired = true
+			}
+		}
+		if invite.MaxUses > 0 && invite.UsesCount >= invite.MaxUses {
+			invite.IsExhausted = true
+		}
+
+		invites = append(invites, invite)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return invites, nil
+}
+
+func (r *PostgresRepository) DeleteInvite(code string) error {
+	query := `DELETE FROM server_invites WHERE code = $1`
+	_, err := r.db.Exec(query, code)
+	return err
+}
+
 
