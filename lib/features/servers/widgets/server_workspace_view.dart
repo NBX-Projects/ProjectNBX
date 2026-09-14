@@ -285,13 +285,13 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
     final dynamic rawPayload = event['payload'];
     Map<String, dynamic> payload = {};
-    if (rawPayload is Map<String, dynamic>) {
-      payload = rawPayload;
+    if (rawPayload is Map) {
+      payload = Map<String, dynamic>.from(rawPayload);
     } else if (rawPayload is String) {
       try {
         final decoded = jsonDecode(rawPayload);
-        if (decoded is Map<String, dynamic>) {
-          payload = decoded;
+        if (decoded is Map) {
+          payload = Map<String, dynamic>.from(decoded);
         }
       } catch (_) {}
     }
@@ -334,8 +334,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
       setState(() {
         for (final item in list) {
-          if (item is Map<String, dynamic>) {
-            final p = _VoiceParticipantInfo.fromJson(item);
+          if (item is Map) {
+            final p = _VoiceParticipantInfo.fromJson(Map<String, dynamic>.from(item));
             if (p.channelId.isNotEmpty && p.isInVoice) {
               _voiceParticipants.putIfAbsent(p.channelId, () => {})[p.key] = p;
             }
@@ -631,38 +631,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
     });
 
-    // Send via WebSocket if connected, otherwise fallback to HTTP REST API
+    // Send via WebSocket in real-time
     final wsClient = ref.read(websocketClientProvider);
-    if (wsClient.isConnected) {
-      wsClient.sendEvent(
-        'CHAT_MESSAGE',
-        {'content': text},
-        channelId: targetChannelId,
-        serverId: widget.server.id,
-      );
-    } else {
-      try {
-        final apiClient = ref.read(apiClientProvider);
-        final res = await apiClient.sendMessage(
-          widget.server.id,
-          targetChannelId,
-          text,
-        );
-        if (res != null && res['id'] != null && mounted) {
-          final realId = res['id'].toString();
-          setState(() {
-            final list = _channelMessages[targetChannelId];
-            if (list != null) {
-              final idx = list.indexWhere((m) => m.id == tempId);
-              if (idx != -1) {
-                list[idx] = list[idx].copyWith(id: realId);
-              }
-            }
-          });
-          await _saveChannelMessages(targetChannelId);
-        }
-      } catch (_) {}
-    }
+    wsClient.sendEvent(
+      'CHAT_MESSAGE',
+      {'content': text},
+      channelId: targetChannelId,
+      serverId: widget.server.id,
+    );
   }
 
   void _startEditingMessage(_ChatMessage msg) {

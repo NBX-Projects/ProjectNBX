@@ -153,8 +153,9 @@ go run cmd/api/main.go
 * `GET /api/servers/{id}` — Detalhes de um servidor
 * `GET /api/servers/{id}/channels` — Lista canais do servidor
 * `POST /api/servers/{id}/channels` — Cria um canal (`type`: `"text"` ou `"voice"`)
-* `GET /api/servers/{id}/channels/{channelId}/messages` — Histórico de mensagens
-* `POST /api/servers/{id}/channels/{channelId}/messages` — Envia mensagem no canal
+* `GET /api/servers/{id}/channels/{channelId}/messages` — Histórico inicial de mensagens do canal
+* `PUT /api/servers/{id}/channels/{channelId}/messages/{messageId}` — Edita mensagem
+* `DELETE /api/servers/{id}/channels/{channelId}/messages/{messageId}` — Exclui mensagem
 
 ---
 
@@ -162,7 +163,8 @@ go run cmd/api/main.go
 
 Conexão: `ws://localhost:8080/ws?token=<JWT_TOKEN>&server_id=<SERVER_ID>`
 
-### Enviar Mensagem de Chat:
+### Envio de Mensagens de Chat (Via WebSocket):
+O envio de mensagens é feito exclusivamente via WebSocket, transmitindo o evento `CHAT_MESSAGE`:
 ```json
 {
   "type": "CHAT_MESSAGE",
@@ -173,6 +175,12 @@ Conexão: `ws://localhost:8080/ws?token=<JWT_TOKEN>&server_id=<SERVER_ID>`
   }
 }
 ```
+
+**Comportamento no Backend Go:**
+1. O backend recebe o evento `CHAT_MESSAGE`.
+2. Identifica o autor automaticamente através do JWT associado à conexão WebSocket do cliente (`client.UserID`).
+3. Gera o ID único (UUID), anexa o autor e timestamp atual, persistindo a mensagem no repositório.
+4. Faz o broadcast do evento `CHAT_MESSAGE` com o objeto completo `models.Message` para todos os clientes conectados ao servidor.
 
 ### Atualizar Estado de Voz (Speaking / Mute):
 ```json

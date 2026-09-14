@@ -177,49 +177,6 @@ func (h *ServerHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(messages)
 }
 
-func (h *ServerHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	serverID := vars["id"]
-	channelID := vars["channelId"]
-
-	var req models.SendMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
-		http.Error(w, `{"error":"Conteúdo da mensagem é obrigatório"}`, http.StatusBadRequest)
-		return
-	}
-
-	userID, _ := r.Context().Value("user_id").(string)
-	author, _ := h.repo.GetUserByID(userID)
-
-	msg := &models.Message{
-		ID:        uuid.New().String(),
-		ChannelID: channelID,
-		ServerID:  serverID,
-		AuthorID:  userID,
-		Author:    author,
-		Content:   req.Content,
-		CreatedAt: time.Now(),
-	}
-
-	if err := h.repo.CreateMessage(msg); err != nil {
-		http.Error(w, `{"error":"Erro ao salvar mensagem"}`, http.StatusInternalServerError)
-		return
-	}
-
-	// Broadcast via WebSocket
-	payloadBytes, _ := json.Marshal(msg)
-	h.hub.Broadcast <- &models.WSEvent{
-		Type:      models.EventChatMessage,
-		Payload:   payloadBytes,
-		ChannelID: channelID,
-		ServerID:  serverID,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(msg)
-}
-
 func (h *ServerHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
@@ -421,4 +378,3 @@ func (h *ServerHandler) JoinServer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedServer)
 }
-

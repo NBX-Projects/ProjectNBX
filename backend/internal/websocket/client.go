@@ -48,6 +48,9 @@ func (c *Client) ReadPump() {
 			break
 		}
 
+		// Reseta o deadline de leitura a cada mensagem recebida com sucesso
+		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+
 		var event models.WSEvent
 		if err := json.Unmarshal(message, &event); err != nil {
 			log.Printf("[WebSocket] Falha ao desserializar evento: %v", err)
@@ -75,20 +78,7 @@ func (c *Client) WritePump() {
 				return
 			}
 
-			w, err := c.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-
-			// Esvazia mensagens em lote na mesma escrita se houver
-			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.Send)
-			}
-
-			if err := w.Close(); err != nil {
+			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
 

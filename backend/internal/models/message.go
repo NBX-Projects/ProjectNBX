@@ -15,11 +15,6 @@ type Message struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
-// SendMessageRequest payload para envio de mensagem REST
-type SendMessageRequest struct {
-	Content string `json:"content"`
-}
-
 // UpdateMessageRequest payload para edição de mensagem REST
 type UpdateMessageRequest struct {
 	Content string `json:"content"`
