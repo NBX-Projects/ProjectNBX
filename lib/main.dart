@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projectnbx/core/network/api_client.dart';
+import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_theme.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
@@ -56,6 +57,9 @@ class ProjectNBXApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Eagerly keep WebSocket client active across whole app lifecycle
+    ref.watch(websocketClientProvider);
+
     final themeMode = ref.watch(themeModeProvider);
     final authState = ref.watch(authControllerProvider);
 

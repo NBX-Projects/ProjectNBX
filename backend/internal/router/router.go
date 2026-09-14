@@ -89,7 +89,6 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/servers/{id}/channels", serverHandler.ListChannels).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels", serverHandler.CreateChannel).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.ListMessages).Methods("GET", "OPTIONS")
-	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.SendMessage).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages/{messageId}", serverHandler.UpdateMessage).Methods("PUT", "PATCH", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages/{messageId}", serverHandler.DeleteMessage).Methods("DELETE", "OPTIONS")
 

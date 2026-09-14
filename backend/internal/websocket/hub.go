@@ -35,7 +35,6 @@ func NewHub(repo repository.Repository) *Hub {
 	}
 }
 
-
 func (h *Hub) Run() {
 	for {
 		select {
@@ -53,9 +52,10 @@ func (h *Hub) Run() {
 					}
 				}
 			}
+			totalClients := len(h.clients)
 			h.mu.Unlock()
 
-			log.Printf("[Hub] Usuário conectado: %s (%s). Total de conexões: %d", client.Username, client.UserID, len(h.clients))
+			log.Printf("[Hub] Usuário conectado: %s (%s). Total de conexões: %d", client.Username, client.UserID, totalClients)
 			h.broadcastPresence(client.UserID, "online")
 
 			// Envia sincronização de voz imediata para o cliente recém-conectado
@@ -63,9 +63,9 @@ func (h *Hub) Run() {
 				payloadBytes, err := json.Marshal(currentVoiceStates)
 				if err == nil {
 					syncMsg, _ := json.Marshal(&models.WSEvent{
-						Type:      models.EventVoiceSync,
-						Payload:   payloadBytes,
-						ServerID:  client.ServerID,
+						Type:     models.EventVoiceSync,
+						Payload:  payloadBytes,
+						ServerID: client.ServerID,
 					})
 					select {
 					case client.Send <- syncMsg:
@@ -75,6 +75,9 @@ func (h *Hub) Run() {
 			}
 
 		case client := <-h.Unregister:
+			var userWentOffline bool
+			var leftVoiceEvents []*models.WSEvent
+
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
@@ -91,39 +94,40 @@ func (h *Hub) Run() {
 
 				if len(h.userConns[client.UserID]) == 0 {
 					delete(h.userConns, client.UserID)
-					h.broadcastPresence(client.UserID, "offline")
+					userWentOffline = true
 
-					// Remove o usuário de canais de voz deste servidor se desconectou
-					if client.ServerID != "" {
-						if sMap, ok := h.voiceStates[client.ServerID]; ok {
-							var removedStates []*models.VoiceParticipantState
-							for sid, st := range sMap {
-								if st.UserID == client.UserID {
-									removedStates = append(removedStates, st)
-									delete(sMap, sid)
-								}
-							}
-							for _, r := range removedStates {
-								leaveState := *r
+					// Remove o usuário de canais de voz em todos os servidores caso tenha desconectado
+					for sID, sMap := range h.voiceStates {
+						for sid, st := range sMap {
+							if st.UserID == client.UserID {
+								leaveState := *st
 								leaveState.IsInVoice = false
 								leaveState.IsTransmitting = false
 								payloadBytes, _ := json.Marshal(leaveState)
-								leaveEvent := &models.WSEvent{
+								leftVoiceEvents = append(leftVoiceEvents, &models.WSEvent{
 									Type:      models.EventVoiceState,
 									Payload:   payloadBytes,
 									ChannelID: leaveState.ChannelID,
-									ServerID:  client.ServerID,
-								}
-								go func(ev *models.WSEvent) {
-									h.Broadcast <- ev
-								}(leaveEvent)
+									ServerID:  sID,
+								})
+								delete(sMap, sid)
 							}
 						}
 					}
 				}
 			}
+			remainingClients := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("[Hub] Usuário desconectado: %s. Conexões restantes: %d", client.UserID, len(h.clients))
+
+			log.Printf("[Hub] Usuário desconectado: %s. Conexões restantes: %d", client.UserID, remainingClients)
+
+			// Notificações emitidas FORA do Lock para evitar qualquer deadlock com BroadcastEvent
+			if userWentOffline {
+				h.broadcastPresence(client.UserID, "offline")
+				for _, ev := range leftVoiceEvents {
+					h.BroadcastEvent(ev)
+				}
+			}
 
 		case event := <-h.Broadcast:
 			h.BroadcastEvent(event)
@@ -140,25 +144,27 @@ func (h *Hub) BroadcastEvent(event *models.WSEvent) {
 	}
 
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-
+	clientsToBroadcast := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
-		// Se o evento for restrito a um servidor específico, filtra conexões
-		if event.ServerID != "" && client.ServerID != "" && client.ServerID != event.ServerID {
-			continue
-		}
+		clientsToBroadcast = append(clientsToBroadcast, client)
+	}
+	h.mu.RUnlock()
 
+	for _, client := range clientsToBroadcast {
 		select {
 		case client.Send <- data:
 		default:
-			close(client.Send)
-			delete(h.clients, client)
+			log.Printf("[Hub] Buffer cheio para cliente %s, frame ignorado", client.UserID)
 		}
 	}
 }
 
 // HandleClientEvent processa mensagens enviadas pelo cliente Flutter via WebSocket
 func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
+	if event.ServerID != "" {
+		client.ServerID = event.ServerID
+	}
+
 	switch event.Type {
 	case models.EventChatMessage:
 		var req struct {
@@ -234,8 +240,12 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 	case models.EventVoiceSync:
 		h.mu.RLock()
 		var statesList []*models.VoiceParticipantState
-		if client.ServerID != "" {
-			if sMap, ok := h.voiceStates[client.ServerID]; ok {
+		targetServerID := event.ServerID
+		if targetServerID == "" {
+			targetServerID = client.ServerID
+		}
+		if targetServerID != "" {
+			if sMap, ok := h.voiceStates[targetServerID]; ok {
 				for _, st := range sMap {
 					statesList = append(statesList, st)
 				}
@@ -247,7 +257,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 		replyMsg, _ := json.Marshal(&models.WSEvent{
 			Type:     models.EventVoiceSync,
 			Payload:  syncBytes,
-			ServerID: client.ServerID,
+			ServerID: targetServerID,
 		})
 		select {
 		case client.Send <- replyMsg:
@@ -260,7 +270,10 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			Type:    models.EventPong,
 			Payload: pongPayload,
 		})
-		client.Send <- data
+		select {
+		case client.Send <- data:
+		default:
+		}
 	}
 }
 

@@ -186,29 +186,6 @@ class ApiClient {
     }
   }
 
-  Future<Map<String, dynamic>?> sendMessage(
-    String serverId,
-    String channelId,
-    String content,
-  ) async {
-    final url = Uri.parse(
-      '$baseUrl/servers/$serverId/channels/$channelId/messages',
-    );
-    try {
-      final response = await _client.post(
-        url,
-        headers: _headers,
-        body: jsonEncode({'content': content}),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<bool> updateMessage(
     String serverId,
     String channelId,
