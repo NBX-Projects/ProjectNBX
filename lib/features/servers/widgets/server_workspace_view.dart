@@ -270,8 +270,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     });
   }
 
-<<<<<<< HEAD
-=======
   void _startPeriodicSync() {
     _pollTimer?.cancel();
     // Fallback sync every 3s to guarantee real-time updates across platforms even during network shifts
@@ -322,7 +320,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     } catch (_) {}
   }
 
->>>>>>> 2f8525c7ec68eed54353fd18988c751428c58fac
   void _handleWebSocketEvent(Map<String, dynamic> event) {
     if (!mounted) return;
 
@@ -6506,3 +6503,4 @@ class _RacingStreamCanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
