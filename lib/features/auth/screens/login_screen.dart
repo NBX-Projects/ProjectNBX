@@ -79,10 +79,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _fillDemoCredentials() {
     setState(() {
-      _emailController.text = 'tauisilva@gmail.com';
-      _passwordController.text = 'Minazuki1902*';
+      _emailController.text = 'srSixSeven@gmail.com';
+      _passwordController.text = 'SixSeven67*';
       if (_isRegister) {
-        _usernameController.text = 'Taui Lima';
+        _usernameController.text = 'Sr. SixSeven';
       }
     });
   }
@@ -208,7 +208,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () {
-                                  ref.read(themeModeProvider.notifier).toggleTheme();
+                                  ref
+                                      .read(themeModeProvider.notifier)
+                                      .toggleTheme();
                                 },
                                 child: AnimatedContainer(
                                   duration: _themeAnimDuration,
@@ -237,9 +239,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       AnimatedSwitcher(
                                         duration: _themeAnimDuration,
                                         transitionBuilder: (child, anim) =>
-                                            ScaleTransition(scale: anim, child: child),
+                                            ScaleTransition(
+                                              scale: anim,
+                                              child: child,
+                                            ),
                                         child: Icon(
-                                          isDark ? LucideIcons.sun : LucideIcons.moon,
+                                          isDark
+                                              ? LucideIcons.sun
+                                              : LucideIcons.moon,
                                           key: ValueKey(isDark),
                                           size: 16,
                                           color: primaryColor,
@@ -703,8 +710,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         builder: (ctx, setDialogState) {
           return Dialog(
             backgroundColor: Colors.transparent,
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 24,
+            ),
             child: Container(
               width: 440,
               padding: const EdgeInsets.all(24),
@@ -732,8 +741,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: primaryColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(LucideIcons.server,
-                            size: 18, color: primaryColor),
+                        child: Icon(
+                          LucideIcons.server,
+                          size: 18,
+                          color: primaryColor,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -809,9 +821,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     urlStr = '$urlStr/api/health';
                                   }
                                   final uri = Uri.parse(urlStr);
-                                  final res = await http.get(uri).timeout(
-                                        const Duration(seconds: 4),
-                                      );
+                                  final res = await http
+                                      .get(uri)
+                                      .timeout(const Duration(seconds: 4));
                                   if (res.statusCode >= 200 &&
                                       res.statusCode < 400) {
                                     setDialogState(() {
@@ -853,11 +865,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         fontSize: 11.5,
                         color: statusMessage!.startsWith('✅')
                             ? (isDark
-                                ? AppColors.darkSage
-                                : AppColors.lightSage)
+                                  ? AppColors.darkSage
+                                  : AppColors.lightSage)
                             : (isDark
-                                ? AppColors.darkDanger
-                                : AppColors.lightDanger),
+                                  ? AppColors.darkDanger
+                                  : AppColors.lightDanger),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -883,7 +895,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ApiClient.setCustomBaseUrl(newHost);
                           try {
                             final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('custom_backend_host', newHost);
+                            await prefs.setString(
+                              'custom_backend_host',
+                              newHost,
+                            );
                           } catch (_) {}
                           if (context.mounted) {
                             setState(() {});
@@ -920,4 +935,3 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
-
