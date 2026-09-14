@@ -588,6 +588,18 @@ func (r *PostgresRepository) ListServerMembers(serverID string) ([]*models.Serve
 	return members, nil
 }
 
+func (r *PostgresRepository) IsServerMember(serverID, userID string) (bool, error) {
+	var exists bool
+	query := `
+	SELECT EXISTS (
+		SELECT 1 FROM servers WHERE id = $1 AND owner_id = $2
+		UNION
+		SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2
+	)`
+	err := r.db.QueryRow(query, serverID, userID).Scan(&exists)
+	return exists, err
+}
+
 func (r *PostgresRepository) FindUser(query string) (*models.User, error) {
 	q := `
 	SELECT id, username, email, COALESCE(avatar_url, ''), status, created_at
@@ -799,5 +811,4 @@ func (r *PostgresRepository) DeleteInvite(code string) error {
 	_, err := r.db.Exec(query, code)
 	return err
 }
-
 

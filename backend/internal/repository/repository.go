@@ -47,6 +47,7 @@ type Repository interface {
 	AddServerMember(serverID, userID string) error
 	RemoveServerMember(serverID, userID string) error
 	ListServerMembers(serverID string) ([]*models.ServerMember, error)
+	IsServerMember(serverID, userID string) (bool, error)
 	FindUser(query string) (*models.User, error)
 	SearchUsers(query string, limit int) ([]*models.User, error)
 
@@ -57,4 +58,3 @@ type Repository interface {
 	ListServerInvites(serverID string) ([]*models.ServerInvite, error)
 	DeleteInvite(code string) error
 }
-

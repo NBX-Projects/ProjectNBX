@@ -50,6 +50,7 @@ func (r *Router) SetupRoutes() http.Handler {
 	authHandler := handlers.NewAuthHandler(r.repo, r.jwtService)
 	liveKitService := auth.NewLiveKitService(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret)
 	liveKitHandler := handlers.NewLiveKitHandler(liveKitService, r.repo, r.cfg)
+	liveKitWebhookHandler := handlers.NewLiveKitWebhookHandler(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret, r.repo, r.hub)
 	serverHandler := handlers.NewServerHandler(r.repo, r.hub)
 	wsHandler := handlers.NewWSHandler(r.hub, r.jwtService, r.repo)
 
@@ -71,6 +72,9 @@ func (r *Router) SetupRoutes() http.Handler {
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
 	api.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
+
+	// Webhooks LiveKit SFU (Autenticado via assinatura HMAC/JWT do LiveKit)
+	api.HandleFunc("/livekit/webhook", liveKitWebhookHandler.HandleWebhook).Methods("POST", "OPTIONS")
 
 	// Rotas Protegidas por Autenticação JWT
 	protected := api.PathPrefix("").Subrouter()

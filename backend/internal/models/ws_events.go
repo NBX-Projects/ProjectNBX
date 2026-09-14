@@ -36,6 +36,7 @@ type VoiceParticipantState struct {
 	ChannelID      string `json:"channel_id"`
 	Device         string `json:"device,omitempty"` // "desktop", "mobile", "web"
 	IsInVoice      bool   `json:"is_in_voice"`
+	IsConnecting   bool   `json:"is_connecting,omitempty"`
 	IsTransmitting bool   `json:"is_transmitting"`
 	StreamTitle    string `json:"stream_title,omitempty"`
 	PreviewType    string `json:"preview_type,omitempty"`

@@ -198,44 +198,71 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 		h.Broadcast <- outEvent
 
 	case models.EventVoiceState:
-		var state models.VoiceParticipantState
-		if err := json.Unmarshal(event.Payload, &state); err == nil {
-			if state.SessionID == "" {
-				state.SessionID = client.UserID
+		var clientState models.VoiceParticipantState
+		if err := json.Unmarshal(event.Payload, &clientState); err == nil {
+			targetServerID := clientState.ServerID
+			if targetServerID == "" {
+				targetServerID = client.ServerID
 			}
-			if state.UserID == "" {
-				state.UserID = client.UserID
-			}
-			if state.Username == "" {
-				state.Username = client.Username
-			}
-			if state.ServerID == "" {
-				state.ServerID = client.ServerID
-			}
-			if state.ChannelID == "" {
-				state.ChannelID = event.ChannelID
+			sessionID := clientState.SessionID
+			if sessionID == "" {
+				sessionID = client.UserID
 			}
 
 			h.mu.Lock()
-			if state.IsInVoice {
-				if _, ok := h.voiceStates[state.ServerID]; !ok {
-					h.voiceStates[state.ServerID] = make(map[string]*models.VoiceParticipantState)
+			sMap, serverExists := h.voiceStates[targetServerID]
+			if !serverExists {
+				sMap = make(map[string]*models.VoiceParticipantState)
+				h.voiceStates[targetServerID] = sMap
+			}
+			st, userExists := sMap[sessionID]
+			if !userExists && sessionID != client.UserID {
+				st, userExists = sMap[client.UserID]
+			}
+
+			if !userExists {
+				if clientState.IsInVoice {
+					clientState.UserID = client.UserID
+					clientState.ServerID = targetServerID
+					sMap[sessionID] = &clientState
+					st = &clientState
+				} else {
+					h.mu.Unlock()
+					return
 				}
-				h.voiceStates[state.ServerID][state.SessionID] = &state
 			} else {
-				if sMap, ok := h.voiceStates[state.ServerID]; ok {
-					delete(sMap, state.SessionID)
+				if !clientState.IsInVoice {
+					delete(sMap, sessionID)
+					delete(sMap, client.UserID)
 				}
 			}
+
+			st.IsInVoice = clientState.IsInVoice
+			st.IsConnecting = clientState.IsConnecting
+			st.IsMuted = clientState.IsMuted
+			st.IsDeafened = clientState.IsDeafened
+			st.IsSpeaking = clientState.IsSpeaking
+			if clientState.StreamTitle != "" {
+				st.StreamTitle = clientState.StreamTitle
+			}
+			if clientState.PreviewType != "" {
+				st.PreviewType = clientState.PreviewType
+			}
+			if clientState.Thumbnail != "" {
+				st.Thumbnail = clientState.Thumbnail
+			}
+			if clientState.Device != "" {
+				st.Device = clientState.Device
+			}
+			copyState := *st
 			h.mu.Unlock()
 
-			// Re-serializa para garantir que todos os campos estejam populados no broadcast
-			updatedBytes, _ := json.Marshal(state)
+			updatedBytes, _ := json.Marshal(copyState)
 			event.Payload = updatedBytes
-			event.ServerID = state.ServerID
-			event.ChannelID = state.ChannelID
+			event.ServerID = copyState.ServerID
+			event.ChannelID = copyState.ChannelID
+			h.BroadcastEvent(event)
 		}
-		h.Broadcast <- event
 
 	case models.EventVoiceSync:
 		h.mu.RLock()
@@ -288,4 +315,120 @@ func (h *Hub) broadcastPresence(userID, status string) {
 		Type:    models.EventUserPresence,
 		Payload: payload,
 	})
+}
+
+// SetLiveKitParticipantState atualiza a presença do participante com base nos webhooks autoritativos do LiveKit SFU
+func (h *Hub) SetLiveKitParticipantState(serverID, channelID, userID, username string, isInVoice bool, isTransmitting bool) {
+	h.mu.Lock()
+	if _, ok := h.voiceStates[serverID]; !ok {
+		h.voiceStates[serverID] = make(map[string]*models.VoiceParticipantState)
+	}
+
+	sessionID := userID
+	var outState models.VoiceParticipantState
+
+	if isInVoice {
+		existing, ok := h.voiceStates[serverID][sessionID]
+		if ok {
+			existing.IsInVoice = true
+			existing.IsConnecting = false
+			existing.ChannelID = channelID
+			if username != "" {
+				existing.Username = username
+			}
+			outState = *existing
+		} else {
+			outState = models.VoiceParticipantState{
+				SessionID:      sessionID,
+				UserID:         userID,
+				Username:       username,
+				ServerID:       serverID,
+				ChannelID:      channelID,
+				IsInVoice:      true,
+				IsConnecting:   false,
+				IsTransmitting: isTransmitting,
+			}
+			h.voiceStates[serverID][sessionID] = &outState
+		}
+	} else {
+		if existing, ok := h.voiceStates[serverID][sessionID]; ok {
+			outState = *existing
+			outState.IsInVoice = false
+			outState.IsTransmitting = false
+			delete(h.voiceStates[serverID], sessionID)
+		} else {
+			outState = models.VoiceParticipantState{
+				SessionID: sessionID,
+				UserID:    userID,
+				Username:  username,
+				ServerID:  serverID,
+				ChannelID: channelID,
+				IsInVoice: false,
+			}
+		}
+	}
+	h.mu.Unlock()
+
+	payloadBytes, err := json.Marshal(outState)
+	if err == nil {
+		h.BroadcastEvent(&models.WSEvent{
+			Type:      models.EventVoiceState,
+			Payload:   payloadBytes,
+			ChannelID: channelID,
+			ServerID:  serverID,
+		})
+	}
+}
+
+// ClearRoomVoiceStates limpa todos os participantes de uma sala encerrada no LiveKit
+func (h *Hub) ClearRoomVoiceStates(serverID, channelID string) {
+	h.mu.Lock()
+	var leftStates []models.VoiceParticipantState
+	if sMap, ok := h.voiceStates[serverID]; ok {
+		for sid, st := range sMap {
+			if st.ChannelID == channelID {
+				leave := *st
+				leave.IsInVoice = false
+				leave.IsTransmitting = false
+				leftStates = append(leftStates, leave)
+				delete(sMap, sid)
+			}
+		}
+	}
+	h.mu.Unlock()
+
+	for _, st := range leftStates {
+		payloadBytes, _ := json.Marshal(st)
+		h.BroadcastEvent(&models.WSEvent{
+			Type:      models.EventVoiceState,
+			Payload:   payloadBytes,
+			ChannelID: channelID,
+			ServerID:  serverID,
+		})
+	}
+}
+
+// UpdateParticipantTransmitting atualiza se o usuário está transmitindo tela (capturado via track LiveKit)
+func (h *Hub) UpdateParticipantTransmitting(serverID, channelID, userID string, isTransmitting bool) {
+	h.mu.Lock()
+	sessionID := userID
+	var updated *models.VoiceParticipantState
+	if sMap, ok := h.voiceStates[serverID]; ok {
+		if st, exists := sMap[sessionID]; exists {
+			st.IsTransmitting = isTransmitting
+			copyState := *st
+			updated = &copyState
+		}
+	}
+	h.mu.Unlock()
+
+	if updated != nil {
+		payloadBytes, _ := json.Marshal(updated)
+		h.BroadcastEvent(&models.WSEvent{
+			Type:      models.EventVoiceState,
+			Payload:   payloadBytes,
+			ChannelID: channelID,
+			ServerID:  serverID,
+		})
+	}
 }

@@ -484,6 +484,27 @@ func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerM
 	return result, nil
 }
 
+func (r *MemoryRepository) IsServerMember(serverID, userID string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	srv, ok := r.servers[serverID]
+	if !ok {
+		return false, ErrNotFound
+	}
+
+	if srv.OwnerID == userID {
+		return true, nil
+	}
+
+	if membersMap, ok := r.members[serverID]; ok {
+		if _, exists := membersMap[userID]; exists {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *MemoryRepository) FindUser(query string) (*models.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -601,4 +622,3 @@ func (r *MemoryRepository) DeleteInvite(code string) error {
 	delete(r.invites, code)
 	return nil
 }
-
