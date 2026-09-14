@@ -25,24 +25,16 @@ type Hub struct {
 
 func NewHub(repo repository.Repository) *Hub {
 	return &Hub{
-<<<<<<< HEAD
-		clients:    make(map[*Client]bool),
-		userConns:  make(map[string][]*Client),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		Broadcast:  make(chan *models.WSEvent, 256),
-		Repo:       repo,
-=======
 		clients:     make(map[*Client]bool),
 		userConns:   make(map[string][]*Client),
 		voiceStates: make(map[string]map[string]*models.VoiceParticipantState),
 		Register:    make(chan *Client),
 		Unregister:  make(chan *Client),
-		Broadcast:   make(chan *models.WSEvent),
+		Broadcast:   make(chan *models.WSEvent, 256),
 		Repo:        repo,
->>>>>>> 2f8525c7ec68eed54353fd18988c751428c58fac
 	}
 }
+
 
 func (h *Hub) Run() {
 	for {
