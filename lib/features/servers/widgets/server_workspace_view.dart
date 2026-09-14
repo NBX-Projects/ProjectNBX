@@ -118,7 +118,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
       } catch (_) {}
 
-      final room = Room();
+      final room = Room(
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+        ),
+      );
       _liveKitRoom = room;
 
       // Escuta os eventos oficiais do LiveKit para sincronizar os participantes da call
@@ -135,10 +140,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       await room.connect(
         serverUrl,
         token,
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-        ),
       );
       try {
         await room.localParticipant?.setMicrophoneEnabled(true);
