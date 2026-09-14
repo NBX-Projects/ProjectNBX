@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +15,21 @@ import (
 	"github.com/projectnbx/backend/internal/repository"
 	"github.com/projectnbx/backend/internal/websocket"
 )
+
+const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func generateShortCode(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(base62Chars))))
+		if err != nil {
+			b[i] = base62Chars[i%len(base62Chars)]
+		} else {
+			b[i] = base62Chars[num.Int64()]
+		}
+	}
+	return string(b)
+}
 
 type ServerHandler struct {
 	repo repository.Repository
@@ -394,6 +412,63 @@ func (h *ServerHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 
 func (h *ServerHandler) JoinServer(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	codeOrID := strings.TrimSpace(vars["id"])
+	if codeOrID == "" {
+		codeOrID = strings.TrimSpace(vars["code"])
+	}
+
+	currentUserID, _ := r.Context().Value("user_id").(string)
+	if currentUserID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var targetServerID string
+
+	// 1. Tenta resolver como código curto de convite
+	invite, err := h.repo.GetInviteByCode(codeOrID)
+	if err == nil && invite != nil {
+		if invite.IsExpired {
+			http.Error(w, `{"error":"Código de convite expirado"}`, http.StatusBadRequest)
+			return
+		}
+		if invite.IsExhausted {
+			http.Error(w, `{"error":"Este convite já atingiu o limite máximo de utilizações"}`, http.StatusBadRequest)
+			return
+		}
+		if err := h.repo.IncrementInviteUses(invite.Code); err != nil {
+			http.Error(w, `{"error":"Este convite já atingiu o limite máximo de utilizações"}`, http.StatusBadRequest)
+			return
+		}
+		targetServerID = invite.ServerID
+	} else {
+		// 2. Fallback de compatibilidade: tenta resolver como ServerID direto
+		server, errS := h.repo.GetServerByID(codeOrID)
+		if errS != nil || server == nil {
+			http.Error(w, `{"error":"Código de convite inválido ou servidor não encontrado"}`, http.StatusNotFound)
+			return
+		}
+		targetServerID = server.ID
+	}
+
+	if err := h.repo.AddServerMember(targetServerID, currentUserID); err != nil {
+		http.Error(w, `{"error":"Erro ao ingressar no servidor"}`, http.StatusInternalServerError)
+		return
+	}
+
+	updatedServer, err := h.repo.GetServerByID(targetServerID)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao carregar dados do servidor"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedServer)
+}
+
+// CreateInvite gera um novo código de convite temporário ou permanente
+func (h *ServerHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
 	serverID := vars["id"]
 	currentUserID, _ := r.Context().Value("user_id").(string)
 
@@ -404,21 +479,108 @@ func (h *ServerHandler) JoinServer(w http.ResponseWriter, r *http.Request) {
 
 	server, err := h.repo.GetServerByID(serverID)
 	if err != nil || server == nil {
-		http.Error(w, `{"error":"Servidor não encontrado com o código fornecido"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
 		return
 	}
 
-	if err := h.repo.AddServerMember(serverID, currentUserID); err != nil {
-		http.Error(w, `{"error":"Erro ao ingressar no servidor"}`, http.StatusInternalServerError)
+	var req models.CreateInviteRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	code := generateShortCode(7)
+	// Garante unicidade tentando gerar novamente se já existir
+	for i := 0; i < 3; i++ {
+		existing, _ := h.repo.GetInviteByCode(code)
+		if existing == nil {
+			break
+		}
+		code = generateShortCode(8)
+	}
+
+	maxUses := 0
+	if req.MaxUses != nil && *req.MaxUses > 0 {
+		maxUses = *req.MaxUses
+	}
+
+	var expiresAt *time.Time
+	if req.MaxAgeSeconds != nil && *req.MaxAgeSeconds > 0 {
+		exp := time.Now().Add(time.Duration(*req.MaxAgeSeconds) * time.Second)
+		expiresAt = &exp
+	}
+
+	invite := &models.ServerInvite{
+		Code:      code,
+		ServerID:  serverID,
+		CreatorID: currentUserID,
+		MaxUses:   maxUses,
+		UsesCount: 0,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+
+	if err := h.repo.CreateInvite(invite); err != nil {
+		http.Error(w, `{"error":"Erro ao criar convite"}`, http.StatusInternalServerError)
 		return
 	}
 
-	updatedServer, err := h.repo.GetServerByID(serverID)
+	creator, _ := h.repo.GetUserByID(currentUserID)
+	invite.Creator = creator
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(invite)
+}
+
+// ListInvites lista todos os convites gerados para um servidor
+func (h *ServerHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+
+	server, err := h.repo.GetServerByID(serverID)
+	if err != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	invites, err := h.repo.ListServerInvites(serverID)
 	if err != nil {
-		updatedServer = server
+		http.Error(w, `{"error":"Erro ao listar convites"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updatedServer)
+	json.NewEncoder(w).Encode(invites)
 }
+
+// DeleteInvite revoga um convite existente
+func (h *ServerHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	code := vars["code"]
+	currentUserID, _ := r.Context().Value("user_id").(string)
+
+	if currentUserID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	invite, err := h.repo.GetInviteByCode(code)
+	if err != nil || invite == nil {
+		http.Error(w, `{"error":"Convite não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	server, errS := h.repo.GetServerByID(invite.ServerID)
+	// Apenas o criador do convite ou o proprietário do servidor podem revogar
+	if currentUserID != invite.CreatorID && (errS != nil || server == nil || server.OwnerID != currentUserID) {
+		http.Error(w, `{"error":"Sem permissão para revogar este convite"}`, http.StatusForbidden)
+		return
+	}
+
+	if err := h.repo.DeleteInvite(code); err != nil {
+		http.Error(w, `{"error":"Erro ao revogar convite"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 
