@@ -98,6 +98,10 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/servers/{id}/members", serverHandler.AddMember).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/members/{userId}", serverHandler.RemoveMember).Methods("DELETE", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/join", serverHandler.JoinServer).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/join/{code}", serverHandler.JoinServer).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/invites", serverHandler.ListInvites).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/invites", serverHandler.CreateInvite).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/invites/{code}", serverHandler.DeleteInvite).Methods("DELETE", "OPTIONS")
 
 	// Busca de Usuários
 	protected.HandleFunc("/users/search", authHandler.SearchUsers).Methods("GET", "OPTIONS")
