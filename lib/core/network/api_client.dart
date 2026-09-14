@@ -7,9 +7,33 @@ import 'package:http/http.dart' as http;
 import 'package:projectnbx/features/auth/models/user_model.dart';
 
 class ApiClient {
+  static String? _customBaseUrl;
+
+  static void setCustomBaseUrl(String? url) {
+    if (url == null || url.trim().isEmpty) {
+      _customBaseUrl = null;
+    } else {
+      var clean = url.trim();
+      if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+        clean = 'http://$clean';
+      }
+      if (!clean.endsWith('/api')) {
+        if (clean.endsWith('/')) {
+          clean = '${clean}api';
+        } else {
+          clean = '$clean/api';
+        }
+      }
+      _customBaseUrl = clean;
+    }
+  }
+
   static String get baseUrl {
+    if (_customBaseUrl != null && _customBaseUrl!.isNotEmpty) {
+      return _customBaseUrl!;
+    }
     if (kIsWeb) return 'http://localhost:8080/api';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8080/api';
+    if (Platform.isAndroid) return 'http://192.168.3.10:8080/api';
     return 'http://localhost:8080/api';
   }
 
@@ -135,8 +159,158 @@ class ApiClient {
       } else {
         return [];
       }
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMessages(String serverId, String channelId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/channels/$channelId/messages');
+    try {
+      final response = await http.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> sendMessage(
+    String serverId,
+    String channelId,
+    String content,
+  ) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/channels/$channelId/messages');
+    try {
+      final response = await http.post(
+        url,
+        headers: _headers,
+        body: jsonEncode({'content': content}),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> updateMessage(
+    String serverId,
+    String channelId,
+    String messageId,
+    String content,
+  ) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/channels/$channelId/messages/$messageId');
+    try {
+      final response = await http.put(
+        url,
+        headers: _headers,
+        body: jsonEncode({'content': content}),
+      );
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteMessage(
+    String serverId,
+    String channelId,
+    String messageId,
+  ) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/channels/$channelId/messages/$messageId');
+    try {
+      final response = await http.delete(url, headers: _headers);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getServerMembers(String serverId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/members');
+    try {
+      final response = await http.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> addServerMember(
+    String serverId, {
+    String? username,
+    String? email,
+    String? userId,
+  }) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/members');
+    try {
+      final response = await http.post(
+        url,
+        headers: _headers,
+        body: jsonEncode({
+          if (userId != null && userId.isNotEmpty) 'user_id': userId,
+          if (username != null && username.isNotEmpty) 'username': username.trim(),
+          if (email != null && email.isNotEmpty) 'email': email.trim(),
+        }),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        throw Exception(data?['error'] ?? 'Falha ao adicionar membro');
+      }
     } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<bool> removeServerMember(String serverId, String userId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/members/$userId');
+    try {
+      final response = await http.delete(url, headers: _headers);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> joinServer(String serverId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/join');
+    try {
+      final response = await http.post(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        throw Exception(data?['error'] ?? 'Falha ao entrar no servidor');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    final url = Uri.parse('$baseUrl/users/search?q=${Uri.encodeComponent(query)}');
+    try {
+      final response = await http.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
       return [];
     }
   }
 }
+

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/core/widgets/window_controls.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -135,63 +138,124 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Row(
                       children: [
                         const Spacer(),
-                        // Theme Toggle Pill
+                        // Server IP / Host Configuration Button
                         Tooltip(
-                          message: isDark
-                              ? 'Mudar para Tema Claro'
-                              : 'Mudar para Tema Escuro',
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(9999),
-                              onTap: () {
-                                ref.read(themeModeProvider.notifier).toggleTheme();
-                              },
-                              child: AnimatedContainer(
-                                duration: _themeAnimDuration,
-                                curve: Curves.easeInOut,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
+                          message: 'Configurar IP do Servidor Backend',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(9999),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _showServerConfigDialog(
+                                  context,
+                                  isDark,
+                                  cardBg,
+                                  borderColor,
+                                  primaryColor,
+                                  textPrimary,
+                                  textSecondary,
+                                  textMuted,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: cardBg,
-                                  borderRadius: BorderRadius.circular(9999),
-                                  border: Border.all(color: borderColor),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: isDark ? 0.2 : 0.04,
-                                      ),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    AnimatedSwitcher(
-                                      duration: _themeAnimDuration,
-                                      transitionBuilder: (child, anim) =>
-                                          ScaleTransition(scale: anim, child: child),
-                                      child: Icon(
-                                        isDark ? LucideIcons.sun : LucideIcons.moon,
-                                        key: ValueKey(isDark),
-                                        size: 16,
+                                child: AnimatedContainer(
+                                  duration: _themeAnimDuration,
+                                  curve: Curves.easeInOut,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cardBg,
+                                    borderRadius: BorderRadius.circular(9999),
+                                    border: Border.all(color: borderColor),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        LucideIcons.server,
+                                        size: 15,
                                         color: primaryColor,
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      isDark ? 'Tema Claro' : 'Tema Escuro',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: textSecondary,
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        ApiClient.baseUrl
+                                            .replaceFirst('http://', '')
+                                            .replaceFirst('https://', '')
+                                            .replaceFirst('/api', ''),
+                                        style: GoogleFonts.jetBrainsMono(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: textSecondary,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Theme Mode Switcher (Pill)
+                        Tooltip(
+                          message: isDark
+                              ? 'Alternar para Tema Claro'
+                              : 'Alternar para Tema Escuro',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(9999),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  ref.read(themeModeProvider.notifier).toggleTheme();
+                                },
+                                child: AnimatedContainer(
+                                  duration: _themeAnimDuration,
+                                  curve: Curves.easeInOut,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cardBg,
+                                    borderRadius: BorderRadius.circular(9999),
+                                    border: Border.all(color: borderColor),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: isDark ? 0.2 : 0.04,
+                                        ),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      AnimatedSwitcher(
+                                        duration: _themeAnimDuration,
+                                        transitionBuilder: (child, anim) =>
+                                            ScaleTransition(scale: anim, child: child),
+                                        child: Icon(
+                                          isDark ? LucideIcons.sun : LucideIcons.moon,
+                                          key: ValueKey(isDark),
+                                          size: 16,
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isDark ? 'Tema Claro' : 'Tema Escuro',
+                                        style: GoogleFonts.jetBrainsMono(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -325,68 +389,74 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               child: Row(
                                 children: [
                                   Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => _switchMode(false),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: !_isRegister
-                                              ? primaryColor
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            9999,
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () => _switchMode(false),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
                                           ),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          'Entrar',
-                                          style: GoogleFonts.jetBrainsMono(
-                                            fontSize: 13,
-                                            fontWeight: !_isRegister
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
                                             color: !_isRegister
-                                                ? onPrimaryColor
-                                                : textMuted,
+                                                ? primaryColor
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              9999,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            'Entrar',
+                                            style: GoogleFonts.jetBrainsMono(
+                                              fontSize: 13,
+                                              fontWeight: !_isRegister
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: !_isRegister
+                                                  ? onPrimaryColor
+                                                  : textMuted,
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
                                   Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => _switchMode(true),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _isRegister
-                                              ? primaryColor
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            9999,
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () => _switchMode(true),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
                                           ),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          'Criar Conta',
-                                          style: GoogleFonts.jetBrainsMono(
-                                            fontSize: 13,
-                                            fontWeight: _isRegister
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
                                             color: _isRegister
-                                                ? onPrimaryColor
-                                                : textMuted,
+                                                ? primaryColor
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              9999,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            'Criar Conta',
+                                            style: GoogleFonts.jetBrainsMono(
+                                              fontSize: 13,
+                                              fontWeight: _isRegister
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: _isRegister
+                                                  ? onPrimaryColor
+                                                  : textMuted,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -606,4 +676,248 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+
+  void _showServerConfigDialog(
+    BuildContext context,
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+    Color primaryColor,
+    Color textPrimary,
+    Color textSecondary,
+    Color textMuted,
+  ) {
+    final currentHost = ApiClient.baseUrl
+        .replaceFirst('http://', '')
+        .replaceFirst('https://', '')
+        .replaceFirst('/api', '');
+
+    final hostController = TextEditingController(text: currentHost);
+    String? statusMessage;
+    final onPrimaryColor = isDark ? AppColors.darkCanvas : Colors.white;
+    bool isTesting = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Container(
+              width: 440,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderColor, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.6 : 0.2),
+                    blurRadius: 32,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(LucideIcons.server,
+                            size: 18, color: primaryColor),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Endereço do Backend (Host)',
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Conecte o mobile ao PC na mesma rede Wi-Fi',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(LucideIcons.x, size: 16, color: textMuted),
+                        onPressed: () => Navigator.of(dialogCtx).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'IP / HOST DO SERVIDOR:',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: hostController,
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 13,
+                      color: textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '192.168.3.10:8080',
+                      hintStyle: GoogleFonts.jetBrainsMono(
+                        fontSize: 12,
+                        color: textMuted,
+                      ),
+                      prefixIcon: const Icon(LucideIcons.network, size: 16),
+                      suffixIcon: TextButton(
+                        onPressed: isTesting
+                            ? null
+                            : () async {
+                                setDialogState(() {
+                                  isTesting = true;
+                                  statusMessage = 'Testando conexão...';
+                                });
+                                final testHost = hostController.text.trim();
+                                try {
+                                  var urlStr = testHost;
+                                  if (!urlStr.startsWith('http://') &&
+                                      !urlStr.startsWith('https://')) {
+                                    urlStr = 'http://$urlStr';
+                                  }
+                                  if (urlStr.endsWith('/')) {
+                                    urlStr = '${urlStr}api/health';
+                                  } else {
+                                    urlStr = '$urlStr/api/health';
+                                  }
+                                  final uri = Uri.parse(urlStr);
+                                  final res = await http.get(uri).timeout(
+                                        const Duration(seconds: 4),
+                                      );
+                                  if (res.statusCode >= 200 &&
+                                      res.statusCode < 400) {
+                                    setDialogState(() {
+                                      isTesting = false;
+                                      statusMessage =
+                                          '✅ Servidor online e respondendo!';
+                                    });
+                                  } else {
+                                    setDialogState(() {
+                                      isTesting = false;
+                                      statusMessage =
+                                          '⚠️ Resposta com status ${res.statusCode}';
+                                    });
+                                  }
+                                } catch (_) {
+                                  setDialogState(() {
+                                    isTesting = false;
+                                    statusMessage =
+                                        '❌ Não foi possível conectar ao host.';
+                                  });
+                                }
+                              },
+                        child: Text(
+                          'Testar',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (statusMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      statusMessage!,
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        color: statusMessage!.startsWith('✅')
+                            ? (isDark
+                                ? AppColors.darkSage
+                                : AppColors.lightSage)
+                            : (isDark
+                                ? AppColors.darkDanger
+                                : AppColors.lightDanger),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogCtx).pop(),
+                        child: Text(
+                          'Cancelar',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: textMuted,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final newHost = hostController.text.trim();
+                          ApiClient.setCustomBaseUrl(newHost);
+                          try {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('custom_backend_host', newHost);
+                          } catch (_) {}
+                          if (context.mounted) {
+                            setState(() {});
+                            Navigator.of(dialogCtx).pop();
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: onPrimaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 10,
+                          ),
+                        ),
+                        child: Text(
+                          'Salvar e Conectar',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
+

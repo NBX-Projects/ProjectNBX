@@ -97,6 +97,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
           backgroundColor: AppColors.darkPrimary,
           foregroundColor: AppColors.darkCanvas,
           elevation: 0,
@@ -110,6 +111,33 @@ class AppTheme {
             letterSpacing: 0.2,
           ),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
+      switchTheme: const SwitchThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      checkboxTheme: const CheckboxThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      radioTheme: const RadioThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
       ),
     );
   }
@@ -207,6 +235,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
           backgroundColor: AppColors.lightPrimary,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -220,6 +249,33 @@ class AppTheme {
             letterSpacing: 0.2,
           ),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
+      switchTheme: const SwitchThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      checkboxTheme: const CheckboxThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      radioTheme: const RadioThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
       ),
     );
   }

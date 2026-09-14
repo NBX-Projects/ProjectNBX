@@ -1,8 +1,10 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
@@ -19,6 +21,7 @@ import 'package:projectnbx/features/servers/models/server_model.dart';
 import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 import 'package:projectnbx/features/servers/widgets/server_workspace_view.dart';
 import 'package:projectnbx/features/settings/screens/settings_screen.dart';
+import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:window_manager/window_manager.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -30,8 +33,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'home';
-  bool _isMuted = false;
-  bool _isDeafened = false;
 
   @override
   Widget build(BuildContext context) {
@@ -50,90 +51,121 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       orElse: () => null,
     );
 
+    final voiceState = ref.watch(voiceStateProvider);
+    final voiceNotifier = ref.read(voiceStateProvider.notifier);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. Full-Width Top Bar
-          _buildTopBar(context, isDark, user, totalVoiceCount, strings),
+      body: SafeArea(
+        top: true,
+        bottom: true,
+        child: isMobile && selectedServer != null
+            ? ServerWorkspaceView(
+                server: selectedServer,
+                onBackToHome: () => setState(() => _activeTab = 'home'),
+              )
+            : Row(
+                children: [
+                  // 1. LEFT RAIL (Server Icons & Navigation)
+                  HubLeftRail(
+                    activeTab: _activeTab,
+                    onTabChanged: (tab) {
+                      setState(() => _activeTab = tab);
+                      if (tab != 'home') {
+                        ref
+                            .read(serversControllerProvider.notifier)
+                            .selectServer(tab);
+                      }
+                    },
+                  ),
 
-          // 2. Body: Left Rail + (Server Workspace OR Hub Grid + Right Panel)
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Left Navigation Rail
-                HubLeftRail(
-                  activeTab: _activeTab,
-                  onTabChanged: (tab) => setState(() => _activeTab = tab),
-                ),
-
-                // Main Stage: Server Workspace OR Hub Grid
-                Expanded(
-                  child: selectedServer != null
-                      ? ServerWorkspaceView(
-                          server: selectedServer,
-                          onBackToHome: () => setState(() => _activeTab = 'home'),
-                        )
-                      : Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Center Main Hub Grid
-                            Expanded(
-                              child: Container(
-                                alignment: Alignment.topLeft,
-                                color: isDark
-                                    ? AppColors.darkCanvas
-                                    : AppColors.lightCanvas,
-                                child: SingleChildScrollView(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 20,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.start,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // Hub Header (Início + Subtitle + Criar Servidor)
-                                      _buildHubHeader(
-                                        context,
-                                        isDark,
-                                        servers.length,
-                                        totalVoiceCount,
-                                        strings,
-                                      ),
-
-                                      const SizedBox(height: 24),
-
-                                      // Server Sections
-                                      _buildSectionTitle(
-                                        isDark,
-                                        strings.myServers,
-                                        count: servers.length,
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _buildCardGrid(servers),
-
-                                      const SizedBox(height: 32),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            // Right Activity & Telemetry Sidebar
-                            const HubRightPanel(),
-                          ],
+                  // 2. MAIN HUB CONTENT OR ACTIVE SERVER WORKSPACE
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // Top Custom Window Bar
+                        _buildTopBar(
+                          context,
+                          isDark,
+                          user,
+                          totalVoiceCount,
+                          strings,
+                          voiceState,
+                          voiceNotifier,
                         ),
-                ),
-              ],
-            ),
-          ),
-        ],
+
+                        // Workspace / Main Area
+                        Expanded(
+                          child: selectedServer != null
+                              ? ServerWorkspaceView(
+                                  server: selectedServer,
+                                  onBackToHome: () =>
+                                      setState(() => _activeTab = 'home'),
+                                )
+                              : Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Center Content
+                                    Expanded(
+                                      child: Container(
+                                        alignment: Alignment.topLeft,
+                                        color: isDark
+                                            ? AppColors.darkCanvas
+                                            : AppColors.lightCanvas,
+                                        child: SingleChildScrollView(
+                                          physics:
+                                              const AlwaysScrollableScrollPhysics(),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: isMobile ? 14 : 24,
+                                            vertical: isMobile ? 14 : 20,
+                                          ),
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Hub Header (Início + Subtitle + Criar Servidor)
+                                              _buildHubHeader(
+                                                context,
+                                                isDark,
+                                                servers.length,
+                                                totalVoiceCount,
+                                                strings,
+                                                isMobile: isMobile,
+                                              ),
+
+                                              const SizedBox(height: 20),
+
+                                              // Server Sections
+                                              _buildSectionTitle(
+                                                isDark,
+                                                strings.myServers,
+                                                count: servers.length,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              _buildCardGrid(servers),
+
+                                              const SizedBox(height: 32),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Right Activity & Telemetry Sidebar (only visible on tablet/desktop)
+                                    if (!isMobile) const HubRightPanel(),
+                                  ],
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -147,42 +179,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     UserModel? user,
     int voiceCount,
     AppStrings strings,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
   ) {
-    final username = user?.username ?? 'Taui Lima';
+    final username = user?.username ?? 'Sr. 6Seven';
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final isDesktopPlatform =
+        !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
-    return SizedBox(
+    final content = Container(
       width: double.infinity,
       height: 56,
-      child: DragToMoveArea(
-        child: Container(
-          width: double.infinity,
-          height: 56,
-          padding: const EdgeInsets.only(left: 16, right: 0),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
-          border: Border(
-            bottom: BorderSide(
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-            ),
+      padding: EdgeInsets.only(left: 14, right: isDesktopPlatform ? 0 : 12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
           ),
         ),
-        child: Row(
-          children: [
-            // Logo Icon Badge (Clean & Modern)
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                LucideIcons.zap,
-                size: 18,
-                color: isDark ? Colors.black : Colors.white,
+      ),
+      child: Row(
+        children: [
+          // Logo Icon Badge
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              LucideIcons.zap,
+              size: 18,
+              color: isDark ? Colors.black : Colors.white,
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          if (isMobile) ...[
+            Text(
+              'ProjectNBX',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
               ),
             ),
-            const SizedBox(width: 16),
-
+          ] else ...[
             // Search Box
             Flexible(
               child: Container(
@@ -193,8 +239,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   color: isDark ? AppColors.darkInput : AppColors.lightSurface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color:
-                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
                   ),
                 ),
                 child: Row(
@@ -221,7 +268,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: isDark
                             ? AppColors.darkSurfaceElevated
@@ -248,8 +297,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             // Voice Activity Pill Badge
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: (isDark ? AppColors.darkSage : AppColors.lightSage)
                     .withValues(alpha: 0.12),
@@ -266,8 +314,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     width: 7,
                     height: 7,
                     decoration: BoxDecoration(
-                      color:
-                          isDark ? AppColors.darkSage : AppColors.lightSage,
+                      color: isDark ? AppColors.darkSage : AppColors.lightSage,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -277,67 +324,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color:
-                          isDark ? AppColors.darkSage : AppColors.lightSage,
+                      color: isDark ? AppColors.darkSage : AppColors.lightSage,
                     ),
                   ),
                 ],
               ),
             ),
+          ],
 
-            const Spacer(),
+          const Spacer(),
 
+          if (!isMobile) ...[
             // Audio Quick Controls
             IconButton(
               icon: Icon(
-                _isMuted ? LucideIcons.micOff : LucideIcons.mic,
+                voiceState.isMicMuted ? LucideIcons.micOff : LucideIcons.mic,
                 size: 18,
-                color: _isMuted
+                color: voiceState.isMicMuted
                     ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
                     : (isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary),
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary),
               ),
-              tooltip: _isMuted ? 'Desmutar' : 'Mutar',
-              onPressed: () => setState(() => _isMuted = !_isMuted),
+              tooltip: voiceState.isMicMuted ? 'Desmutar' : 'Mutar',
+              onPressed: () => voiceNotifier.toggleMic(),
             ),
             IconButton(
               icon: Icon(
-                _isDeafened ? LucideIcons.headphones : LucideIcons.headphones,
+                voiceState.isDeafened
+                    ? LucideIcons.headphones
+                    : LucideIcons.headphones,
                 size: 18,
-                color: _isDeafened
+                color: voiceState.isDeafened
                     ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
                     : (isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary),
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary),
               ),
-              tooltip: _isDeafened ? 'Ativar Áudio' : 'Desativar Áudio',
-              onPressed: () => setState(() => _isDeafened = !_isDeafened),
+              tooltip: voiceState.isDeafened
+                  ? 'Ativar Áudio'
+                  : 'Desativar Áudio',
+              onPressed: () => voiceNotifier.toggleDeafened(),
             ),
-            IconButton(
-              icon: Icon(
-                isDark ? LucideIcons.sun : LucideIcons.moon,
-                size: 18,
-                color:
-                    isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
-              ),
-              tooltip: isDark ? 'Modo Claro' : 'Modo Escuro',
-              onPressed: () {
-                ref.read(themeModeProvider.notifier).toggleTheme();
-              },
-            ),
-            const SizedBox(width: 6),
+          ],
 
+          IconButton(
+            icon: Icon(
+              isDark ? LucideIcons.sun : LucideIcons.moon,
+              size: 18,
+              color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+            ),
+            tooltip: isDark ? 'Modo Claro' : 'Modo Escuro',
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggleTheme();
+            },
+          ),
+
+          if (!isMobile) ...[
+            const SizedBox(width: 4),
             // AFK / Status Badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color:
-                    isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color:
-                      isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
               ),
               child: Text(
@@ -351,63 +403,67 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 4),
+          ],
 
-            // Settings Button (Configurações)
-            IconButton(
-              icon: Icon(
-                LucideIcons.settings,
-                size: 18,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-              ),
-              tooltip: strings.navSettings,
-              onPressed: () => SettingsScreen.show(context),
+          const SizedBox(width: 4),
+
+          // Settings Button (Configurações)
+          IconButton(
+            icon: Icon(
+              LucideIcons.settings,
+              size: 18,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
             ),
-            const SizedBox(width: 6),
+            tooltip: strings.navSettings,
+            onPressed: () => SettingsScreen.show(context),
+          ),
+          const SizedBox(width: 6),
 
-            // User Profile Pill with Logout
-            InkWell(
-              onTap: () {
-                ref.read(authControllerProvider.notifier).logout();
-              },
-              borderRadius: BorderRadius.circular(9999),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color:
-                      isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                  borderRadius: BorderRadius.circular(9999),
-                  border: Border.all(
-                    color:
-                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                  ),
+          // User Profile Pill with Logout
+          InkWell(
+            onTap: () {
+              ref.read(authControllerProvider.notifier).logout();
+            },
+            mouseCursor: SystemMouseCursors.click,
+            borderRadius: BorderRadius.circular(9999),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 6 : 10,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                borderRadius: BorderRadius.circular(9999),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.darkLavender
-                            : AppColors.lightLavender,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.black : Colors.white,
-                          ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.darkLavender
+                          : AppColors.lightLavender,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.black : Colors.white,
                         ),
                       ),
                     ),
+                  ),
+                  if (!isMobile) ...[
                     const SizedBox(width: 8),
                     Text(
                       username,
@@ -428,27 +484,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           : AppColors.lightTextMuted,
                     ),
                   ],
-                ),
+                ],
               ),
             ),
+          ),
 
+          if (isDesktopPlatform) ...[
             const SizedBox(width: 10),
-
             // Vertical Divider separating app bar and window buttons
             Container(
               height: 24,
               width: 1,
               color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
             ),
-
             const SizedBox(width: 4),
-
             // Integrated Windows Window Controls
             const WindowControls(height: 56, buttonWidth: 46),
           ],
-        ),
+        ],
       ),
-    ));
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: isDesktopPlatform ? DragToMoveArea(child: content) : content,
+    );
   }
 
   // ===========================================================================
@@ -459,8 +520,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     bool isDark,
     int totalCommunities,
     int totalInVoice,
-    AppStrings strings,
-  ) {
+    AppStrings strings, {
+    bool isMobile = false,
+  }) {
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                strings.hubTitle,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark
+                      ? AppColors.darkPrimary
+                      : AppColors.lightPrimary,
+                  foregroundColor: isDark ? Colors.black : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                ),
+                onPressed: () => CreateServerDialog.show(context),
+                icon: const Icon(LucideIcons.plus, size: 15),
+                label: Text(
+                  strings.createServer,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            strings.hubSubtitle(totalCommunities, totalInVoice),
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              color: isDark
+                  ? AppColors.darkTextMuted
+                  : AppColors.lightTextMuted,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -493,8 +612,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // + Criar / Explorar Button
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor:
-                isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+            backgroundColor: isDark
+                ? AppColors.darkPrimary
+                : AppColors.lightPrimary,
             foregroundColor: isDark ? Colors.black : Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(9999),
@@ -515,11 +635,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildSectionTitle(
-    bool isDark,
-    String title, {
-    int? count,
-  }) {
+  Widget _buildSectionTitle(bool isDark, String title, {int? count}) {
     return Row(
       children: [
         Text(

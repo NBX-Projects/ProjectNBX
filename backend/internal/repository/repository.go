@@ -32,9 +32,20 @@ type Repository interface {
 
 	// Mensagens
 	CreateMessage(msg *models.Message) error
+	GetMessageByID(id string) (*models.Message, error)
+	UpdateMessage(id, content string) error
+	DeleteMessage(id string) error
 	ListMessagesByChannel(channelID string, limit int) ([]*models.Message, error)
 
 	// Auditoria
 	CreateAuditLog(log *models.AuditLog) error
 	ListAuditLogs(limit int, source models.AuditSource) ([]*models.AuditLog, error)
+
+	// Membros do Servidor & Busca de Usuários
+	AddServerMember(serverID, userID string) error
+	RemoveServerMember(serverID, userID string) error
+	ListServerMembers(serverID string) ([]*models.ServerMember, error)
+	FindUser(query string) (*models.User, error)
+	SearchUsers(query string, limit int) ([]*models.User, error)
 }
+

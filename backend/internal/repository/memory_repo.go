@@ -16,6 +16,7 @@ type MemoryRepository struct {
 	servers  map[string]*models.Server
 	channels map[string]*models.Channel
 	messages map[string][]*models.Message // channelID -> messages
+	members  map[string]map[string]time.Time // serverID -> userID -> joinedAt
 }
 
 // NewMemoryRepository inicializa o repositório com dados padrão de demonstração
@@ -25,6 +26,7 @@ func NewMemoryRepository() *MemoryRepository {
 		servers:  make(map[string]*models.Server),
 		channels: make(map[string]*models.Channel),
 		messages: make(map[string][]*models.Message),
+		members:  make(map[string]map[string]time.Time),
 	}
 
 	repo.seedInitialData()
@@ -335,6 +337,52 @@ func (r *MemoryRepository) CreateMessage(msg *models.Message) error {
 	return nil
 }
 
+func (r *MemoryRepository) GetMessageByID(id string) (*models.Message, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, msgs := range r.messages {
+		for _, m := range msgs {
+			if m.ID == id {
+				return m, nil
+			}
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (r *MemoryRepository) UpdateMessage(id, content string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, msgs := range r.messages {
+		for _, m := range msgs {
+			if m.ID == id {
+				m.Content = content
+				m.IsEdited = true
+				m.UpdatedAt = time.Now()
+				return nil
+			}
+		}
+	}
+	return ErrNotFound
+}
+
+func (r *MemoryRepository) DeleteMessage(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for channelID, msgs := range r.messages {
+		for i, m := range msgs {
+			if m.ID == id {
+				r.messages[channelID] = append(msgs[:i], msgs[i+1:]...)
+				return nil
+			}
+		}
+	}
+	return ErrNotFound
+}
+
 func (r *MemoryRepository) ListMessagesByChannel(channelID string, limit int) ([]*models.Message, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -358,3 +406,108 @@ func (r *MemoryRepository) CreateAuditLog(log *models.AuditLog) error {
 func (r *MemoryRepository) ListAuditLogs(limit int, source models.AuditSource) ([]*models.AuditLog, error) {
 	return []*models.AuditLog{}, nil
 }
+
+func (r *MemoryRepository) AddServerMember(serverID, userID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.members[serverID]; !ok {
+		r.members[serverID] = make(map[string]time.Time)
+	}
+	r.members[serverID][userID] = time.Now()
+
+	if srv, ok := r.servers[serverID]; ok {
+		srv.MemberCount = len(r.members[serverID])
+	}
+	return nil
+}
+
+func (r *MemoryRepository) RemoveServerMember(serverID, userID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if m, ok := r.members[serverID]; ok {
+		delete(m, userID)
+		if srv, ok := r.servers[serverID]; ok {
+			srv.MemberCount = len(m)
+		}
+	}
+	return nil
+}
+
+func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	srv, ok := r.servers[serverID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	membersMap, ok := r.members[serverID]
+	if !ok {
+		// If empty, return owner as member
+		if owner, ok := r.users[srv.OwnerID]; ok {
+			return []*models.ServerMember{
+				{
+					ServerID: serverID,
+					UserID:   owner.ID,
+					User:     owner,
+					Role:     "owner",
+					JoinedAt: srv.CreatedAt,
+				},
+			}, nil
+		}
+		return []*models.ServerMember{}, nil
+	}
+
+	result := make([]*models.ServerMember, 0, len(membersMap))
+	for uid, joinedAt := range membersMap {
+		u, ok := r.users[uid]
+		if !ok {
+			continue
+		}
+		role := "member"
+		if uid == srv.OwnerID {
+			role = "owner"
+		}
+		result = append(result, &models.ServerMember{
+			ServerID: serverID,
+			UserID:   uid,
+			User:     u,
+			Role:     role,
+			JoinedAt: joinedAt,
+		})
+	}
+	return result, nil
+}
+
+func (r *MemoryRepository) FindUser(query string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, u := range r.users {
+		if u.ID == query || u.Email == query || u.Username == query {
+			return u, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (r *MemoryRepository) SearchUsers(query string, limit int) ([]*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 10
+	}
+	var res []*models.User
+	for _, u := range r.users {
+		if len(res) >= limit {
+			break
+		}
+		res = append(res, u)
+	}
+	return res, nil
+}
+

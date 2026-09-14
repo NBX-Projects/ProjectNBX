@@ -77,10 +77,12 @@ class _HubServerCardState extends State<HubServerCard> {
     final hasVoice = voiceChannels.isNotEmpty;
 
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: InkWell(
         onTap: widget.onTap,
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(14),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),

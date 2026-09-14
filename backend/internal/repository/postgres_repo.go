@@ -137,7 +137,14 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 		server.CreatedAt,
 		time.Now(),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if server.OwnerID != "" {
+		_ = r.AddServerMember(server.ID, server.OwnerID)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
@@ -303,6 +310,65 @@ func (r *PostgresRepository) CreateMessage(msg *models.Message) error {
 	return err
 }
 
+func (r *PostgresRepository) GetMessageByID(id string) (*models.Message, error) {
+	query := `
+	SELECT m.id, m.channel_id, m.server_id, m.author_id, m.content, m.created_at,
+	       u.id, u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
+	FROM messages m
+	JOIN users u ON m.author_id = u.id
+	WHERE m.id = $1`
+
+	row := r.db.QueryRow(query, id)
+	msg := &models.Message{Author: &models.User{}}
+	err := row.Scan(
+		&msg.ID,
+		&msg.ChannelID,
+		&msg.ServerID,
+		&msg.AuthorID,
+		&msg.Content,
+		&msg.CreatedAt,
+		&msg.Author.ID,
+		&msg.Author.Username,
+		&msg.Author.Email,
+		&msg.Author.AvatarURL,
+		&msg.Author.Status,
+		&msg.Author.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return msg, nil
+}
+
+func (r *PostgresRepository) UpdateMessage(id, content string) error {
+	query := `UPDATE messages SET content = $1 WHERE id = $2`
+	res, err := r.db.Exec(query, content, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) DeleteMessage(id string) error {
+	query := `DELETE FROM messages WHERE id = $1`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *PostgresRepository) ListMessagesByChannel(channelID string, limit int) ([]*models.Message, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
@@ -448,4 +514,141 @@ func (r *PostgresRepository) ListAuditLogs(limit int, source models.AuditSource)
 	}
 	return logs, nil
 }
+
+// Server Member Methods
+func (r *PostgresRepository) AddServerMember(serverID, userID string) error {
+	query := `
+	INSERT INTO server_members (server_id, user_id, joined_at)
+	VALUES ($1, $2, $3)
+	ON CONFLICT (server_id, user_id) DO NOTHING`
+	_, err := r.db.Exec(query, serverID, userID, time.Now())
+	if err == nil {
+		countQuery := `UPDATE servers SET member_count = (SELECT COUNT(*) FROM server_members WHERE server_id = $1) WHERE id = $1`
+		_, _ = r.db.Exec(countQuery, serverID)
+	}
+	return err
+}
+
+func (r *PostgresRepository) RemoveServerMember(serverID, userID string) error {
+	query := `DELETE FROM server_members WHERE server_id = $1 AND user_id = $2`
+	_, err := r.db.Exec(query, serverID, userID)
+	if err == nil {
+		countQuery := `UPDATE servers SET member_count = (SELECT COUNT(*) FROM server_members WHERE server_id = $1) WHERE id = $1`
+		_, _ = r.db.Exec(countQuery, serverID)
+	}
+	return err
+}
+
+func (r *PostgresRepository) ListServerMembers(serverID string) ([]*models.ServerMember, error) {
+	query := `
+	SELECT sm.server_id, sm.user_id, sm.joined_at, s.owner_id,
+	       u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
+	FROM server_members sm
+	JOIN servers s ON s.id = sm.server_id
+	JOIN users u ON u.id = sm.user_id
+	WHERE sm.server_id = $1
+	ORDER BY sm.joined_at ASC`
+
+	rows, err := r.db.Query(query, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	members := make([]*models.ServerMember, 0)
+	for rows.Next() {
+		var sm models.ServerMember
+		var ownerID string
+		var u models.User
+		if err := rows.Scan(
+			&sm.ServerID,
+			&sm.UserID,
+			&sm.JoinedAt,
+			&ownerID,
+			&u.Username,
+			&u.Email,
+			&u.AvatarURL,
+			&u.Status,
+			&u.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		u.ID = sm.UserID
+		sm.User = &u
+		if sm.UserID == ownerID {
+			sm.Role = "owner"
+		} else {
+			sm.Role = "member"
+		}
+		members = append(members, &sm)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+
+func (r *PostgresRepository) FindUser(query string) (*models.User, error) {
+	q := `
+	SELECT id, username, email, COALESCE(avatar_url, ''), status, created_at
+	FROM users
+	WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1) OR id = $1
+	LIMIT 1`
+
+	u := &models.User{}
+	err := r.db.QueryRow(q, query).Scan(
+		&u.ID,
+		&u.Username,
+		&u.Email,
+		&u.AvatarURL,
+		&u.Status,
+		&u.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func (r *PostgresRepository) SearchUsers(query string, limit int) ([]*models.User, error) {
+	if limit <= 0 || limit > 20 {
+		limit = 10
+	}
+
+	q := `
+	SELECT id, username, email, COALESCE(avatar_url, ''), status, created_at
+	FROM users
+	WHERE LOWER(username) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1)
+	LIMIT $2`
+
+	rows, err := r.db.Query(q, "%"+query+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]*models.User, 0)
+	for rows.Next() {
+		u := &models.User{}
+		if err := rows.Scan(
+			&u.ID,
+			&u.Username,
+			&u.Email,
+			&u.AvatarURL,
+			&u.Status,
+			&u.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 

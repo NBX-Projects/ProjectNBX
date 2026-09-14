@@ -42,3 +42,20 @@ type CreateChannelRequest struct {
 	Name string      `json:"name"`
 	Type ChannelType `json:"type"`
 }
+
+// ServerMember representa a associação entre um usuário e um servidor
+type ServerMember struct {
+	ServerID string    `json:"server_id"`
+	UserID   string    `json:"user_id"`
+	User     *User     `json:"user,omitempty"`
+	Role     string    `json:"role"` // "owner", "member"
+	JoinedAt time.Time `json:"joined_at"`
+}
+
+// AddMemberRequest payload para adicionar um membro a um servidor
+type AddMemberRequest struct {
+	UserID   string `json:"user_id,omitempty"`
+	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
+}
+

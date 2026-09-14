@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
 import 'package:projectnbx/core/localization/app_language.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
@@ -10,6 +9,7 @@ import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
+import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -47,11 +47,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _noiseSuppression = true;
   bool _echoCancellation = true;
   bool _dtxEnabled = true;
-
-  // Selected Devices
-  String _selectedInputDevice =
-      'Microfone Padrão do Sistema (Realtek High Definition)';
-  String _selectedOutputDevice = 'Alto-falantes Padrão (Realtek Audio)';
 
   // Account Status
   String _userStatus = 'online';
@@ -140,8 +135,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color:
-                        isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+                    color: isDark
+                        ? AppColors.darkPrimary
+                        : AppColors.lightPrimary,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -214,10 +210,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Navigator.of(context).pop();
                 ref.read(authControllerProvider.notifier).logout();
               },
+              mouseCursor: SystemMouseCursors.click,
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: (isDark ? AppColors.darkDanger : AppColors.lightDanger)
                       .withValues(alpha: 0.08),
@@ -233,8 +232,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Icon(
                       LucideIcons.logOut,
                       size: 16,
-                      color:
-                          isDark ? AppColors.darkDanger : AppColors.lightDanger,
+                      color: isDark
+                          ? AppColors.darkDanger
+                          : AppColors.lightDanger,
                     ),
                     const SizedBox(width: 10),
                     Text(
@@ -284,6 +284,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: InkWell(
         onTap: () => setState(() => _selectedSection = id),
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
@@ -291,8 +292,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           decoration: BoxDecoration(
             color: isSelected
                 ? (isDark
-                    ? AppColors.darkSurfaceElevated
-                    : AppColors.lightSurfaceElevated)
+                      ? AppColors.darkSurfaceElevated
+                      : AppColors.lightSurfaceElevated)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: isSelected
@@ -311,8 +312,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: isSelected
                     ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
                     : (isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary),
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -323,11 +324,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                     color: isSelected
                         ? (isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary)
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary)
                         : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary),
                   ),
                 ),
               ),
@@ -343,6 +344,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         InkWell(
           onTap: () => Navigator.of(context).pop(),
+          mouseCursor: SystemMouseCursors.click,
           borderRadius: BorderRadius.circular(9999),
           child: Container(
             padding: const EdgeInsets.all(8),
@@ -405,7 +407,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     UserModel? user,
     AppStrings strings,
   ) {
-    final username = user?.username ?? 'Taui Lima';
+    final username = user?.username ?? 'Sr. 6Seven';
     final email = user?.email ?? 'dev@projectnbx.com';
 
     return Column(
@@ -499,8 +501,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color:
-                            isDark ? AppColors.darkSage : AppColors.lightSage,
+                        color: isDark
+                            ? AppColors.darkSage
+                            : AppColors.lightSage,
                       ),
                     ),
                   ),
@@ -519,8 +522,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     : strings.currentStatusAway,
                 action: DropdownButton<String>(
                   value: _userStatus,
-                  dropdownColor:
-                      isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                  dropdownColor: isDark
+                      ? AppColors.darkSurface
+                      : AppColors.lightSurface,
                   underline: const SizedBox(),
                   style: GoogleFonts.inter(
                     fontSize: 12,
@@ -579,8 +583,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: GoogleFonts.inter(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color:
-                    isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                color: isDark
+                    ? AppColors.darkTextMuted
+                    : AppColors.lightTextMuted,
               ),
             ),
             const SizedBox(height: 2),
@@ -707,6 +712,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onTap: () {
                     ref.read(localeProvider.notifier).setLanguage(lang);
                   },
+                  mouseCursor: SystemMouseCursors.click,
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.all(14),
@@ -718,11 +724,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       border: Border.all(
                         color: isSelected
                             ? (isDark
-                                ? AppColors.darkPrimary
-                                : AppColors.lightPrimary)
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
                             : (isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder),
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder),
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -776,6 +782,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }) {
     return InkWell(
       onTap: onTap,
+      mouseCursor: SystemMouseCursors.click,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -803,8 +810,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               child: Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: accentColor,
                     borderRadius: BorderRadius.circular(9999),
@@ -827,10 +836,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon,
                   size: 15,
                   color: isSelected
-                      ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                      ? (isDark
+                            ? AppColors.darkPrimary
+                            : AppColors.lightPrimary)
                       : (isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted),
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -850,8 +861,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle,
               style: GoogleFonts.inter(
                 fontSize: 11,
-                color:
-                    isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                color: isDark
+                    ? AppColors.darkTextMuted
+                    : AppColors.lightTextMuted,
               ),
             ),
           ],
@@ -862,13 +874,112 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // 3. VOZ & ÁUDIO
   Widget _buildVoiceSection(bool isDark, AppStrings strings) {
+    final audioState = ref.watch(audioDevicesProvider);
+    final audioNotifier = ref.read(audioDevicesProvider.notifier);
+
+    final inputItems = audioState.inputDevices.isNotEmpty
+        ? audioState.inputDevices.map((d) {
+            final label = d.label.isNotEmpty
+                ? d.label
+                : 'Microfone (${d.deviceId.substring(0, d.deviceId.length.clamp(0, 8))})';
+            return DropdownMenuItem(
+              value: d.deviceId,
+              child: Text(label, overflow: TextOverflow.ellipsis),
+            );
+          }).toList()
+        : [
+            const DropdownMenuItem(
+              value: 'default',
+              child: Text('Microfone Padrão do Sistema'),
+            ),
+          ];
+
+    final outputItems = audioState.outputDevices.isNotEmpty
+        ? audioState.outputDevices.map((d) {
+            final label = d.label.isNotEmpty
+                ? d.label
+                : 'Alto-falantes (${d.deviceId.substring(0, d.deviceId.length.clamp(0, 8))})';
+            return DropdownMenuItem(
+              value: d.deviceId,
+              child: Text(label, overflow: TextOverflow.ellipsis),
+            );
+          }).toList()
+        : [
+            const DropdownMenuItem(
+              value: 'default',
+              child: Text('Alto-falantes Padrão do Sistema'),
+            ),
+          ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeaderTitle(
-          isDark,
-          strings.voiceAndVideo,
-          strings.voiceDescription,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildSectionHeaderTitle(
+              isDark,
+              strings.voiceAndVideo,
+              strings.voiceDescription,
+            ),
+            Tooltip(
+              message: 'Detectar novos microfones e fones conectados',
+              child: InkWell(
+                onTap: audioState.isLoading
+                    ? null
+                    : () => audioNotifier.loadDevices(),
+                mouseCursor: SystemMouseCursors.click,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.darkSurface
+                        : AppColors.lightSurface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (audioState.isLoading)
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Icon(
+                          LucideIcons.refreshCw,
+                          size: 13,
+                          color: isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
+                        ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Reescanear',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
 
@@ -876,12 +987,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildDeviceDropdown(
           isDark,
           strings.inputDevice,
-          _selectedInputDevice,
-          [
-            'Microfone Padrão do Sistema (Realtek High Definition)',
-            'Microfone USB Headset (Noise-Cancelling)',
-          ],
-          (val) => setState(() => _selectedInputDevice = val!),
+          audioState.selectedInputDeviceId,
+          inputItems,
+          (val) {
+            if (val != null) audioNotifier.selectInputDevice(val);
+          },
         ),
 
         const SizedBox(height: 14),
@@ -899,12 +1009,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildDeviceDropdown(
           isDark,
           strings.outputDevice,
-          _selectedOutputDevice,
-          [
-            'Alto-falantes Padrão (Realtek Audio)',
-            'Headphones (Pro Audio 7.1)',
-          ],
-          (val) => setState(() => _selectedOutputDevice = val!),
+          audioState.selectedOutputDeviceId,
+          outputItems,
+          (val) {
+            if (val != null) audioNotifier.selectOutputDevice(val);
+          },
         ),
 
         const SizedBox(height: 14),
@@ -960,10 +1069,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildDeviceDropdown(
     bool isDark,
     String label,
-    String currentValue,
-    List<String> items,
+    String? currentValue,
+    List<DropdownMenuItem<String>> items,
     ValueChanged<String?> onChanged,
   ) {
+    final safeValue =
+        (currentValue != null && items.any((it) => it.value == currentValue))
+        ? currentValue
+        : (items.isNotEmpty ? items.first.value : null);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -986,11 +1100,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           child: DropdownButton<String>(
-            value: currentValue,
+            value: safeValue,
             isExpanded: true,
             underline: const SizedBox(),
-            dropdownColor:
-                isDark ? AppColors.darkSurface : AppColors.lightSurface,
+            dropdownColor: isDark
+                ? AppColors.darkSurface
+                : AppColors.lightSurface,
             style: GoogleFonts.inter(
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
@@ -998,9 +1113,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ? AppColors.darkTextPrimary
                   : AppColors.lightTextPrimary,
             ),
-            items: items
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
+            items: items,
             onChanged: onChanged,
           ),
         ),
@@ -1032,12 +1145,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Expanded(
           child: SliderTheme(
             data: SliderThemeData(
-              activeTrackColor:
-                  isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
-              inactiveTrackColor:
-                  isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              thumbColor:
-                  isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+              activeTrackColor: isDark
+                  ? AppColors.darkPrimary
+                  : AppColors.lightPrimary,
+              inactiveTrackColor: isDark
+                  ? AppColors.darkBorder
+                  : AppColors.lightBorder,
+              thumbColor: isDark
+                  ? AppColors.darkPrimary
+                  : AppColors.lightPrimary,
               overlayColor:
                   (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
                       .withValues(alpha: 0.2),
@@ -1117,12 +1233,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           Switch(
             value: value,
-            activeThumbColor:
-                isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
-            activeTrackColor: (isDark
-                    ? AppColors.darkPrimary
-                    : AppColors.lightPrimary)
-                .withValues(alpha: 0.38),
+            activeThumbColor: isDark
+                ? AppColors.darkPrimary
+                : AppColors.lightPrimary,
+            activeTrackColor:
+                (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                    .withValues(alpha: 0.38),
             onChanged: onChanged,
           ),
         ],
@@ -1219,8 +1335,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark
                         ? AppColors.darkSurfaceElevated
@@ -1260,26 +1378,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 10),
 
-        _buildHotkeyRow(
-          isDark,
-          strings.muteUnmuteAction,
-          'Ctrl + Shift + M',
-        ),
-        _buildHotkeyRow(
-          isDark,
-          strings.deafenAction,
-          'Ctrl + Shift + D',
-        ),
-        _buildHotkeyRow(
-          isDark,
-          strings.searchShortcut,
-          'Ctrl + K',
-        ),
-        _buildHotkeyRow(
-          isDark,
-          strings.toggleThemeShortcut,
-          'Ctrl + T',
-        ),
+        _buildHotkeyRow(isDark, strings.muteUnmuteAction, 'Ctrl + Shift + M'),
+        _buildHotkeyRow(isDark, strings.deafenAction, 'Ctrl + Shift + D'),
+        _buildHotkeyRow(isDark, strings.searchShortcut, 'Ctrl + K'),
+        _buildHotkeyRow(isDark, strings.toggleThemeShortcut, 'Ctrl + T'),
       ],
     );
   }
@@ -1294,6 +1396,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }) {
     return InkWell(
       onTap: onTap,
+      mouseCursor: SystemMouseCursors.click,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -1316,10 +1419,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon,
                   size: 16,
                   color: isSelected
-                      ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                      ? (isDark
+                            ? AppColors.darkPrimary
+                            : AppColors.lightPrimary)
                       : (isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted),
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -1339,8 +1444,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               description,
               style: GoogleFonts.inter(
                 fontSize: 11,
-                color:
-                    isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                color: isDark
+                    ? AppColors.darkTextMuted
+                    : AppColors.lightTextMuted,
               ),
             ),
           ],
@@ -1427,17 +1533,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildServiceStatusCard(
           isDark: isDark,
           serviceName: 'Servidor de Voz & Transmissão',
-          endpoint: 'Áudio cristalino de alta fidelidade com latência ultrabaixa',
+          endpoint:
+              'Áudio cristalino de alta fidelidade com latência ultrabaixa',
           status: 'PRONTO (< 50ms)',
           icon: LucideIcons.radio,
-          accentColor: isDark ? AppColors.darkLavender : AppColors.lightLavender,
+          accentColor: isDark
+              ? AppColors.darkLavender
+              : AppColors.lightLavender,
         ),
         const SizedBox(height: 12),
 
         _buildServiceStatusCard(
           isDark: isDark,
           serviceName: 'API Gateway & WebSocket Hub',
-          endpoint: 'Sincronização em tempo real de mensagens e status de presença',
+          endpoint:
+              'Sincronização em tempo real de mensagens e status de presença',
           status: 'CONECTADO',
           icon: LucideIcons.server,
           accentColor: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
@@ -1533,8 +1643,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           style: GoogleFonts.spaceGrotesk(
             fontSize: 22,
             fontWeight: FontWeight.w800,
-            color:
-                isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.lightTextPrimary,
           ),
         ),
         const SizedBox(height: 4),

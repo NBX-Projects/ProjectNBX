@@ -166,6 +166,7 @@ class HubLeftRail extends ConsumerWidget {
         child: Center(
           child: InkWell(
             onTap: onTap,
+            mouseCursor: SystemMouseCursors.click,
             borderRadius: BorderRadius.circular(14),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -216,6 +217,9 @@ class HubLeftRail extends ConsumerWidget {
     final initials = server.name.isNotEmpty
         ? server.name.substring(0, server.name.length >= 2 ? 2 : 1).toUpperCase()
         : 'S';
+    final accentColor = Color(server.accentColor);
+    final hasCustomIcon = server.iconUrl != null && server.iconUrl!.trim().isNotEmpty;
+    final isLightAccent = accentColor.computeLuminance() > 0.5;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
@@ -231,42 +235,65 @@ class HubLeftRail extends ConsumerWidget {
         child: Center(
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
+            mouseCursor: SystemMouseCursors.click,
+            borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 color: isSelected
-                    ? (isDark
-                        ? AppColors.darkPrimary
-                        : AppColors.lightPrimary)
+                    ? accentColor
                     : (isDark
                         ? AppColors.darkSurface
                         : AppColors.lightSurface),
                 borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
                 border: Border.all(
                   color: isSelected
-                      ? (isDark
-                          ? AppColors.darkPrimary
-                          : AppColors.lightPrimary)
-                      : (isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder),
+                      ? accentColor
+                      : accentColor.withValues(alpha: 0.4),
+                  width: isSelected ? 1.5 : 1,
                 ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               ),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: isSelected
-                        ? (isDark ? Colors.black : Colors.white)
-                        : (isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary),
-                  ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
+                child: Center(
+                  child: hasCustomIcon
+                      ? Image.network(
+                          server.iconUrl!,
+                          fit: BoxFit.cover,
+                          width: 44,
+                          height: 44,
+                          errorBuilder: (context, error, stackTrace) => Text(
+                            initials,
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: isSelected
+                                  ? (isLightAccent ? const Color(0xFF181926) : Colors.white)
+                                  : accentColor,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          initials,
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected
+                                ? (isLightAccent ? const Color(0xFF181926) : Colors.white)
+                                : accentColor,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -289,6 +316,7 @@ class HubLeftRail extends ConsumerWidget {
       child: Center(
         child: InkWell(
           onTap: () => CreateServerDialog.show(context),
+          mouseCursor: SystemMouseCursors.click,
           borderRadius: BorderRadius.circular(22),
           child: Container(
             width: 44,

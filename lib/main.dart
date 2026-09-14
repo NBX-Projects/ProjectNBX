@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/theme/app_theme.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/screens/login_screen.dart';
 import 'package:projectnbx/features/home/screens/home_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 void main() async {
@@ -36,6 +38,15 @@ void main() async {
       debugPrint('Desktop window manager initialization error: $e');
     }
   }
+
+  // Restore custom backend host from SharedPreferences if configured
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final customHost = prefs.getString('custom_backend_host');
+    if (customHost != null && customHost.isNotEmpty) {
+      ApiClient.setCustomBaseUrl(customHost);
+    }
+  } catch (_) {}
 
   runApp(const ProviderScope(child: ProjectNBXApp()));
 }

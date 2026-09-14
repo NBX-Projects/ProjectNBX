@@ -225,6 +225,46 @@ class ServersNotifier extends StateNotifier<ServersState> {
       return false;
     }
   }
+
+  Future<bool> joinServer(String serverId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final res = await _apiClient.joinServer(serverId.trim());
+      if (res != null) {
+        final server = ServerModel.fromJson(res);
+        final existingIdx = state.servers.indexWhere((s) => s.id == server.id);
+        List<ServerModel> updatedList;
+        if (existingIdx >= 0) {
+          updatedList = [...state.servers];
+          updatedList[existingIdx] = server;
+        } else {
+          updatedList = [...state.servers, server];
+        }
+
+        state = state.copyWith(
+          servers: updatedList,
+          selectedServerId: server.id,
+          selectedChannelId: server.channels.isNotEmpty
+              ? server.channels.first.id
+              : null,
+          isLoading: false,
+        );
+        return true;
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Não foi possível entrar no servidor.',
+        );
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      return false;
+    }
+  }
 }
 
 final serversControllerProvider =

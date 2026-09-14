@@ -26,6 +26,8 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _iconUrlController = TextEditingController();
+  final _joinCodeController = TextEditingController();
+  bool _isJoinMode = false;
   String _selectedCategory = 'Gaming';
   int _selectedBannerPreset = 0;
   Color _selectedAccentColor = const Color(0xFFF5CBA7);
@@ -59,17 +61,57 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   void initState() {
     super.initState();
     _nameController.addListener(() => setState(() {}));
+    _joinCodeController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _iconUrlController.dispose();
+    _joinCodeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleJoin() async {
+    final code = _joinCodeController.text.trim();
+    if (code.isEmpty) return;
+
+    setState(() => _isSubmitting = true);
+    final success = await ref
+        .read(serversControllerProvider.notifier)
+        .joinServer(code);
+
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+      if (success) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF10B981),
+            content: Text(
+              'Você entrou no servidor com sucesso!',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      } else {
+        final error = ref.read(serversControllerProvider).error ??
+            'Servidor não encontrado com o código fornecido.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.darkDanger
+                : AppColors.lightDanger,
+            content: Text(error),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleCreate() async {
     if (!_formKey.currentState!.validate()) return;
+
 
     final strings = ref.read(stringsProvider);
     setState(() => _isSubmitting = true);
@@ -150,7 +192,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              strings.dialogCreateServerTitle,
+              _isJoinMode ? 'Entrar em um Servidor' : strings.dialogCreateServerTitle,
               style: GoogleFonts.spaceGrotesk(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -165,12 +207,136 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Mode Selector Tabs
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF141520) : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF313244) : const Color(0xFFCBD5E1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _isJoinMode = false),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: !_isJoinMode
+                                ? _selectedAccentColor
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Criar Novo',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: !_isJoinMode
+                                    ? Colors.black
+                                    : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _isJoinMode = true),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _isJoinMode
+                                ? _selectedAccentColor
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Entrar com Código',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: _isJoinMode
+                                    ? Colors.black
+                                    : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (_isJoinMode) ...[
+                // Join Mode Form
+                Text(
+                  'CÓDIGO DE CONVITE OU ID DO SERVIDOR',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _joinCodeController,
+                  autofocus: true,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 13,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Ex: srv_104e12aa-953b-4794-b5f2-7ce0190c64b9',
+                    hintStyle: GoogleFonts.jetBrainsMono(
+                      fontSize: 11.5,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF141520) : const Color(0xFFFFFFFF),
+                    prefixIcon: const Icon(LucideIcons.keyRound, size: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: isDark ? const Color(0xFF313244) : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (_) => _handleJoin(),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Cole aqui o código fornecido pelo criador do servidor (no PC ou por outro usuário) para participar instantaneamente.',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+
                 // 1. Live Banner & Identity Preview Card
                 Container(
                   height: 84,
@@ -370,6 +536,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                     final isSelected = _selectedCategory == cat;
                     return InkWell(
                       onTap: () => setState(() => _selectedCategory = cat),
+                      mouseCursor: SystemMouseCursors.click,
                       borderRadius: BorderRadius.circular(8),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
@@ -460,6 +627,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                             final isSelected = _selectedBannerPreset == idx;
                             return InkWell(
                               onTap: () => setState(() => _selectedBannerPreset = idx),
+                              mouseCursor: SystemMouseCursors.click,
                               borderRadius: BorderRadius.circular(6),
                               child: Container(
                                 width: 28,
@@ -509,6 +677,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                             final isSelected = _selectedAccentColor.toARGB32() == color.toARGB32();
                             return InkWell(
                               onTap: () => setState(() => _selectedAccentColor = color),
+                              mouseCursor: SystemMouseCursors.click,
                               borderRadius: BorderRadius.circular(9999),
                               child: Container(
                                 width: 20,
@@ -583,6 +752,9 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
               ],
             ),
           ),
+        ],
+            ],
+          ),
         ),
       ),
       actions: [
@@ -608,7 +780,9 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
           ),
-          onPressed: _isSubmitting ? null : _handleCreate,
+          onPressed: _isSubmitting
+              ? null
+              : (_isJoinMode ? _handleJoin : _handleCreate),
           child: _isSubmitting
               ? SizedBox(
                   width: 16,
@@ -621,7 +795,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                   ),
                 )
               : Text(
-                  strings.createServer,
+                  _isJoinMode ? 'Entrar no Servidor' : strings.createServer,
                   style: GoogleFonts.jetBrainsMono(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,

@@ -1,24 +1,25 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:projectnbx/features/servers/widgets/invite_member_dialog.dart';
+import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
+import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-enum ServerViewMode {
-  home,
-  channel,
-}
+enum ServerViewMode { home, channel }
 
-enum ServerSidebarTab {
-  canais,
-  membros,
-  resumo,
-}
+enum ServerSidebarTab { canais, membros, resumo }
 
 class ServerWorkspaceView extends ConsumerStatefulWidget {
   final ServerModel server;
@@ -31,14 +32,20 @@ class ServerWorkspaceView extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ServerWorkspaceView> createState() => _ServerWorkspaceViewState();
+  ConsumerState<ServerWorkspaceView> createState() =>
+      _ServerWorkspaceViewState();
 }
 
 class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _editMessageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final Map<String, List<_ChatMessage>> _channelMessages = {};
 
+  StreamSubscription<Map<String, dynamic>>? _wsSubscription;
+  Timer? _pollTimer;
+
+  String? _editingMessageId;
   ServerViewMode _viewMode = ServerViewMode.home;
   ServerSidebarTab _activeSidebarTab = ServerSidebarTab.canais;
   ChannelModel? _activeChannel;
@@ -47,16 +54,18 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   Color _selectedAccentColor = const Color(0xFFF5CBA7);
   bool _isCustomizingBanner = false;
 
-  bool _isMicMuted = false;
-  bool _isDeafened = false;
+  bool _isRightSidebarVisible = true;
   bool _isInVoice = false;
   String? _connectedVoiceChannelId;
 
   // Real stream / screen share transmission state
   bool _isTransmitting = false;
+  ScreenShareConfig? _activeScreenShareConfig;
   double _streamVolume = 0.75;
-  bool _isChatMinimized = false;
+  bool _isChatVisible = true;
   bool _isFullscreen = false;
+
+  List<Map<String, dynamic>> _serverMembers = [];
 
   final List<List<Color>> _bannerPresets = [
     [const Color(0xFF1E1B4B), const Color(0xFF312E81), const Color(0xFF4338CA)],
@@ -77,8 +86,236 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   @override
   void initState() {
     super.initState();
-    _selectedBannerPreset = widget.server.bannerPreset.clamp(0, _bannerPresets.length - 1);
+    _selectedBannerPreset = widget.server.bannerPreset.clamp(
+      0,
+      _bannerPresets.length - 1,
+    );
     _selectedAccentColor = Color(widget.server.accentColor);
+    _loadPersistedMessages();
+    _loadServerMembers();
+    _initWebSocketAndSync();
+    _startPeriodicSync();
+  }
+
+  void _initWebSocketAndSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final wsClient = ref.read(websocketClientProvider);
+      wsClient.connect(serverId: widget.server.id);
+
+      _wsSubscription?.cancel();
+      _wsSubscription = wsClient.eventStream.listen(_handleWebSocketEvent);
+    });
+  }
+
+  void _startPeriodicSync() {
+    _pollTimer?.cancel();
+    // Fallback sync every 3s to guarantee real-time updates across platforms even during network shifts
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      final activeChId = _activeChannel?.id;
+      if (activeChId != null && activeChId.isNotEmpty) {
+        _syncChannelMessagesQuietly(activeChId);
+      }
+    });
+  }
+
+  Future<void> _syncChannelMessagesQuietly(String channelId) async {
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final apiMsgs = await apiClient.getMessages(widget.server.id, channelId);
+      if (!mounted || apiMsgs.isEmpty) return;
+
+      final mapped = apiMsgs
+          .map((m) => _ChatMessage.fromApi(m, _selectedAccentColor))
+          .toList();
+      final currentList = _channelMessages[channelId] ?? [];
+
+      var hasChanges = currentList.length != mapped.length;
+      if (!hasChanges) {
+        for (var i = 0; i < mapped.length; i++) {
+          if (currentList[i].id != mapped[i].id ||
+              currentList[i].content != mapped[i].content ||
+              currentList[i].isEdited != mapped[i].isEdited) {
+            hasChanges = true;
+            break;
+          }
+        }
+      }
+
+      if (hasChanges) {
+        setState(() {
+          _channelMessages[channelId] = mapped;
+        });
+        _saveChannelMessages(channelId);
+      }
+    } catch (_) {}
+  }
+
+  void _handleWebSocketEvent(Map<String, dynamic> event) {
+    if (!mounted) return;
+
+    final type = event['type']?.toString();
+    if (type == null) return;
+
+    final eventServerId = event['server_id']?.toString();
+    if (eventServerId != null &&
+        eventServerId.isNotEmpty &&
+        eventServerId != widget.server.id) {
+      return;
+    }
+
+    final dynamic rawPayload = event['payload'];
+    Map<String, dynamic> payload = {};
+    if (rawPayload is Map<String, dynamic>) {
+      payload = rawPayload;
+    } else if (rawPayload is String) {
+      try {
+        final decoded = jsonDecode(rawPayload);
+        if (decoded is Map<String, dynamic>) {
+          payload = decoded;
+        }
+      } catch (_) {}
+    }
+
+    final channelId = (event['channel_id'] ??
+            payload['channel_id'] ??
+            _activeChannel?.id)
+        ?.toString();
+    if (channelId == null || channelId.isEmpty) return;
+
+    if (type == 'CHAT_MESSAGE') {
+      final newMsg = _ChatMessage.fromApi(payload, _selectedAccentColor);
+      setState(() {
+        final list = _channelMessages.putIfAbsent(channelId, () => []);
+        final idx = list.indexWhere((m) => m.id == newMsg.id);
+        if (idx != -1) {
+          list[idx] = newMsg;
+        } else {
+          final tempIdx = list.indexWhere(
+            (m) =>
+                m.id.startsWith('msg_') &&
+                m.content == newMsg.content &&
+                m.author == newMsg.author,
+          );
+          if (tempIdx != -1) {
+            list[tempIdx] = newMsg;
+          } else {
+            list.add(newMsg);
+          }
+        }
+      });
+      _saveChannelMessages(channelId);
+
+      if (_activeChannel?.id == channelId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    } else if (type == 'MESSAGE_UPDATE') {
+      final msgId = payload['id']?.toString();
+      final newContent = payload['content']?.toString() ?? '';
+      if (msgId != null && msgId.isNotEmpty) {
+        setState(() {
+          final list = _channelMessages[channelId];
+          if (list != null) {
+            final idx = list.indexWhere((m) => m.id == msgId);
+            if (idx != -1) {
+              list[idx] = list[idx].copyWith(content: newContent, isEdited: true);
+            }
+          }
+        });
+        _saveChannelMessages(channelId);
+      }
+    } else if (type == 'MESSAGE_DELETE') {
+      final msgId = payload['id']?.toString();
+      if (msgId != null && msgId.isNotEmpty) {
+        setState(() {
+          final list = _channelMessages[channelId];
+          if (list != null) {
+            list.removeWhere((m) => m.id == msgId);
+          }
+        });
+        _saveChannelMessages(channelId);
+      }
+    }
+  }
+
+  Future<void> _loadServerMembers() async {
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final list = await apiClient.getServerMembers(widget.server.id);
+      if (mounted) {
+        setState(() {
+          _serverMembers = list;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadPersistedMessages() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final prefix = 'channel_messages_${widget.server.id}_';
+      final keys = prefs.getKeys().where((k) => k.startsWith(prefix));
+      final Map<String, List<_ChatMessage>> loaded = {};
+
+      for (final key in keys) {
+        final chKey = key.substring(prefix.length);
+        final rawJson = prefs.getString(key);
+        if (rawJson != null && rawJson.isNotEmpty) {
+          try {
+            final list = (jsonDecode(rawJson) as List<dynamic>)
+                .map(
+                  (item) => _ChatMessage.fromJson(item as Map<String, dynamic>),
+                )
+                .toList();
+            loaded[chKey] = list;
+          } catch (_) {}
+        }
+      }
+
+      if (mounted && loaded.isNotEmpty) {
+        setState(() {
+          _channelMessages.addAll(loaded);
+        });
+      }
+
+      // Fetch from API in background for current or first channel
+      final apiClient = ref.read(apiClientProvider);
+      final activeChId =
+          _activeChannel?.id ??
+          (widget.server.channels.isNotEmpty
+              ? widget.server.channels.first.id
+              : 'chn_geral');
+      final apiMsgs = await apiClient.getMessages(widget.server.id, activeChId);
+      if (mounted && apiMsgs.isNotEmpty) {
+        final mapped = apiMsgs
+            .map((m) => _ChatMessage.fromApi(m, _selectedAccentColor))
+            .toList();
+
+        setState(() {
+          _channelMessages[activeChId] = mapped;
+        });
+        await _saveChannelMessages(activeChId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveChannelMessages(String channelKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final msgs = _channelMessages[channelKey] ?? [];
+      final key = 'channel_messages_${widget.server.id}_$channelKey';
+      final jsonStr = jsonEncode(msgs.map((m) => m.toJson()).toList());
+      await prefs.setString(key, jsonStr);
+    } catch (_) {}
   }
 
   @override
@@ -88,24 +325,37 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         oldWidget.server.bannerPreset != widget.server.bannerPreset ||
         oldWidget.server.accentColor != widget.server.accentColor) {
       setState(() {
-        _selectedBannerPreset = widget.server.bannerPreset.clamp(0, _bannerPresets.length - 1);
+        _selectedBannerPreset = widget.server.bannerPreset.clamp(
+          0,
+          _bannerPresets.length - 1,
+        );
         _selectedAccentColor = Color(widget.server.accentColor);
       });
+      if (oldWidget.server.id != widget.server.id) {
+        _loadPersistedMessages();
+        _loadServerMembers();
+        _initWebSocketAndSync();
+      }
     }
   }
 
   @override
   void dispose() {
+    _wsSubscription?.cancel();
+    _pollTimer?.cancel();
     _messageController.dispose();
+    _editMessageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _sendMessage(String channelKey, String authorName) {
+  Future<void> _sendMessage(String channelKey, String authorName) async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
+    final tempId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
     final newMsg = _ChatMessage(
+      id: tempId,
       author: authorName,
       authorColor: _selectedAccentColor,
       content: text,
@@ -117,6 +367,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _messageController.clear();
     });
 
+    await _saveChannelMessages(channelKey);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -126,6 +378,91 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         );
       }
     });
+
+    // Call API to persist in database and replace temp ID with real server UUID
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final res = await apiClient.sendMessage(
+        widget.server.id,
+        channelKey,
+        text,
+      );
+      if (res != null && res['id'] != null && mounted) {
+        final realId = res['id'].toString();
+        setState(() {
+          final list = _channelMessages[channelKey];
+          if (list != null) {
+            final idx = list.indexWhere((m) => m.id == tempId);
+            if (idx != -1) {
+              list[idx] = list[idx].copyWith(id: realId);
+            }
+          }
+        });
+        await _saveChannelMessages(channelKey);
+      }
+    } catch (_) {}
+  }
+
+  void _startEditingMessage(_ChatMessage msg) {
+    setState(() {
+      _editingMessageId = msg.id;
+      _editMessageController.text = msg.content;
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() {
+      _editingMessageId = null;
+      _editMessageController.clear();
+    });
+  }
+
+  Future<void> _saveEditedMessage(String channelKey) async {
+    final text = _editMessageController.text.trim();
+    if (text.isEmpty || _editingMessageId == null) {
+      _cancelEditing();
+      return;
+    }
+
+    final msgId = _editingMessageId!;
+    setState(() {
+      final list = _channelMessages[channelKey];
+      if (list != null) {
+        final index = list.indexWhere((m) => m.id == msgId);
+        if (index != -1) {
+          list[index] = list[index].copyWith(content: text, isEdited: true);
+        }
+      }
+      _editingMessageId = null;
+      _editMessageController.clear();
+    });
+
+    await _saveChannelMessages(channelKey);
+
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.updateMessage(widget.server.id, channelKey, msgId, text);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteMessage(String channelKey, String messageId) async {
+    setState(() {
+      final list = _channelMessages[channelKey];
+      if (list != null) {
+        list.removeWhere((m) => m.id == messageId);
+      }
+      if (_editingMessageId == messageId) {
+        _editingMessageId = null;
+        _editMessageController.clear();
+      }
+    });
+
+    await _saveChannelMessages(channelKey);
+
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.deleteMessage(widget.server.id, channelKey, messageId);
+    } catch (_) {}
   }
 
   void _openHybridChannel(ChannelModel channel) {
@@ -136,27 +473,92 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _connectedVoiceChannelId = channel.id;
     });
     ref.read(serversControllerProvider.notifier).selectChannel(channel.id);
+    _loadChannelFromApi(channel.id);
+  }
+
+  Future<void> _loadChannelFromApi(String channelId) async {
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final apiMsgs = await apiClient.getMessages(widget.server.id, channelId);
+      if (mounted) {
+        final mapped = apiMsgs.map((m) {
+          final authorName = (m['author'] is Map)
+              ? (m['author']['username'] ?? 'Usuário')
+              : (m['author_id'] ?? 'Usuário');
+          return _ChatMessage(
+            id: (m['id'] ?? 'msg_${DateTime.now().microsecondsSinceEpoch}')
+                .toString(),
+            author: authorName.toString(),
+            authorColor: _selectedAccentColor,
+            content: (m['content'] ?? '').toString(),
+            isEdited: m['is_edited'] == true,
+            timestamp: m['created_at'] != null
+                ? DateTime.tryParse(m['created_at'].toString())
+                : null,
+          );
+        }).toList();
+
+        setState(() {
+          _channelMessages[channelId] = mapped;
+        });
+        await _saveChannelMessages(channelId);
+      }
+    } catch (_) {}
   }
 
   void _leaveVoice() {
     setState(() {
       _isInVoice = false;
       _isTransmitting = false;
+      _activeScreenShareConfig = null;
       _connectedVoiceChannelId = null;
       _viewMode = ServerViewMode.home;
     });
   }
 
-  void _toggleTransmission() {
-    setState(() {
-      _isTransmitting = !_isTransmitting;
-      if (_isTransmitting) {
+  Future<void> _toggleTransmission() async {
+    final user = ref.read(authControllerProvider).user;
+    if (_isTransmitting) {
+      setState(() {
+        _isTransmitting = false;
+        _activeScreenShareConfig = null;
+      });
+      try {
+        ref.read(websocketClientProvider).sendEvent('VOICE_STATE', <String, dynamic>{
+          'user_id': user?.id ?? '',
+          'channel_id': _activeChannel?.id ?? '',
+          'is_transmitting': false,
+        });
+      } catch (_) {}
+      return;
+    }
+
+    final activeChannelName = _activeChannel?.name ?? 'geral';
+    final config = await ScreenShareDialog.show(
+      context,
+      accentColor: _selectedAccentColor,
+      channelName: activeChannelName,
+    );
+
+    if (config != null && mounted) {
+      setState(() {
+        _isTransmitting = true;
+        _activeScreenShareConfig = config;
         _isInVoice = true;
         if (_activeChannel != null) {
           _connectedVoiceChannelId = _activeChannel!.id;
         }
-      }
-    });
+      });
+      try {
+        ref.read(websocketClientProvider).sendEvent('VOICE_STATE', <String, dynamic>{
+          'user_id': user?.id ?? '',
+          'channel_id': _activeChannel?.id ?? '',
+          'is_transmitting': true,
+          'stream_title': config.title,
+          'preview_type': config.previewType,
+        });
+      } catch (_) {}
+    }
   }
 
   @override
@@ -165,7 +567,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
-    final username = user?.username ?? 'Taui Lima';
+    final username = user?.username ?? 'Sr. 6Seven';
+
+    final voiceState = ref.watch(voiceStateProvider);
+    final voiceNotifier = ref.read(voiceStateProvider.notifier);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
 
     final effectiveChannels = widget.server.channels.isNotEmpty
         ? widget.server.channels
@@ -181,29 +588,67 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     return Column(
       children: [
         // 1. Sub-Header Navigation Bar
-        _buildServerTopNav(context, isDark, username),
+        _buildServerTopNav(
+          context,
+          isDark,
+          username,
+          effectiveChannels,
+          voiceState,
+          voiceNotifier,
+        ),
 
         // 2. Main Body: Stage (Home OR Hybrid Channel Stage) + Right Sidebar
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Main Stage (Home, Direct Chat, or Immersive Stream + HUD)
-              Expanded(
-                child: _viewMode == ServerViewMode.home
-                    ? _buildServerHomeContent(context, isDark, username, effectiveChannels)
-                    : _buildHybridChannelStage(context, isDark, username, effectiveChannels),
-              ),
+          child: isMobile
+              ? (_viewMode == ServerViewMode.home
+                    ? _buildServerHomeContent(
+                        context,
+                        isDark,
+                        username,
+                        effectiveChannels,
+                      )
+                    : _buildHybridChannelStage(
+                        context,
+                        isDark,
+                        username,
+                        effectiveChannels,
+                        voiceState,
+                        voiceNotifier,
+                      ))
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Main Stage (Home, Direct Chat, or Immersive Stream + HUD)
+                    Expanded(
+                      child: _viewMode == ServerViewMode.home
+                          ? _buildServerHomeContent(
+                              context,
+                              isDark,
+                              username,
+                              effectiveChannels,
+                            )
+                          : _buildHybridChannelStage(
+                              context,
+                              isDark,
+                              username,
+                              effectiveChannels,
+                              voiceState,
+                              voiceNotifier,
+                            ),
+                    ),
 
-              // Right Sidebar (Canais | Membros | Resumo)
-              _buildRightSidebar(
-                context,
-                isDark,
-                effectiveChannels,
-                username,
-              ),
-            ],
-          ),
+                    // Right Sidebar (Canais | Membros | Resumo)
+                    if (_isRightSidebarVisible)
+                      _buildRightSidebar(
+                        context,
+                        isDark,
+                        effectiveChannels,
+                        username,
+                        voiceState,
+                        voiceNotifier,
+                      ),
+                  ],
+                ),
         ),
       ],
     );
@@ -216,10 +661,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     BuildContext context,
     bool isDark,
     String username,
+    List<ChannelModel> effectiveChannels,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
   ) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
     return Container(
       height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141522) : const Color(0xFFF8FAFC),
         border: Border(
@@ -232,162 +683,364 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         children: [
           // Back to Hub Button
           IconButton(
-            icon: const Icon(LucideIcons.arrowLeft, size: 16),
+            icon: const Icon(LucideIcons.arrowLeft, size: 18),
             tooltip: 'Voltar ao Hub Principal',
-            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            color: isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary,
             onPressed: widget.onBackToHome,
           ),
-          const SizedBox(width: 8),
 
-          // Server Icon & Name
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurfaceElevated : const Color(0xFFE2E8F0),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(
-              LucideIcons.server,
-              size: 14,
-              color: _selectedAccentColor,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            widget.server.name,
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-            ),
-          ),
-          if (_viewMode == ServerViewMode.channel && _activeChannel != null) ...[
-            const SizedBox(width: 8),
-            Text(
-              '/',
-              style: TextStyle(
-                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          if (!isMobile) ...[
+            const SizedBox(width: 4),
+            // Hub Pill Button (Between back arrow and server name)
+            InkWell(
+              onTap: () => setState(() => _viewMode = ServerViewMode.home),
+              mouseCursor: SystemMouseCursors.click,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: _viewMode == ServerViewMode.home
+                      ? _selectedAccentColor
+                      : (isDark
+                            ? const Color(0xFF1E2030)
+                            : const Color(0xFFE2E8F0)),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _viewMode == ServerViewMode.home
+                        ? Colors.transparent
+                        : (isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.layoutGrid,
+                      size: 13,
+                      color: _viewMode == ServerViewMode.home
+                          ? Colors.black
+                          : (isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Hub',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: _viewMode == ServerViewMode.home
+                            ? Colors.black
+                            : (isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              '# ${_activeChannel!.name}',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _selectedAccentColor,
-              ),
-            ),
+            const SizedBox(width: 12),
           ],
 
-          const Spacer(),
+          // Server Name (Without server icon)
+          Expanded(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    widget.server.name,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: isMobile ? 13.5 : 14,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_viewMode == ServerViewMode.channel &&
+                    _activeChannel != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '/',
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkTextMuted
+                          : AppColors.lightTextMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '# ${_activeChannel!.name}',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _selectedAccentColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
 
-          // Hub Pill Button
+          const SizedBox(width: 6),
+
+          // Invite / Add Members Button
           InkWell(
-            onTap: () => setState(() => _viewMode = ServerViewMode.home),
+            onTap: () => InviteMemberDialog.show(
+              context,
+              widget.server,
+              onMembersUpdated: _loadServerMembers,
+            ),
+            mouseCursor: SystemMouseCursors.click,
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 10,
+                vertical: 5,
+              ),
               decoration: BoxDecoration(
-                color: _viewMode == ServerViewMode.home
-                    ? _selectedAccentColor
-                    : Colors.transparent,
+                color: _selectedAccentColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _viewMode == ServerViewMode.home
-                      ? Colors.transparent
-                      : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                  color: _selectedAccentColor.withValues(alpha: 0.5),
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    LucideIcons.layoutGrid,
+                    LucideIcons.userPlus,
                     size: 13,
-                    color: _viewMode == ServerViewMode.home
-                        ? Colors.black
-                        : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                    color: _selectedAccentColor,
+                  ),
+                  if (!isMobile) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      'Convidar',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          if (isMobile) ...[
+            // Mobile Channels / Members Sheet Toggle
+            IconButton(
+              icon: Icon(
+                _viewMode == ServerViewMode.channel
+                    ? LucideIcons.layers
+                    : LucideIcons.menu,
+                size: 18,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.lightTextSecondary,
+              ),
+              tooltip: 'Canais e Membros',
+              onPressed: () {
+                _showMobileChannelsBottomSheet(
+                  context,
+                  isDark,
+                  effectiveChannels,
+                  username,
+                  voiceState,
+                  voiceNotifier,
+                );
+              },
+            ),
+          ] else ...[
+            // User Pill (Desktop)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E2030)
+                    : const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(9999),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: _selectedAccentColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Hub',
-                    style: GoogleFonts.jetBrainsMono(
+                    username,
+                    style: GoogleFonts.inter(
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: _viewMode == ServerViewMode.home
-                          ? Colors.black
-                          : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                      fontWeight: FontWeight.w600,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(width: 8),
 
-          const SizedBox(width: 10),
-
-          // User Pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E2030) : const Color(0xFFE2E8F0),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            // Right Sidebar Collapse/Expand Toggle (Desktop)
+            Tooltip(
+              message: _isRightSidebarVisible
+                  ? 'Recolher painel lateral'
+                  : 'Expandir painel lateral',
+              child: InkWell(
+                onTap: () => setState(
+                  () => _isRightSidebarVisible = !_isRightSidebarVisible,
+                ),
+                mouseCursor: SystemMouseCursors.click,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E2030)
+                        : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                    ),
+                  ),
+                  child: Icon(
+                    _isRightSidebarVisible
+                        ? LucideIcons.panelRightClose
+                        : LucideIcons.panelRightOpen,
+                    size: 16,
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                  ),
+                ),
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: _selectedAccentColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                      style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  username,
-                  style: GoogleFonts.inter(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: _selectedAccentColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Owner',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w800,
-                      color: _selectedAccentColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ],
       ),
+    );
+  }
+
+  void _showMobileChannelsBottomSheet(
+    BuildContext context,
+    bool isDark,
+    List<ChannelModel> effectiveChannels,
+    String username,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF141522) : const Color(0xFFFAF9F6),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return SizedBox(
+              height: MediaQuery.of(context).size.height * 0.75,
+              child: Column(
+                children: [
+                  // Handle
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 10, bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.black26,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Header Tabs: Canais | Membros | Resumo
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        _buildSidebarTabButton(
+                          title: 'Canais',
+                          tab: ServerSidebarTab.canais,
+                          icon: LucideIcons.volume2,
+                          isDark: isDark,
+                        ),
+                        _buildSidebarTabButton(
+                          title: 'Membros',
+                          tab: ServerSidebarTab.membros,
+                          icon: LucideIcons.users,
+                          isDark: isDark,
+                        ),
+                        _buildSidebarTabButton(
+                          title: 'Resumo',
+                          tab: ServerSidebarTab.resumo,
+                          icon: LucideIcons.barChart2,
+                          isDark: isDark,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Tab Content
+                  Expanded(
+                    child: _buildSidebarTabContent(isDark, effectiveChannels, username),
+                  ),
+                  // Voice Connection Status
+                  _buildDockedVoiceFooter(isDark, voiceState, voiceNotifier),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -399,6 +1052,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     bool isDark,
     String username,
     List<ChannelModel> channels,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
   ) {
     final activeChannelName = _activeChannel?.name ?? 'geral';
     final channelKey = _activeChannel?.id ?? 'default';
@@ -422,9 +1077,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       child: Stack(
         children: [
           // A. Palco Imersivo de Transmissão / Screen Share
-          Positioned.fill(
-            child: _buildImmersiveStreamPlayer(isDark, username),
-          ),
+          Positioned.fill(child: _buildImmersiveStreamPlayer(isDark, username)),
 
           // B. Barra Inferior da Transmissão (Volume, Tela Cheia, PiP)
           Positioned(
@@ -434,21 +1087,64 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             child: _buildStageBottomControlBar(isDark, username),
           ),
 
-          // C. Chat Flutuante HUD (Glassmorphism Overlay)
-          Positioned(
-            top: 20,
-            right: 20,
-            width: 330,
-            height: _isChatMinimized ? 44 : 390,
-            child: _buildFloatingChatHud(
-              context,
-              isDark,
-              activeChannelName,
-              channelKey,
-              username,
-              messages,
+          // C. Chat Flutuante HUD (Glassmorphism Overlay) ou Botão Circular Flutuante de Abrir
+          if (_isChatVisible)
+            Positioned(
+              top: 20,
+              right: 20,
+              width: 320,
+              height: 440,
+              child: _buildFloatingChatHud(
+                context,
+                isDark,
+                activeChannelName,
+                channelKey,
+                username,
+                messages,
+                channels,
+                voiceState,
+                voiceNotifier,
+              ),
+            )
+          else
+            Positioned(
+              top: 20,
+              right: 20,
+              child: Tooltip(
+                message: 'Abrir Chat',
+                child: InkWell(
+                  onTap: () => setState(() => _isChatVisible = true),
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(9999),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF13141F).withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        LucideIcons.messageSquare,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -463,225 +1159,569 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     String username,
     List<_ChatMessage> messages,
   ) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
     return Container(
-      color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
+      color: isDark ? const Color(0xFF13141F) : const Color(0xFFFAF9F6),
       child: Column(
         children: [
           // Channel Header Bar
           Container(
             height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141520) : Colors.white,
+              color: isDark ? const Color(0xFF141522) : const Color(0xFFFFFFFF),
               border: Border(
                 bottom: BorderSide(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: isDark
+                      ? const Color(0xFF202234)
+                      : const Color(0xFFE2E8F0),
                 ),
               ),
             ),
             child: Row(
               children: [
                 Icon(LucideIcons.hash, size: 18, color: _selectedAccentColor),
-                const SizedBox(width: 10),
-                Text(
-                  activeChannelName,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          activeChannelName,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: isMobile ? 14.5 : 16,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (!isMobile) ...[
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            'Canal Híbrido · Texto, Voz e Transmissão integrados',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: isDark
+                                  ? const Color(0xFF64748B)
+                                  : AppColors.lightTextMuted,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Canal Híbrido · Texto, Voz e Transmissão integrados',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                  ),
-                ),
-                const Spacer(),
+                const SizedBox(width: 8),
 
                 // Transmitir Tela Button
-                ElevatedButton.icon(
-                  onPressed: _toggleTransmission,
-                  icon: const Icon(LucideIcons.screenShare, size: 14),
-                  label: const Text(
-                    'Transmitir Tela',
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                if (isMobile)
+                  IconButton(
+                    onPressed: _toggleTransmission,
+                    icon: Icon(
+                      _isTransmitting
+                          ? LucideIcons.screenShareOff
+                          : LucideIcons.screenShare,
+                      size: 18,
+                      color: _isTransmitting
+                          ? const Color(0xFFEF4444)
+                          : _selectedAccentColor,
+                    ),
+                    tooltip: _isTransmitting
+                        ? 'Parar Transmissão'
+                        : 'Transmitir Tela',
+                  )
+                else
+                  ElevatedButton.icon(
+                    onPressed: _toggleTransmission,
+                    icon: Icon(
+                      _isTransmitting
+                          ? LucideIcons.screenShareOff
+                          : LucideIcons.screenShare,
+                      size: 14,
+                    ),
+                    label: Text(
+                      _isTransmitting ? 'Parar Transmissão' : 'Transmitir Tela',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isTransmitting
+                          ? const Color(0xFFEF4444)
+                          : _selectedAccentColor,
+                      foregroundColor: _isTransmitting
+                          ? Colors.white
+                          : (_selectedAccentColor.computeLuminance() > 0.5
+                                ? Colors.black
+                                : Colors.white),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _selectedAccentColor,
-                    foregroundColor: _selectedAccentColor.computeLuminance() > 0.5
-                        ? Colors.black
-                        : Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
               ],
             ),
           ),
 
-          // Message Feed or Clean Empty State
+          // Message Feed (Real messages or welcome empty state)
           Expanded(
             child: messages.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E2030)
+                                  : const Color(0xFFE2E8F0),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _selectedAccentColor.withValues(
+                                  alpha: 0.4,
+                                ),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                LucideIcons.hash,
+                                size: 28,
+                                color: _selectedAccentColor,
+                              ),
                             ),
                           ),
-                          child: Icon(
-                            LucideIcons.messageSquare,
-                            size: 32,
-                            color: _selectedAccentColor,
+                          const SizedBox(height: 16),
+                          Text(
+                            'Bem-vindo ao #$activeChannelName!',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'Início do canal #$activeChannelName',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          const SizedBox(height: 6),
+                          Text(
+                            'Este é o início do canal #$activeChannelName no servidor ${widget.server.name}.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Envie uma mensagem ou inicie uma transmissão para conversar!',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          const SizedBox(height: 4),
+                          Text(
+                            'Envie uma mensagem abaixo para começar a conversar!',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: isDark
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF94A3B8),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: _toggleTransmission,
-                          icon: const Icon(LucideIcons.screenShare, size: 14),
-                          label: const Text('Iniciar Transmissão de Tela'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _selectedAccentColor,
-                            side: BorderSide(color: _selectedAccentColor),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(20),
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = messages[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundColor: msg.authorColor.withValues(alpha: 0.3),
-                              child: Text(
-                                msg.author.isNotEmpty ? msg.author[0].toUpperCase() : 'U',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: msg.authorColor,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        msg.author,
-                                        style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          color: msg.authorColor,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}',
-                                        style: GoogleFonts.jetBrainsMono(
-                                          fontSize: 10,
-                                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                                        ),
-                                      ),
-                                    ],
+                : Align(
+                    alignment: Alignment.bottomCenter,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shrinkWrap: true,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = messages[index];
+                        final isEditing = _editingMessageId == msg.id;
+                        final isMine =
+                            msg.author == username || msg.author == 'Você';
+                        final initials = msg.author.isNotEmpty
+                            ? (msg.author.contains('_')
+                                  ? '${msg.author.split('_')[0][0]}${msg.author.split('_')[1][0]}'
+                                        .toUpperCase()
+                                  : msg.author
+                                        .substring(
+                                          0,
+                                          msg.author.length >= 2 ? 2 : 1,
+                                        )
+                                        .toUpperCase())
+                            : 'U';
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? const Color(0xFF1E2030)
+                                      : const Color(0xFFE2E8F0),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: msg.authorColor.withValues(
+                                      alpha: isDark ? 0.35 : 0.5,
+                                    ),
+                                    width: 1,
                                   ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    msg.content,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    initials,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: msg.authorColor,
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          msg.author,
+                                          style: GoogleFonts.inter(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13.5,
+                                            color: msg.authorColor,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        if (msg.timestamp != null)
+                                          Text(
+                                            '${msg.timestamp!.hour.toString().padLeft(2, '0')}:${msg.timestamp!.minute.toString().padLeft(2, '0')}',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: isDark
+                                                  ? const Color(0xFF64748B)
+                                                  : const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        if (msg.isEdited) ...[
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '(editada)',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              fontStyle: FontStyle.italic,
+                                              color: isDark
+                                                  ? const Color(0xFF64748B)
+                                                  : const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        ],
+                                        const Spacer(),
+                                        if (isMine && !isEditing) ...[
+                                          Tooltip(
+                                            message: 'Editar mensagem',
+                                            child: InkWell(
+                                              onTap: () =>
+                                                  _startEditingMessage(msg),
+                                              mouseCursor:
+                                                  SystemMouseCursors.click,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  4,
+                                                ),
+                                                child: Icon(
+                                                  LucideIcons.pencil,
+                                                  size: 13,
+                                                  color: isDark
+                                                      ? const Color(0xFF94A3B8)
+                                                      : const Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Tooltip(
+                                            message: 'Excluir mensagem',
+                                            child: InkWell(
+                                              onTap: () => _deleteMessage(
+                                                channelKey,
+                                                msg.id,
+                                              ),
+                                              mouseCursor:
+                                                  SystemMouseCursors.click,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              child: const Padding(
+                                                padding: EdgeInsets.all(4),
+                                                child: Icon(
+                                                  LucideIcons.trash2,
+                                                  size: 13,
+                                                  color: Color(0xFFEF4444),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    if (isEditing)
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? const Color(0xFF141520)
+                                                  : const Color(0xFFF1F5F9),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: _selectedAccentColor,
+                                                width: 1.2,
+                                              ),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            child: TextField(
+                                              controller:
+                                                  _editMessageController,
+                                              autofocus: true,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13.5,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : const Color(0xFF0F172A),
+                                              ),
+                                              cursorColor: _selectedAccentColor,
+                                              decoration: const InputDecoration(
+                                                border: InputBorder.none,
+                                                enabledBorder: InputBorder.none,
+                                                focusedBorder: InputBorder.none,
+                                                errorBorder: InputBorder.none,
+                                                focusedErrorBorder:
+                                                    InputBorder.none,
+                                                disabledBorder:
+                                                    InputBorder.none,
+                                                isDense: true,
+                                                filled: false,
+                                                contentPadding: EdgeInsets.zero,
+                                              ),
+                                              onSubmitted: (_) =>
+                                                  _saveEditedMessage(
+                                                    channelKey,
+                                                  ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Enter para ',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 11,
+                                                  color: isDark
+                                                      ? const Color(0xFF64748B)
+                                                      : const Color(0xFF94A3B8),
+                                                ),
+                                              ),
+                                              InkWell(
+                                                onTap: () => _saveEditedMessage(
+                                                  channelKey,
+                                                ),
+                                                mouseCursor:
+                                                    SystemMouseCursors.click,
+                                                child: Text(
+                                                  'salvar',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _selectedAccentColor,
+                                                  ),
+                                                ),
+                                              ),
+                                              Text(
+                                                ' • ',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 11,
+                                                  color: isDark
+                                                      ? const Color(0xFF64748B)
+                                                      : const Color(0xFF94A3B8),
+                                                ),
+                                              ),
+                                              InkWell(
+                                                onTap: _cancelEditing,
+                                                mouseCursor:
+                                                    SystemMouseCursors.click,
+                                                child: Text(
+                                                  'cancelar',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(
+                                                      0xFFEF4444,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      )
+                                    else
+                                      Text(
+                                        msg.content,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13.5,
+                                          color: isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.92,
+                                                )
+                                              : const Color(0xFF1E293B),
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
           ),
 
-          // Message Input Box
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141520) : Colors.white,
-              border: Border(
-                top: BorderSide(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                ),
-              ),
-            ),
+          // Message Input Bar matching Prototype
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
+                color: isDark
+                    ? const Color(0xFF1E2030)
+                    : const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: isDark
+                      ? const Color(0xFF2E314A)
+                      : const Color(0xFFCBD5E1),
+                  width: 1,
                 ),
+                boxShadow: isDark
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
               child: Row(
                 children: [
+                  InkWell(
+                    onTap: () {},
+                    mouseCursor: SystemMouseCursors.click,
+                    borderRadius: BorderRadius.circular(9999),
+                    child: Icon(
+                      LucideIcons.plusCircle,
+                      size: 20,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                      cursorColor: _selectedAccentColor,
                       decoration: InputDecoration(
-                        hintText: 'Conversar em #$activeChannelName...',
+                        hintText: 'Mensagem em #$activeChannelName',
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
                         isDense: true,
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
                         hintStyle: GoogleFonts.inter(
-                          fontSize: 12.5,
-                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          fontSize: 13,
+                          color: isDark
+                              ? const Color(0xFF64748B)
+                              : const Color(0xFF94A3B8),
                         ),
                       ),
                       onSubmitted: (_) => _sendMessage(channelKey, username),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(LucideIcons.send, size: 16, color: _selectedAccentColor),
-                    onPressed: () => _sendMessage(channelKey, username),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {},
+                    mouseCursor: SystemMouseCursors.click,
+                    borderRadius: BorderRadius.circular(9999),
+                    child: Icon(
+                      LucideIcons.smile,
+                      size: 20,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: () => _sendMessage(channelKey, username),
+                    mouseCursor: SystemMouseCursors.click,
+                    borderRadius: BorderRadius.circular(9999),
+                    child: Icon(
+                      LucideIcons.send,
+                      size: 18,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
                   ),
                 ],
               ),
@@ -692,48 +1732,606 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  // Palco de Transmissão Imersiva
+  // Palco de Transmissão Imersiva com Vídeo ao Vivo, Som e Telemetria
   Widget _buildImmersiveStreamPlayer(bool isDark, String username) {
+    final title = _activeScreenShareConfig?.title ?? 'Tela Principal';
+    final resolution = _activeScreenShareConfig?.resolution ?? '1080p';
+    final fps = _activeScreenShareConfig?.fps ?? 60;
+    final previewType = _activeScreenShareConfig?.previewType ?? 'nbx';
+    final shareAudio = _activeScreenShareConfig?.shareAudio ?? true;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF090A10),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFF090A10)),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Graphic Simulation of Screen Share / Stream
-          const CustomPaint(
-            painter: _RacingStreamCanvasPainter(),
+          // 1. Live Screen / Window Video Feed Canvas
+          Positioned.fill(
+            child: _buildLiveStreamContent(previewType, title, username, isDark),
           ),
 
-          // Screen Share Overlay
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _selectedAccentColor.withValues(alpha: 0.4)),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(LucideIcons.screenShare, size: 48, color: _selectedAccentColor),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Transmissão ao vivo de $username',
-                        style: GoogleFonts.spaceGrotesk(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+          // 2. Top HUD Overlay (Live Badge, App Name, Telemetry, Audio Meter)
+          Positioned(
+            top: 16,
+            left: 20,
+            right: 20,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 740;
+                final isVeryCompact = constraints.maxWidth < 560;
+
+                return Row(
+                  children: [
+                    // Live Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(9999),
+                        border: Border.all(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.6),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xFFEF4444).withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'AO VIVO',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                              color: const Color(0xFFEF4444),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Active Window / App Badge
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(9999),
+                          border: Border.all(
+                            color: _selectedAccentColor.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.screenShare,
+                              size: 13,
+                              color: _selectedAccentColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                title,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
+                    ),
+
+                    if (!isVeryCompact) ...[
+                      const SizedBox(width: 8),
+                      // SFU Realtime Telemetry Chip
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(9999),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Text(
+                          isCompact ? '$resolution $fps FPS' : '$resolution • $fps FPS • 6.8 Mbps',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const Spacer(),
+
+                    // Live Audio Visualizer Equalizer (if audio enabled)
+                    if (shareAudio && _streamVolume > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFF10B981).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(9999),
+                          border: Border.all(
+                            color:
+                                const Color(0xFF10B981).withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.volume2,
+                              size: 13,
+                              color: Color(0xFF10B981),
+                            ),
+                            if (!isCompact) ...[
+                              const SizedBox(width: 5),
+                              Text(
+                                'ÁUDIO',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 5),
+                            _buildMiniAudioEqualizer(),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // 3. Subtle Vignette & Gradient Edges
+          IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.7),
+                  ],
+                  stops: const [0.0, 0.15, 0.85, 1.0],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Live Screen Content Simulation
+  Widget _buildLiveStreamContent(
+    String previewType,
+    String title,
+    String username,
+    bool isDark,
+  ) {
+    // If we have a real captured thumbnail from PrintWindow or CopyFromScreen, display it in the player!
+    final thumbB64 = _activeScreenShareConfig?.thumbnail;
+    if (thumbB64 != null && thumbB64.isNotEmpty) {
+      try {
+        final bytes = base64Decode(thumbB64);
+        return Container(
+          color: const Color(0xFF090A10),
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+              ),
+            ),
+          ),
+        );
+      } catch (_) {}
+    }
+
+    switch (previewType) {
+      case 'youtube':
+        return _buildYouTubeStreamViewport(title);
+      case 'android_studio':
+        return _buildAndroidStudioStreamViewport();
+      case 'goland':
+        return _buildGoLandStreamViewport();
+      case 'figma':
+        return _buildFigmaStreamViewport();
+      case 'github':
+        return _buildGitHubStreamViewport();
+      case 'whatsapp':
+        return _buildWhatsAppStreamViewport();
+      case 'rgb':
+        return _buildRgbStreamViewport();
+      case 'vscode':
+        return _buildVsCodeStreamViewport();
+      case 'chrome':
+        return _buildChromeStreamViewport();
+      case 'spotify':
+        return _buildSpotifyStreamViewport();
+      case 'terminal':
+        return _buildTerminalStreamViewport();
+      case 'game':
+        return _buildGameStreamViewport();
+      case 'screen1':
+      case 'screen2':
+        return _buildDesktopMonitorViewport(title);
+      case 'discord':
+        return _buildDiscordStreamViewport();
+      case 'nbx':
+      default:
+        return _buildProjectNbxStreamViewport();
+    }
+  }
+
+  // YouTube Live Stream Viewport
+  Widget _buildYouTubeStreamViewport(String title) {
+    return Container(
+      color: const Color(0xFF0F0F0F),
+      child: Column(
+        children: [
+          // Video Player Screen
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Backdrop with subtle gradient
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment.center,
+                      radius: 0.85,
+                      colors: [Color(0xFF2A1515), Color(0xFF0A0A0A)],
+                    ),
+                  ),
+                ),
+                // Center Player Overlay
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF0000).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF0000).withValues(alpha: 0.45),
+                              blurRadius: 28,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.play_arrow, size: 44, color: Colors.white),
+                      ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          title,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF0000),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'AO VIVO',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'YouTube 1080p60 HDR • 48 kHz Stereo Audio',
+                            style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Player Bottom Scrubber Bar
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 42,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.play_arrow, size: 20, color: Colors.white),
+                        const SizedBox(width: 12),
+                        const Icon(Icons.volume_up, size: 18, color: Colors.white),
+                        const SizedBox(width: 12),
+                        Text(
+                          '24:10 / 1:12:00',
+                          style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [
+                              Container(
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              Container(
+                                width: 220,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF0000),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              Positioned(
+                                left: 216,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFFF0000),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white54),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            'HD 1080',
+                            style: GoogleFonts.jetBrainsMono(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.fullscreen, size: 20, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Android Studio Stream Viewport
+  Widget _buildAndroidStudioStreamViewport() {
+    return Container(
+      color: const Color(0xFF1E1F22),
+      child: Column(
+        children: [
+          // Android Studio Window Tab Header
+          Container(
+            height: 36,
+            color: const Color(0xFF2B2D30),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.android, size: 16, color: Color(0xFF3DDC84)),
+                const SizedBox(width: 8),
+                Text('projectNBX — [D:\\Github\\My\\projectNBX]', style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white70)),
+                const Spacer(),
+                const Icon(Icons.play_arrow, size: 16, color: Color(0xFF3DDC84)),
+                const SizedBox(width: 8),
+                const Icon(Icons.bug_report, size: 16, color: Color(0xFFE8BF6A)),
+                const SizedBox(width: 8),
+                const Icon(Icons.refresh, size: 16, color: Color(0xFF38BDF8)),
+              ],
+            ),
+          ),
+          // Code Area + Project Tree
+          Expanded(
+            child: Row(
+              children: [
+                // Project Explorer
+                Container(
+                  width: 160,
+                  color: const Color(0xFF1E1F22),
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PROJECT', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white54)),
+                      const SizedBox(height: 8),
+                      _buildTreeItem(Icons.folder, 'lib', const Color(0xFF6897BB), isExpanded: true),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildTreeItem(Icons.folder, 'features', const Color(0xFF6897BB)),
+                            _buildTreeItem(Icons.folder, 'core', const Color(0xFF6897BB)),
+                            _buildTreeItem(LucideIcons.fileCode2, 'main.dart', const Color(0xFF3DDC84), isSelected: true),
+                          ],
+                        ),
+                      ),
+                      _buildTreeItem(LucideIcons.fileText, 'pubspec.yaml', const Color(0xFFE8BF6A)),
+                    ],
+                  ),
+                ),
+                Container(width: 1, color: const Color(0xFF2B2D30)),
+                // Editor with Code
+                Expanded(
+                  child: Container(
+                    color: const Color(0xFF1E1F22),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCodeLine('import \'package:flutter/material.dart\';', const Color(0xFFCC7832)),
+                        _buildCodeLine('import \'package:flutter_riverpod/flutter_riverpod.dart\';', const Color(0xFFCC7832)),
+                        _buildCodeLine('import \'package:projectnbx/features/home/screens/home_screen.dart\';', const Color(0xFFCC7832)),
+                        _buildCodeLine('', Colors.transparent),
+                        _buildCodeLine('void main() async {', const Color(0xFFFFC66D)),
+                        _buildCodeLine('  WidgetsFlutterBinding.ensureInitialized();', const Color(0xFF9876AA)),
+                        _buildCodeLine('  runApp(const ProviderScope(child: ProjectNBXApp()));', const Color(0xFF9876AA)),
+                        _buildCodeLine('}', const Color(0xFFFFC66D)),
+                        const Spacer(),
+                        // Bottom Run Bar
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2B2D30),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle, size: 14, color: Color(0xFF3DDC84)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Running on Windows (Desktop) • Hot Reload active (214ms)',
+                                style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFF3DDC84)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // GoLand Stream Viewport
+  Widget _buildGoLandStreamViewport() {
+    return Container(
+      color: const Color(0xFF1E1F22),
+      child: Column(
+        children: [
+          Container(
+            height: 36,
+            color: const Color(0xFF2B2D30),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.code2, size: 16, color: Color(0xFF00ADD8)),
+                const SizedBox(width: 8),
+                Text('backend — GoLand 2024.1', style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white70)),
+                const Spacer(),
+                Text('Go 1.22.4', style: GoogleFonts.jetBrainsMono(fontSize: 11, color: const Color(0xFF00ADD8))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                _buildCodeLine('package database', const Color(0xFFCC7832)),
+                _buildCodeLine('', Colors.transparent),
+                _buildCodeLine('// ConnectDB establishes high performance pooling with Postgres 16', const Color(0xFF629755)),
+                _buildCodeLine('func ConnectDB(cfg *config.Config) (*sqlx.DB, error) {', const Color(0xFFFFC66D)),
+                _buildCodeLine('    db, err := sqlx.Open("postgres", cfg.DatabaseURL)', const Color(0xFF00ADD8)),
+                _buildCodeLine('    if err != nil { return nil, err }', const Color(0xFFCC7832)),
+                _buildCodeLine('    db.SetMaxOpenConns(50)', const Color(0xFF6897BB)),
+                _buildCodeLine('    db.SetMaxIdleConns(10)', const Color(0xFF6897BB)),
+                _buildCodeLine('    return db, nil', const Color(0xFFCC7832)),
+                _buildCodeLine('}', const Color(0xFFFFC66D)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2B2D30),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check, size: 14, color: Color(0xFF00ADD8)),
+                      const SizedBox(width: 6),
                       Text(
-                        'Transmissão de tela em alta fidelidade ativa',
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                        'Tests passed: 18 of 18 (100% coverage on audit_repository)',
+                        style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFF00ADD8)),
                       ),
                     ],
                   ),
@@ -741,18 +2339,151 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               ],
             ),
           ),
+        ),
+      ],
+    ),
+  );
+}
 
-          // Gradient Overlays
+  // Figma Stream Viewport
+  Widget _buildFigmaStreamViewport() {
+    return Container(
+      color: const Color(0xFF2C2C2C),
+      child: Column(
+        children: [
+          // Figma Header
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withValues(alpha: 0.4),
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.85),
+            height: 38,
+            color: const Color(0xFF1E1E1E),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.penTool, size: 16, color: Color(0xFFF24E1E)),
+                const SizedBox(width: 8),
+                Text('ProjectNBX — Design System 2.0', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFF0D99FF), borderRadius: BorderRadius.circular(4)),
+                  child: Text('Share', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ],
+            ),
+          ),
+          // Canvas Area
+          Expanded(
+            child: Row(
+              children: [
+                // Layers
+                Container(
+                  width: 140,
+                  color: const Color(0xFF252525),
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('LAYERS', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white54)),
+                      const SizedBox(height: 8),
+                      Text('❖ ScreenShareModal', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFFF24E1E))),
+                      Text('  ↳ TopBarHUD', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                      Text('  ↳ SourceGrid (16:9)', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                      Text('  ↳ SoundwaveEqualizer', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                    ],
+                  ),
+                ),
+                // Center Canvas
+                Expanded(
+                  child: Container(
+                    color: const Color(0xFF1E1E1E),
+                    child: Center(
+                      child: Container(
+                        width: 320,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF181926),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF24E1E), width: 1.5),
+                          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 20)],
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(LucideIcons.screenShare, size: 36, color: _selectedAccentColor),
+                              const SizedBox(height: 8),
+                              Text('Discord-Like Screen Share UI', style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                              Text('Real Windows & Monitors Enumerable', style: GoogleFonts.inter(fontSize: 10, color: Colors.white60)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // GitHub Desktop Stream Viewport
+  Widget _buildGitHubStreamViewport() {
+    return Container(
+      color: const Color(0xFF1F2428),
+      child: Column(
+        children: [
+          Container(
+            height: 38,
+            color: const Color(0xFF24292E),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.gitBranch, size: 16, color: Color(0xFF8957E5)),
+                const SizedBox(width: 8),
+                Text('Current Repository: projectNBX', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(width: 14),
+                Text('Current Branch: main', style: GoogleFonts.jetBrainsMono(fontSize: 11, color: const Color(0xFF8957E5))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('2 changed files in working tree', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFF161B22), borderRadius: BorderRadius.circular(6)),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.fileCode2, size: 14, color: Color(0xFF3FB950)),
+                        const SizedBox(width: 8),
+                        Text('lib/features/voice/widgets/screen_share_dialog.dart', style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white70)),
+                        const Spacer(),
+                        Text('+182 -14', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFF3FB950))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFF161B22), borderRadius: BorderRadius.circular(6)),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.fileCode2, size: 14, color: Color(0xFF3FB950)),
+                        const SizedBox(width: 8),
+                        Text('lib/features/servers/widgets/server_workspace_view.dart', style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white70)),
+                        const Spacer(),
+                        Text('+220 -8', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFF3FB950))),
+                      ],
+                    ),
+                  ),
                 ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
               ),
             ),
           ),
@@ -761,119 +2492,905 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  // Barra Inferior da Transmissão
-  Widget _buildStageBottomControlBar(bool isDark, String username) {
+  // WhatsApp Desktop Stream Viewport
+  Widget _buildWhatsAppStreamViewport() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.transparent,
-            Colors.black.withValues(alpha: 0.9),
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+      color: const Color(0xFF111B21),
       child: Row(
         children: [
-          // Live Indicator Badge
           Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Color(0xFFEF4444),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0xFFEF4444),
-                  blurRadius: 6,
-                  spreadRadius: 1,
+            width: 180,
+            color: const Color(0xFF202C33),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(LucideIcons.messageCircle, size: 18, color: Color(0xFF25D366)),
+                    const SizedBox(width: 8),
+                    Text('Conversas', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF111B21), borderRadius: BorderRadius.circular(6)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Dev Team NBX', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text('Transmissão ao vivo iniciada!', style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFF25D366))),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            'AO VIVO',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: const Color(0xFFEF4444),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$username — Transmissão de Tela',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-
-          const Spacer(),
-
-          // Stop Transmission Button
-          ElevatedButton.icon(
-            onPressed: _toggleTransmission,
-            icon: const Icon(LucideIcons.screenShareOff, size: 12),
-            label: const Text('Parar Transmissão', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // Volume Control
-          IconButton(
-            icon: Icon(
-              _streamVolume == 0 ? LucideIcons.volumeX : LucideIcons.volume2,
-              size: 16,
-              color: Colors.white70,
-            ),
-            onPressed: () {
-              setState(() {
-                _streamVolume = _streamVolume == 0 ? 0.75 : 0;
-              });
-            },
-          ),
-          SizedBox(
-            width: 80,
-            child: SliderTheme(
-              data: SliderThemeData(
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                trackHeight: 3,
-                activeTrackColor: _selectedAccentColor,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: _selectedAccentColor,
-                overlayShape: SliderComponentShape.noOverlay,
-              ),
-              child: Slider(
-                value: _streamVolume,
-                onChanged: (val) => setState(() => _streamVolume = val),
+          Expanded(
+            child: Container(
+              color: const Color(0xFF0B141A),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Spacer(),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF005C4B),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'A transmissão via LiveKit está rodando em 1080p 60FPS!',
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF202C33),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Sensacional! A latência está em menos de 20ms.',
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // Fullscreen Toggle
-          IconButton(
-            icon: Icon(
-              _isFullscreen ? LucideIcons.minimize : LucideIcons.maximize,
-              size: 16,
-              color: Colors.white70,
-            ),
-            tooltip: 'Tela Cheia',
-            onPressed: () => setState(() => _isFullscreen = !_isFullscreen),
           ),
         ],
+      ),
+    );
+  }
+
+  // SignalRGB Chroma Stream Viewport
+  Widget _buildRgbStreamViewport() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF831843),
+            Color(0xFF312E81),
+            Color(0xFF064E3B),
+            Color(0xFF78350F),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFEC4899), width: 1.5),
+              ),
+              child: Column(
+                children: [
+                  const Icon(LucideIcons.palette, size: 48, color: Color(0xFFEC4899)),
+                  const SizedBox(height: 12),
+                  Text('SignalRGB Pro — Chroma Lighting Canvas', style: GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text('All Peripherals Synchronized to LiveKit Stream Soundwave', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTreeItem(IconData icon, String name, Color color, {bool isExpanded = false, bool isSelected = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            name,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10.5,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? const Color(0xFF3DDC84) : Colors.white70,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // VS Code Stream Viewport Simulation
+  Widget _buildVsCodeStreamViewport() {
+    return Container(
+      color: const Color(0xFF1E1E1E),
+      child: Column(
+        children: [
+          // Editor Tab Bar
+          Container(
+            height: 34,
+            color: const Color(0xFF252526),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1E1E1E),
+                    border: Border(top: BorderSide(color: Color(0xFF38BDF8), width: 2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.fileCode2, size: 14, color: Color(0xFF38BDF8)),
+                      const SizedBox(width: 6),
+                      Text('server_handler.go', style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  color: const Color(0xFF2D2D2D),
+                  child: Text('websocket_client.dart', style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white54)),
+                ),
+                const Spacer(),
+                const Icon(LucideIcons.split, size: 14, color: Colors.white54),
+                const SizedBox(width: 8),
+                const Icon(LucideIcons.moreHorizontal, size: 14, color: Colors.white54),
+              ],
+            ),
+          ),
+          // Code Area + Minimap
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Line numbers
+                Container(
+                  width: 42,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  color: const Color(0xFF1E1E1E),
+                  child: Column(
+                    children: List.generate(16, (i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2.2),
+                      child: Text(
+                        '${i + 1}'.padLeft(2, ' '),
+                        style: GoogleFonts.jetBrainsMono(fontSize: 11, color: const Color(0xFF858585)),
+                      ),
+                    )),
+                  ),
+                ),
+                // Code Lines with Syntax Colors
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCodeLine('package handlers', const Color(0xFFC586C0)),
+                        _buildCodeLine('', Colors.transparent),
+                        _buildCodeLine('// SendMessage transmits chat and triggers live stream SFU', const Color(0xFF6A9955)),
+                        _buildCodeLine('func (h *ServerHandler) SendMessage(w http.ResponseWriter, r *http.Request) {', const Color(0xFFDCDCAA)),
+                        _buildCodeLine('    vars := mux.Vars(r)', const Color(0xFF9CDCFE)),
+                        _buildCodeLine('    serverID := vars["id"]', const Color(0xFF9CDCFE)),
+                        _buildCodeLine('    channelID := vars["channelId"]', const Color(0xFF9CDCFE)),
+                        _buildCodeLine('    msg := models.NewMessage(serverID, channelID, req.Content)', const Color(0xFF4EC9B0)),
+                        _buildCodeLine('    h.hub.BroadcastEvent(&models.WSEvent{', const Color(0xFFDCDCAA)),
+                        _buildCodeLine('        Type: models.EventChatMessage,', const Color(0xFF4FC1FF)),
+                        _buildCodeLine('        Payload: msg.ToJSON(),', const Color(0xFFCE9178)),
+                        _buildCodeLine('        ChannelID: channelID,', const Color(0xFF9CDCFE)),
+                        _buildCodeLine('    })', const Color(0xFFDCDCAA)),
+                        _buildCodeLine('    w.WriteHeader(http.StatusCreated)', const Color(0xFF569CD6)),
+                        _buildCodeLine('}', const Color(0xFFDCDCAA)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Integrated Bottom Terminal Output
+          Container(
+            height: 90,
+            color: const Color(0xFF181818),
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('TERMINAL', style: GoogleFonts.jetBrainsMono(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const SizedBox(width: 8),
+                    Text('zsh (ProjectNBX)', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFF38BDF8))),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('➜  projectNBX git:(main) go run ./cmd/api', style: GoogleFonts.jetBrainsMono(fontSize: 10.5, color: const Color(0xFF4ADE80))),
+                Text('[LiveKit] SFU Room "geral" audio/video track published at 60 FPS (Opus 48kHz)', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFFF5CBA7))),
+                Text('[WS] Hub active • 2 clients connected • Zero frame drops', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: const Color(0xFF38BDF8))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCodeLine(String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.2),
+      child: Text(
+        text,
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  // Google Chrome Stream Viewport
+  Widget _buildChromeStreamViewport() {
+    return Container(
+      color: const Color(0xFF1E2028),
+      child: Column(
+        children: [
+          // Chrome Tab Bar & URL
+          Container(
+            color: const Color(0xFF2B2D3A),
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1E2028),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.globe, size: 12, color: Color(0xFF38BDF8)),
+                          const SizedBox(width: 6),
+                          Text('LiveKit SFU WebRTC Docs', style: GoogleFonts.inter(fontSize: 11, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2028),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock, size: 12, color: Color(0xFF4ADE80)),
+                      const SizedBox(width: 6),
+                      Text('https://docs.livekit.io/realtime/sfu/performance', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Web Page Documentation Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('ProjectNBX Ultra-Low Latency Architecture', style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 8),
+                  Text('Using LiveKit WebRTC SFU with adaptive bitrate (Dynacast), DTX, and Opus 48kHz audio encoding.', style: GoogleFonts.inter(fontSize: 13, color: Colors.white70)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _buildDocCard('SFU Gateway', '12ms Latency', const Color(0xFF38BDF8)),
+                      const SizedBox(width: 14),
+                      _buildDocCard('Audio Track', '48kHz Opus Stereo', const Color(0xFF4ADE80)),
+                      const SizedBox(width: 14),
+                      _buildDocCard('Video Track', '1080p 60 FPS VP9', const Color(0xFFF5CBA7)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocCard(String title, String subtitle, Color color) {
+    return Container(
+      width: 170,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF262835),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+
+  // Spotify Stream Viewport
+  Widget _buildSpotifyStreamViewport() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F3820), Color(0xFF0A0F0D), Color(0xFF000000)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1DB954).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF1DB954), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1DB954).withValues(alpha: 0.35),
+                    blurRadius: 30,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(LucideIcons.music, size: 54, color: Color(0xFF1DB954)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Developer Focus Beats (Lo-Fi)', style: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 4),
+            Text('ProjectNBX Live Audio Stream • 48 kHz High Fidelity', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF1DB954))),
+            const SizedBox(height: 18),
+            // Dynamic Bouncing Soundwave Bars
+            SizedBox(
+              height: 36,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(18, (i) {
+                  final heights = [12, 22, 18, 30, 14, 34, 26, 16, 28, 20, 32, 18, 24, 14, 28, 20, 16, 10];
+                  final h = heights[i % heights.length];
+                  return Container(
+                    width: 4,
+                    height: h.toDouble(),
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1DB954),
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Windows Terminal Stream Viewport
+  Widget _buildTerminalStreamViewport() {
+    return Container(
+      color: const Color(0xFF0C0C0C),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.squareTerminal, size: 16, color: Color(0xFF4ADE80)),
+              const SizedBox(width: 8),
+              Text('PowerShell 7.4.2 — ProjectNBX Dev Suite', style: GoogleFonts.jetBrainsMono(fontSize: 12, color: Colors.white70)),
+            ],
+          ),
+          const Divider(color: Colors.white24, height: 20),
+          Text('PS D:\\projectNBX> .\\scripts\\deploy_cluster.ps1', style: GoogleFonts.jetBrainsMono(fontSize: 13, color: const Color(0xFF4ADE80))),
+          const SizedBox(height: 8),
+          Text('[INFO] Initializing PostgreSQL 16 migration cluster...', style: GoogleFonts.jetBrainsMono(fontSize: 12, color: Colors.white60)),
+          Text('[INFO] LiveKit SFU running on udp://0.0.0.0:7880', style: GoogleFonts.jetBrainsMono(fontSize: 12, color: const Color(0xFF38BDF8))),
+          Text('[SUCCESS] WebSocket broadcast stream online on :8080/ws', style: GoogleFonts.jetBrainsMono(fontSize: 12, color: const Color(0xFF4ADE80))),
+          Text('[ACTIVE] Streaming 1080p 60FPS to channel #geral', style: GoogleFonts.jetBrainsMono(fontSize: 12, color: const Color(0xFFF5CBA7))),
+        ],
+      ),
+    );
+  }
+
+  // Game / Racing Simulator Viewport
+  Widget _buildGameStreamViewport() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const CustomPaint(painter: _RacingStreamCanvasPainter()),
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('248 KM/H', style: GoogleFonts.jetBrainsMono(fontSize: 36, fontWeight: FontWeight.w900, color: const Color(0xFFEF4444))),
+              Text('GEAR 6 • 8200 RPM', style: GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 12),
+              Container(
+                width: 240,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 190,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF38BDF8), Color(0xFFEF4444)]),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Desktop Monitor Viewport
+  Widget _buildDesktopMonitorViewport(String title) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Floating simulated windows
+          Positioned(
+            top: 60,
+            left: 50,
+            width: 360,
+            height: 220,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E2030),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF38BDF8), width: 1.2),
+                boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 20)],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    height: 26,
+                    color: const Color(0xFF181926),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: [
+                        Text('ProjectNBX Dev Workspace', style: GoogleFonts.inter(fontSize: 10, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Icon(LucideIcons.terminal, size: 36, color: _selectedAccentColor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Taskbar at bottom
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 38,
+            child: Container(
+              color: const Color(0xFF0B0C12),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.layoutGrid, size: 18, color: _selectedAccentColor),
+                  const SizedBox(width: 14),
+                  const Icon(LucideIcons.terminal, size: 16, color: Colors.white70),
+                  const SizedBox(width: 12),
+                  const Icon(LucideIcons.globe, size: 16, color: Colors.white70),
+                  const SizedBox(width: 12),
+                  const Icon(LucideIcons.music, size: 16, color: Colors.white70),
+                  const Spacer(),
+                  Text(
+                    '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                    style: GoogleFonts.jetBrainsMono(fontSize: 12, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ProjectNBX Native Stream Viewport
+  Widget _buildProjectNbxStreamViewport() {
+    return Container(
+      color: const Color(0xFF141520),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _selectedAccentColor.withValues(alpha: 0.4),
+                ),
+                boxShadow: const [BoxShadow(color: Colors.black87, blurRadius: 28)],
+              ),
+              child: Column(
+                children: [
+                  Icon(LucideIcons.screenShare, size: 48, color: _selectedAccentColor),
+                  const SizedBox(height: 12),
+                  Text('ProjectNBX Live Workspace', style: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text('Stream de Alta Performance • Zero Frame Drop', style: GoogleFonts.inter(fontSize: 12, color: _selectedAccentColor)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Discord Stream Viewport
+  Widget _buildDiscordStreamViewport() {
+    return Container(
+      color: const Color(0xFF313338),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          // Left Sidebar channels
+          Container(
+            width: 140,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2B2D31),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('NBX COMMUNITY', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.hash, size: 14, color: Color(0xFF5865F2)),
+                    const SizedBox(width: 6),
+                    Text('geral', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.volume2, size: 14, color: Color(0xFF4ADE80)),
+                    const SizedBox(width: 6),
+                    Text('Voz Geral', style: GoogleFonts.inter(fontSize: 12, color: Colors.white70)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Chat Stream
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF313338),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF5865F2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(LucideIcons.messageSquare, size: 16, color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Dev Squad', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                          Text('Transmitindo tela com latência de 14ms', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniAudioEqualizer() {
+    return Row(
+      children: List.generate(4, (i) {
+        final heights = [6, 12, 8, 14];
+        return Container(
+          width: 2.5,
+          height: heights[i].toDouble(),
+          margin: const EdgeInsets.symmetric(horizontal: 1.2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        );
+      }),
+    );
+  }
+
+  // Barra Inferior da Transmissão
+  Widget _buildStageBottomControlBar(bool isDark, String username) {
+    final title = _activeScreenShareConfig?.title ?? 'Transmissão de Tela';
+    final resolution = _activeScreenShareConfig?.resolution ?? '1080p';
+    final fps = _activeScreenShareConfig?.fps ?? 60;
+    final shareAudio = _activeScreenShareConfig?.shareAudio ?? true;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.94)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 740;
+          final isVeryCompact = constraints.maxWidth < 560;
+
+          return Row(
+            children: [
+              // Live Indicator Badge
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEF4444),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0xFFEF4444),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'AO VIVO',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: const Color(0xFFEF4444),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  '$username — $title',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (!isVeryCompact) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF334155),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    isCompact ? '$fps FPS' : '$resolution $fps FPS',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+              ],
+
+              const Spacer(),
+
+              // Audio Mute/Volume Control (working)
+              if (shareAudio) ...[
+                IconButton(
+                  icon: Icon(
+                    _streamVolume == 0
+                        ? LucideIcons.volumeX
+                        : LucideIcons.volume2,
+                    size: 16,
+                    color: _streamVolume > 0
+                        ? const Color(0xFF4ADE80)
+                        : Colors.white70,
+                  ),
+                  tooltip: _streamVolume == 0 ? 'Ativar Som' : 'Silenciar',
+                  onPressed: () {
+                    setState(() {
+                      _streamVolume = _streamVolume == 0 ? 0.75 : 0;
+                    });
+                  },
+                ),
+                if (!isVeryCompact) ...[
+                  SizedBox(
+                    width: isCompact ? 50 : 80,
+                    child: SliderTheme(
+                      data: SliderThemeData(
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 5,
+                        ),
+                        trackHeight: 3,
+                        activeTrackColor: const Color(0xFF4ADE80),
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: const Color(0xFF4ADE80),
+                        overlayShape: SliderComponentShape.noOverlay,
+                      ),
+                      child: Slider(
+                        value: _streamVolume,
+                        onChanged: (val) =>
+                            setState(() => _streamVolume = val),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+
+              // Chat Visibility HUD Toggle
+              IconButton(
+                icon: Icon(
+                  _isChatVisible
+                      ? LucideIcons.messageSquare
+                      : LucideIcons.messageSquareOff,
+                  size: 16,
+                  color:
+                      _isChatVisible ? _selectedAccentColor : Colors.white70,
+                ),
+                tooltip:
+                    _isChatVisible ? 'Ocultar Chat HUD' : 'Mostrar Chat HUD',
+                onPressed: () =>
+                    setState(() => _isChatVisible = !_isChatVisible),
+              ),
+
+              const SizedBox(width: 4),
+
+              // Fullscreen Toggle
+              IconButton(
+                icon: Icon(
+                  _isFullscreen ? LucideIcons.minimize : LucideIcons.maximize,
+                  size: 16,
+                  color: Colors.white70,
+                ),
+                tooltip: 'Tela Cheia',
+                onPressed: () =>
+                    setState(() => _isFullscreen = !_isFullscreen),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Stop Stream Red Pill Button
+              ElevatedButton.icon(
+                onPressed: _toggleTransmission,
+                icon: const Icon(LucideIcons.screenShareOff, size: 14),
+                label: Text(
+                  isCompact ? 'Parar' : 'Parar Transmissão',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 10 : 14,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -886,24 +3403,46 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     String channelKey,
     String username,
     List<_ChatMessage> messages,
+    List<ChannelModel> channels,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
   ) {
+    // Dynamic text/hybrid channels from real server data
+    final effectiveChannels = channels
+        .where(
+          (c) => c.type == ChannelType.text || c.type == ChannelType.hybrid,
+        )
+        .toList();
+    final displayChannels = effectiveChannels.isNotEmpty
+        ? effectiveChannels
+        : (channels.isNotEmpty
+              ? channels
+              : [
+                  ChannelModel(
+                    id: _activeChannel?.id ?? 'chn_geral',
+                    serverId: widget.server.id,
+                    name: activeChannelName,
+                    type: _activeChannel?.type ?? ChannelType.text,
+                  ),
+                ]);
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF141520).withValues(alpha: 0.90),
-            borderRadius: BorderRadius.circular(14),
+            color: const Color(0xFF13141F).withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFF313244).withValues(alpha: 0.8),
-              width: 1,
+              color: const Color(0xFF2E3048).withValues(alpha: 0.8),
+              width: 1.2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: Colors.black.withValues(alpha: 0.6),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -912,37 +3451,41 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             children: [
               // 1. HUD Header (Chat title + minimize button)
               Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Color(0xFF262838),
-                    ),
-                  ),
+                  border: Border(bottom: BorderSide(color: Color(0xFF232538))),
                 ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.messageSquare, size: 13, color: Colors.white70),
-                    const SizedBox(width: 6),
+                    const Icon(
+                      LucideIcons.messageSquare,
+                      size: 14,
+                      color: Colors.white70,
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      'Chat: #$activeChannelName',
+                      'Chats · #$activeChannelName',
                       style: GoogleFonts.spaceGrotesk(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
                     ),
                     const Spacer(),
-                    InkWell(
-                      onTap: () => setState(() => _isChatMinimized = !_isChatMinimized),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          _isChatMinimized ? LucideIcons.maximize2 : LucideIcons.minimize2,
-                          size: 13,
-                          color: Colors.white70,
+                    Tooltip(
+                      message: 'Minimizar Chat',
+                      child: InkWell(
+                        onTap: () => setState(() => _isChatVisible = false),
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: BorderRadius.circular(4),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            LucideIcons.arrowUpRight,
+                            size: 14,
+                            color: Colors.white70,
+                          ),
                         ),
                       ),
                     ),
@@ -950,154 +3493,391 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 ),
               ),
 
-              if (!_isChatMinimized) ...[
-                // 2. Message Stream
-                Expanded(
-                  child: messages.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Nenhuma mensagem ainda.\nEnvie algo no chat!',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final msg = messages[index];
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3),
-                              child: RichText(
-                                text: TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: '${msg.author}: ',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: msg.authorColor,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: msg.content,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w400,
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                      ),
-                                    ),
-                                  ],
+              // 2. Channel Tag / Filter Pills Row (Real channels)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: displayChannels.map((c) {
+                    final isSelected =
+                        c.id == _activeChannel?.id ||
+                        c.name == activeChannelName;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _buildChatTagPill(
+                        label: '# ${c.name}',
+                        badge: c.unreadCount > 0 ? '${c.unreadCount}' : null,
+                        isSelected: isSelected,
+                        onTap: () {
+                          if (c.id != _activeChannel?.id) {
+                            _openHybridChannel(c);
+                          }
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              // 3. Real Message Stream (No mock data)
+              Expanded(
+                child: messages.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                LucideIcons.messageSquare,
+                                size: 26,
+                                color: Colors.white.withValues(alpha: 0.2),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Nenhuma mensagem ainda',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withValues(alpha: 0.4),
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                ),
-
-                // 3. Message Input Field
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  child: Container(
-                    height: 34,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F1018),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF262838)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _messageController,
-                            style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white),
-                            decoration: InputDecoration(
-                              hintText: 'Mensagem em #$activeChannelName',
-                              hintStyle: GoogleFonts.inter(fontSize: 11, color: Colors.white38),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                            ),
-                            onSubmitted: (_) => _sendMessage(channelKey, username),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Envie uma mensagem abaixo!',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        InkWell(
-                          onTap: () => _sendMessage(channelKey, username),
-                          borderRadius: BorderRadius.circular(4),
-                          child: const Icon(LucideIcons.send, size: 12, color: Colors.white70),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
                         ),
-                      ],
-                    ),
-                  ),
-                ),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = messages[index];
+                          final isMine =
+                              msg.author == username || msg.author == 'Você';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: RichText(
+                                    text: TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: '${msg.author}: ',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: msg.authorColor,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: msg.content,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w400,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.92,
+                                            ),
+                                          ),
+                                        ),
+                                        if (msg.isEdited)
+                                          TextSpan(
+                                            text: ' (editada)',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              fontStyle: FontStyle.italic,
+                                              color: Colors.white38,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (isMine) ...[
+                                  InkWell(
+                                    onTap: () => _startEditingMessage(msg),
+                                    mouseCursor: SystemMouseCursors.click,
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 3,
+                                      ),
+                                      child: Icon(
+                                        LucideIcons.pencil,
+                                        size: 11,
+                                        color: Colors.white38,
+                                      ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () =>
+                                        _deleteMessage(channelKey, msg.id),
+                                    mouseCursor: SystemMouseCursors.click,
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 3,
+                                      ),
+                                      child: Icon(
+                                        LucideIcons.trash2,
+                                        size: 11,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
 
-                // 4. Quick Voice Control Bar inside HUD
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF10111A),
-                    border: Border(top: BorderSide(color: Color(0xFF1E2030))),
+              // 4. Compact Pill Input Field
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F101A),
+                    borderRadius: BorderRadius.circular(9999),
+                    border: Border.all(
+                      color: const Color(0xFF2B2D42),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      // Mic toggle
-                      InkWell(
-                        onTap: () => setState(() => _isMicMuted = !_isMicMuted),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _isMicMuted
-                                ? const Color(0xFFEF4444).withValues(alpha: 0.2)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.white,
                           ),
-                          child: Icon(
-                            _isMicMuted ? LucideIcons.micOff : LucideIcons.mic,
-                            size: 14,
-                            color: _isMicMuted ? const Color(0xFFEF4444) : Colors.white70,
+                          cursorColor: Colors.white,
+                          decoration: InputDecoration(
+                            hintText: 'Mensagem em #$activeChannelName',
+                            hintStyle: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white38,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            isDense: true,
+                            filled: false,
+                            contentPadding: EdgeInsets.zero,
                           ),
+                          onSubmitted: (_) =>
+                              _sendMessage(channelKey, username),
                         ),
                       ),
-                      const SizedBox(width: 4),
-
-                      // Headphones toggle
+                      const SizedBox(width: 8),
                       InkWell(
-                        onTap: () => setState(() => _isDeafened = !_isDeafened),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
+                        onTap: () => _sendMessage(channelKey, username),
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: BorderRadius.circular(9999),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
                           child: Icon(
-                            _isDeafened ? LucideIcons.headphones : LucideIcons.headphones,
-                            size: 14,
-                            color: _isDeafened ? const Color(0xFFEF4444) : Colors.white70,
+                            LucideIcons.send,
+                            size: 15,
+                            color: Colors.white70,
                           ),
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Sair Button (Red Pill)
-                      ElevatedButton.icon(
-                        onPressed: _leaveVoice,
-                        icon: const Icon(LucideIcons.logOut, size: 11),
-                        label: const Text('Sair', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFEF4444),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          minimumSize: const Size(0, 26),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9999)),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
+
+              // 5. Quick Voice Control Bar inside HUD
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0D0E16),
+                  border: Border(top: BorderSide(color: Color(0xFF1E2030))),
+                ),
+                child: Row(
+                  children: [
+                    // Mic toggle
+                    Tooltip(
+                      message: voiceState.isMicMuted ? 'Desmutar' : 'Mutar',
+                      child: InkWell(
+                        onTap: () => voiceNotifier.toggleMic(),
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: voiceState.isMicMuted
+                                ? const Color(0xFFEF4444).withValues(alpha: 0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            voiceState.isMicMuted
+                                ? LucideIcons.micOff
+                                : LucideIcons.mic,
+                            size: 15,
+                            color: voiceState.isMicMuted
+                                ? const Color(0xFFEF4444)
+                                : Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Headphones toggle
+                    Tooltip(
+                      message: voiceState.isDeafened
+                          ? 'Ativar Áudio'
+                          : 'Desativar Áudio',
+                      child: InkWell(
+                        onTap: () => voiceNotifier.toggleDeafened(),
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: voiceState.isDeafened
+                                ? const Color(0xFFEF4444).withValues(alpha: 0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            LucideIcons.headphones,
+                            size: 15,
+                            color: voiceState.isDeafened
+                                ? const Color(0xFFEF4444)
+                                : Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // Sair Button (Red Squircle with logOut icon)
+                    InkWell(
+                      onTap: _leaveVoice,
+                      mouseCursor: SystemMouseCursors.click,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        height: 32,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.logOut,
+                              size: 13,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Sair',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatTagPill({
+    required String label,
+    String? badge,
+    IconData? icon,
+    Color? iconColor,
+    required bool isSelected,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      mouseCursor: SystemMouseCursors.click,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF23305A) : const Color(0xFF141520),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF384B7E)
+                : const Color(0xFF262838),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 11, color: iconColor ?? Colors.white70),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : Colors.white70,
+              ),
+            ),
+            if (badge != null) ...[
+              const SizedBox(width: 5),
+              Text(
+                badge,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFEF4444),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -1112,46 +3892,65 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     String username,
     List<ChannelModel> channels,
   ) {
-    final memberCount = widget.server.memberCount < 1 ? 1 : widget.server.memberCount;
+    final memberCount = widget.server.memberCount < 1
+        ? 1
+        : widget.server.memberCount;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
 
     return Container(
       color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 14 : 24,
+          vertical: isMobile ? 14 : 20,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Hero Banner
-            _buildServerHeroBanner(isDark),
+            _buildServerHeroBanner(isDark, isMobile: isMobile),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Activity + Media Listening Section
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _buildActivityCard(isDark, channels),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    children: [
-                      _buildMediaListeningCard(isDark),
-                      const SizedBox(height: 16),
-                      _buildCommunitySummaryCard(isDark, memberCount),
-                    ],
+            if (isMobile) ...[
+              _buildActivityCard(isDark, channels, isMobile: true),
+              const SizedBox(height: 16),
+              _buildMediaListeningCard(isDark),
+              const SizedBox(height: 16),
+              _buildCommunitySummaryCard(isDark, memberCount),
+            ] else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: _buildActivityCard(
+                      isDark,
+                      channels,
+                      isMobile: false,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      children: [
+                        _buildMediaListeningCard(isDark),
+                        const SizedBox(height: 16),
+                        _buildCommunitySummaryCard(isDark, memberCount),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Announcements and Server Details
-            _buildAnnouncementsAndRulesSection(isDark),
+            _buildAnnouncementsAndRulesSection(isDark, isMobile: isMobile),
           ],
         ),
       ),
@@ -1159,9 +3958,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   // Server Hero Banner
-  Widget _buildServerHeroBanner(bool isDark) {
+  Widget _buildServerHeroBanner(bool isDark, {bool isMobile = false}) {
     final currentGradient = _bannerPresets[_selectedBannerPreset];
-    final memberCount = widget.server.memberCount < 1 ? 1 : widget.server.memberCount;
+    final memberCount = widget.server.memberCount < 1
+        ? 1
+        : widget.server.memberCount;
 
     return Container(
       width: double.infinity,
@@ -1183,12 +3984,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         children: [
           // Banner Top
           Container(
-            height: 140,
+            height: isMobile ? 120 : 140,
             width: double.infinity,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.vertical(
                 top: const Radius.circular(15),
-                bottom: _isCustomizingBanner ? Radius.zero : const Radius.circular(15),
+                bottom: _isCustomizingBanner
+                    ? Radius.zero
+                    : const Radius.circular(15),
               ),
               gradient: LinearGradient(
                 colors: currentGradient,
@@ -1203,22 +4006,22 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   bottom: -15,
                   child: Icon(
                     LucideIcons.gamepad2,
-                    size: 130,
+                    size: isMobile ? 90 : 130,
                     color: Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(isMobile ? 14 : 20),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // Server Avatar
                       Container(
-                        width: 60,
-                        height: 60,
+                        width: isMobile ? 46 : 60,
+                        height: isMobile ? 46 : 60,
                         decoration: BoxDecoration(
                           color: _selectedAccentColor,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.35),
@@ -1230,14 +4033,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         child: Center(
                           child: Icon(
                             LucideIcons.gamepad2,
-                            size: 30,
+                            size: isMobile ? 22 : 30,
                             color: _selectedAccentColor.computeLuminance() > 0.5
                                 ? Colors.black
                                 : Colors.white,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
 
                       // Server Name & Category
                       Expanded(
@@ -1248,48 +4051,94 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                             Text(
                               widget.server.name,
                               style: GoogleFonts.spaceGrotesk(
-                                fontSize: 20,
+                                fontSize: isMobile ? 16 : 20,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             Text(
                               '${widget.server.category} · $memberCount ${memberCount == 1 ? "membro" : "membros"}',
                               style: GoogleFonts.inter(
-                                fontSize: 12,
+                                fontSize: isMobile ? 11 : 12,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white.withValues(alpha: 0.8),
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
 
+                      const SizedBox(width: 8),
+
                       // Personalizar Button
-                      ElevatedButton.icon(
-                        onPressed: () => setState(() => _isCustomizingBanner = !_isCustomizingBanner),
-                        icon: Icon(
-                          _isCustomizingBanner ? LucideIcons.x : LucideIcons.slidersHorizontal,
-                          size: 14,
-                        ),
-                        label: Text(
-                          _isCustomizingBanner ? 'Fechar' : 'Personalizar',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                      if (isMobile)
+                        IconButton(
+                          onPressed: () => setState(
+                            () => _isCustomizingBanner = !_isCustomizingBanner,
+                          ),
+                          icon: Icon(
+                            _isCustomizingBanner
+                                ? LucideIcons.x
+                                : LucideIcons.slidersHorizontal,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          tooltip: _isCustomizingBanner
+                              ? 'Fechar'
+                              : 'Personalizar',
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(
+                              0xFF181926,
+                            ).withValues(alpha: 0.85),
+                            padding: const EdgeInsets.all(8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: () => setState(
+                            () => _isCustomizingBanner = !_isCustomizingBanner,
+                          ),
+                          icon: Icon(
+                            _isCustomizingBanner
+                                ? LucideIcons.x
+                                : LucideIcons.slidersHorizontal,
+                            size: 14,
+                          ),
+                          label: Text(
+                            _isCustomizingBanner ? 'Fechar' : 'Personalizar',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(
+                              0xFF181926,
+                            ).withValues(alpha: 0.85),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF181926).withValues(alpha: 0.85),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1300,113 +4149,152 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           // Customization Drawer
           if (_isCustomizingBanner)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 12 : 20,
+                vertical: 12,
+              ),
               decoration: BoxDecoration(
                 color: const Color(0xFF141520),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(15),
+                ),
                 border: Border(
                   top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                 ),
               ),
-              child: Row(
-                children: [
-                  Text(
-                    'Banner',
-                    style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white70),
-                  ),
-                  const SizedBox(width: 12),
-                  ...List.generate(_bannerPresets.length, (idx) {
-                    final preset = _bannerPresets[idx];
-                    final isSelected = _selectedBannerPreset == idx;
-                    return InkWell(
-                      onTap: () => setState(() => _selectedBannerPreset = idx),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        width: 32,
-                        height: 22,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(6),
-                          gradient: LinearGradient(
-                            colors: preset,
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    Text(
+                      'Banner',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        color: Colors.white70,
                       ),
-                    );
-                  }),
-
-                  const SizedBox(width: 16),
-                  Text(
-                    'Cor',
-                    style: GoogleFonts.jetBrainsMono(fontSize: 11, color: Colors.white70),
-                  ),
-                  const SizedBox(width: 12),
-                  ..._accentPalette.map((color) {
-                    final isSelected = _selectedAccentColor.toARGB32() == color.toARGB32();
-                    return InkWell(
-                      onTap: () => setState(() => _selectedAccentColor = color),
-                      borderRadius: BorderRadius.circular(9999),
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-
-                  const Spacer(),
-
-                  ElevatedButton(
-                    onPressed: () async {
-                      await ref.read(serversControllerProvider.notifier).updateServerCustomization(
-                        widget.server.id,
-                        bannerPreset: _selectedBannerPreset,
-                        accentColor: _selectedAccentColor.toARGB32(),
-                      );
-                      if (mounted) {
-                        setState(() => _isCustomizingBanner = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: _selectedAccentColor,
-                            content: Text(
-                              'Personalização do servidor salva!',
-                              style: TextStyle(
-                                color: _selectedAccentColor.computeLuminance() > 0.5
-                                    ? Colors.black
-                                    : Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
+                    ),
+                    const SizedBox(width: 10),
+                    ...List.generate(_bannerPresets.length, (idx) {
+                      final preset = _bannerPresets[idx];
+                      final isSelected = _selectedBannerPreset == idx;
+                      return InkWell(
+                        onTap: () =>
+                            setState(() => _selectedBannerPreset = idx),
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 30,
+                          height: 20,
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            gradient: LinearGradient(
+                              colors: preset,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              width: isSelected ? 2 : 1,
                             ),
                           ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedAccentColor,
-                      foregroundColor: _selectedAccentColor.computeLuminance() > 0.5
-                          ? Colors.black
-                          : Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      );
+                    }),
+
+                    const SizedBox(width: 14),
+                    Text(
+                      'Cor',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        color: Colors.white70,
+                      ),
                     ),
-                    child: const Text('Salvar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    ..._accentPalette.map((color) {
+                      final isSelected =
+                          _selectedAccentColor.toARGB32() == color.toARGB32();
+                      return InkWell(
+                        onTap: () =>
+                            setState(() => _selectedAccentColor = color),
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+
+                    const SizedBox(width: 14),
+
+                    ElevatedButton(
+                      onPressed: () async {
+                        await ref
+                            .read(serversControllerProvider.notifier)
+                            .updateServerCustomization(
+                              widget.server.id,
+                              bannerPreset: _selectedBannerPreset,
+                              accentColor: _selectedAccentColor.toARGB32(),
+                            );
+                        if (mounted) {
+                          setState(() => _isCustomizingBanner = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              duration: const Duration(seconds: 2),
+                              backgroundColor: _selectedAccentColor,
+                              content: Text(
+                                'Personalização salva!',
+                                style: TextStyle(
+                                  color:
+                                      _selectedAccentColor.computeLuminance() >
+                                          0.5
+                                      ? Colors.black
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selectedAccentColor,
+                        foregroundColor:
+                            _selectedAccentColor.computeLuminance() > 0.5
+                            ? Colors.black
+                            : Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Salvar',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -1415,9 +4303,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   // Activity Card
-  Widget _buildActivityCard(bool isDark, List<ChannelModel> channels) {
+  Widget _buildActivityCard(bool isDark, List<ChannelModel> channels, {bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isMobile ? 14 : 20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         borderRadius: BorderRadius.circular(16),
@@ -1438,18 +4326,22 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                     Text(
                       'Acontecendo no servidor',
                       style: GoogleFonts.spaceGrotesk(
-                        fontSize: 16,
+                        fontSize: isMobile ? 14.5 : 16,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'As novidades mais recentes da comunidade',
+                      'Novidades recentes da comunidade',
                       style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        fontSize: isMobile ? 11 : 12,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1462,13 +4354,25 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   onPressed: () => _openHybridChannel(channels.first),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _selectedAccentColor,
-                    foregroundColor: _selectedAccentColor.computeLuminance() > 0.5
+                    foregroundColor:
+                        _selectedAccentColor.computeLuminance() > 0.5
                         ? Colors.black
                         : Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 10 : 14,
+                      vertical: isMobile ? 6 : 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('Abrir canal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Abrir',
+                    style: TextStyle(
+                      fontSize: isMobile ? 11 : 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -1486,7 +4390,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           _buildActivityItem(
             isDark: isDark,
             icon: LucideIcons.headphones,
-            title: 'Canal #${channels.isNotEmpty ? channels.first.name : "geral"} pronto',
+            title:
+                'Canal #${channels.isNotEmpty ? channels.first.name : "geral"} pronto',
             subtitle: _isTransmitting
                 ? 'Transmissão de tela ativa no canal'
                 : 'Conecte-se para conversar por texto, voz ou transmitir sua tela',
@@ -1518,7 +4423,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurfaceElevated : const Color(0xFFE2E8F0),
+              color: isDark
+                  ? AppColors.darkSurfaceElevated
+                  : const Color(0xFFE2E8F0),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16, color: _selectedAccentColor),
@@ -1533,24 +4440,31 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    color: isDark
+                        ? AppColors.darkTextMuted
+                        : AppColors.lightTextMuted,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             time,
             style: GoogleFonts.jetBrainsMono(
               fontSize: 10,
-              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              color: isDark
+                  ? AppColors.darkTextMuted
+                  : AppColors.lightTextMuted,
             ),
           ),
         ],
@@ -1564,7 +4478,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF10281C) : const Color(0xFFECFDF5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1573,13 +4489,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             children: [
               const Icon(LucideIcons.radio, size: 14, color: Color(0xFF10B981)),
               const SizedBox(width: 6),
-              Text(
-                'CANAL HÍBRIDO',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  color: const Color(0xFF10B981),
+              Expanded(
+                child: Text(
+                  'CANAL HÍBRIDO',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: const Color(0xFF10B981),
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1596,7 +4515,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 ),
                 child: Center(
                   child: Icon(
-                    _isTransmitting ? LucideIcons.screenShare : LucideIcons.headphones,
+                    _isTransmitting
+                        ? LucideIcons.screenShare
+                        : LucideIcons.headphones,
                     size: 18,
                     color: Colors.black,
                   ),
@@ -1608,12 +4529,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isTransmitting ? 'Transmissão Ativa' : 'Sala de Áudio e Texto',
+                      _isTransmitting
+                          ? 'Transmissão Ativa'
+                          : 'Sala de Áudio e Texto',
                       style: GoogleFonts.spaceGrotesk(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : Colors.black87,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       _isTransmitting
@@ -1623,6 +4547,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         fontSize: 11,
                         color: isDark ? Colors.white70 : Colors.black54,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -1709,7 +4634,105 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  Widget _buildAnnouncementsAndRulesSection(bool isDark) {
+  Widget _buildAnnouncementsAndRulesSection(bool isDark, {bool isMobile = false}) {
+    final rulesWidget = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1D2C) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                LucideIcons.pin,
+                size: 14,
+                color: Color(0xFFF87171),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Regras do Servidor',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Respeite todos os membros da comunidade. Sem spam e com foco em colaboração e respeito mútuo.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final hybridInfoWidget = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1D2C) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                LucideIcons.sparkles,
+                size: 14,
+                color: _selectedAccentColor,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Canais Híbridos',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cada canal combina chat de texto, chamada de áudio e transmissão de tela no mesmo ambiente integrado.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1718,94 +4741,26 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           style: GoogleFonts.spaceGrotesk(
             fontSize: 16,
             fontWeight: FontWeight.w700,
-            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.lightTextPrimary,
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1D2C) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(LucideIcons.pin, size: 14, color: Color(0xFFF87171)),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Regras do Servidor',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Respeite todos os membros da comunidade. Sem spam e com foco em colaboração e respeito mútuo.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1D2C) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(LucideIcons.sparkles, size: 14, color: _selectedAccentColor),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Canais Híbridos',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Cada canal combina chat de texto, chamada de áudio e transmissão de tela no mesmo ambiente integrado.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+        if (isMobile) ...[
+          rulesWidget,
+          const SizedBox(height: 12),
+          hybridInfoWidget,
+        ] else ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: rulesWidget),
+              const SizedBox(width: 14),
+              Expanded(child: hybridInfoWidget),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1818,26 +4773,30 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     bool isDark,
     List<ChannelModel> channels,
     String username,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
   ) {
     return Container(
       width: 250,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141522) : const Color(0xFFF8FAFC),
+        color: isDark ? const Color(0xFF141522) : const Color(0xFFFAF9F6),
         border: Border(
           left: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
           ),
         ),
       ),
       child: Column(
         children: [
-          // Header Tabs: Canais | Membros | Resumo
+          // Header Tabs: Canais | Membros | Resumo + Collapse Button
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: isDark
+                      ? const Color(0xFF202234)
+                      : const Color(0xFFE2E8F0),
                 ),
               ),
             ),
@@ -1861,17 +4820,34 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   icon: LucideIcons.barChart2,
                   isDark: isDark,
                 ),
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: 'Recolher painel lateral',
+                  child: InkWell(
+                    onTap: () => setState(() => _isRightSidebarVisible = false),
+                    mouseCursor: SystemMouseCursors.click,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        LucideIcons.panelRightClose,
+                        size: 15,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
           // Tab Content
-          Expanded(
-            child: _buildSidebarTabContent(isDark, channels, username),
-          ),
+          Expanded(child: _buildSidebarTabContent(isDark, channels, username)),
 
           // Bottom Voice Connection Status (Docked Footer)
-          _buildDockedVoiceFooter(isDark),
+          _buildDockedVoiceFooter(isDark, voiceState, voiceNotifier),
         ],
       ),
     );
@@ -1888,34 +4864,46 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => _activeSidebarTab = tab),
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(6),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? AppColors.darkSurfaceElevated : const Color(0xFFE2E8F0))
+                ? (isDark ? const Color(0xFF25283E) : const Color(0xFFE2E8F0))
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
                 size: 13,
                 color: isSelected
-                    ? _selectedAccentColor
-                    : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ? (isDark ? _selectedAccentColor : const Color(0xFF0F172A))
+                    : (isDark
+                          ? AppColors.darkTextMuted
+                          : AppColors.lightTextMuted),
               ),
               const SizedBox(width: 4),
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+              Flexible(
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected
+                        ? (isDark
+                              ? AppColors.darkTextPrimary
+                              : const Color(0xFF0F172A))
+                        : (isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1930,69 +4918,95 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     List<ChannelModel> channels,
     String username,
   ) {
+    final activeCh =
+        _activeChannel ?? (channels.isNotEmpty ? channels.first : null);
+    final otherChannels = activeCh != null
+        ? channels.where((c) => c.id != activeCh.id).toList()
+        : channels;
+
     switch (_activeSidebarTab) {
       case ServerSidebarTab.canais:
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           children: [
-            ...channels.map((c) {
-              final isCurrentActive = _viewMode == ServerViewMode.channel && _activeChannel?.id == c.id;
-              final isConnected = _isInVoice && _connectedVoiceChannelId == c.id;
-
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 3),
+            // 1. Active Channel Highlighted Card
+            if (activeCh != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
-                  color: isCurrentActive
-                      ? (isDark ? const Color(0xFF1E2030) : const Color(0xFFE2E8F0))
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  color: isDark
+                      ? const Color(0xFF1E2034)
+                      : const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isCurrentActive
-                        ? _selectedAccentColor.withValues(alpha: 0.4)
-                        : Colors.transparent,
+                    color: isDark
+                        ? const Color(0xFF333758)
+                        : const Color(0xFFE2E8F0),
                     width: 1,
                   ),
+                  boxShadow: isDark
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Channel Item Header
+                    // Channel Header
                     InkWell(
-                      onTap: () => _openHybridChannel(c),
-                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _openHybridChannel(activeCh),
+                      mouseCursor: SystemMouseCursors.click,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(10),
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                         child: Row(
                           children: [
-                            Icon(
-                              LucideIcons.hash,
-                              size: 14,
-                              color: isCurrentActive ? _selectedAccentColor : (isDark ? Colors.white60 : Colors.black54),
+                            const Icon(
+                              LucideIcons.volume2,
+                              size: 15,
+                              color: Color(0xFF22C55E),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                c.name,
+                                activeCh.name,
                                 style: GoogleFonts.inter(
-                                  fontSize: 12.5,
-                                  fontWeight: isCurrentActive ? FontWeight.w700 : FontWeight.w500,
-                                  color: isDark ? Colors.white : Colors.black87,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF0F172A),
                                 ),
                               ),
                             ),
-                            if (isConnected)
+                            if (_isInVoice)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 1.5,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                                  color: const Color(
+                                    0xFF14532D,
+                                  ).withValues(alpha: isDark ? 0.6 : 0.15),
                                   borderRadius: BorderRadius.circular(9999),
                                 ),
                                 child: const Text(
                                   '1',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF4ADE80),
+                                    color: Color(0xFF22C55E),
                                   ),
                                 ),
                               ),
@@ -2001,18 +5015,65 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                       ),
                     ),
 
-                    // Connected Real Members list under active channel
-                    if (isConnected)
+                    // Real Connected Participants list
+                    if (_isInVoice)
                       Padding(
-                        padding: const EdgeInsets.only(left: 12, right: 8, bottom: 8),
+                        padding: const EdgeInsets.only(
+                          left: 12,
+                          right: 10,
+                          bottom: 8,
+                        ),
                         child: _buildNestedMemberRow(
-                          initials: username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                          initials: username.isNotEmpty
+                              ? username
+                                    .substring(0, username.length >= 2 ? 2 : 1)
+                                    .toUpperCase()
+                              : 'U',
                           name: username,
                           color: _selectedAccentColor,
                           isLive: _isTransmitting,
+                          isDark: isDark,
                         ),
                       ),
                   ],
+                ),
+              ),
+
+            // 2. Real Other Channels from Server
+            ...otherChannels.map((c) {
+              return InkWell(
+                onTap: () => _openHybridChannel(c),
+                mouseCursor: SystemMouseCursors.click,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        LucideIcons.hash,
+                        size: 14,
+                        color: isDark
+                            ? Colors.white54
+                            : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          c.name,
+                          style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.white70
+                                : const Color(0xFF334155),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }),
@@ -2020,22 +5081,93 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         );
 
       case ServerSidebarTab.membros:
+        final membersList = _serverMembers.isNotEmpty
+            ? _serverMembers
+            : [
+                {
+                  'user': {'username': username.isNotEmpty ? username : 'Você'},
+                  'role': 'owner',
+                },
+              ];
+
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           children: [
+            // Quick Invite Button
+            InkWell(
+              onTap: () => InviteMemberDialog.show(
+                context,
+                widget.server,
+                onMembersUpdated: _loadServerMembers,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: _selectedAccentColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _selectedAccentColor.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      LucideIcons.userPlus,
+                      size: 14,
+                      color: _selectedAccentColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Convidar Pessoas',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Text(
-                'ONLINE — 1',
+                'MEMBROS — ${membersList.length}',
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 9.5,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: const Color(0xFF4ADE80),
+                  color: const Color(0xFF22C55E),
                 ),
               ),
             ),
-            _buildSidebarMemberRow(username, 'Owner & Criador', _selectedAccentColor),
+
+            ...membersList.map((m) {
+              final user = m['user'] as Map<String, dynamic>? ?? {};
+              final uName = user['username'] ?? username;
+              final role = m['role'] ?? 'member';
+              final isOwner = role == 'owner';
+
+              return _buildSidebarMemberRow(
+                uName.toString(),
+                isOwner ? '👑 Dono & Criador' : 'Membro',
+                isOwner
+                    ? _selectedAccentColor
+                    : (isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B)),
+                isDark,
+              );
+            }),
           ],
         );
 
@@ -2046,18 +5178,38 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Estatísticas',
-                style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700),
+                'Estatísticas do Canal',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
               ),
               const SizedBox(height: 10),
               Text(
                 '• Canais Híbridos: ${channels.length}',
-                style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : const Color(0xFF475569),
+                ),
               ),
               const SizedBox(height: 4),
               Text(
-                '• Membros Conectados: ${_isInVoice ? 1 : 0}',
-                style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+                '• Membros em Chamada: ${_isInVoice ? 1 : 0}',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : const Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '• Transmissão: ${_isTransmitting ? "Ao Vivo (Transmitindo tela)" : "Inativa"}',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : const Color(0xFF475569),
+                ),
               ),
             ],
           ),
@@ -2070,24 +5222,25 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     required String name,
     required Color color,
     required bool isLive,
+    required bool isDark,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           Container(
-            width: 20,
-            height: 20,
+            width: 22,
+            height: 22,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.25),
               shape: BoxShape.circle,
-              border: Border.all(color: color, width: 1.2),
+              border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
             ),
             child: Center(
               child: Text(
                 initials,
                 style: TextStyle(
-                  fontSize: 8.5,
+                  fontSize: 9,
                   fontWeight: FontWeight.w800,
                   color: color,
                 ),
@@ -2099,9 +5252,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             child: Text(
               name,
               style: GoogleFonts.inter(
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.85),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.9)
+                    : const Color(0xFF1E293B),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -2111,19 +5266,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                color: const Color(0xFF9333EA).withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: const Color(0xFFEF4444).withValues(alpha: 0.6),
-                  width: 1,
-                ),
               ),
               child: const Text(
                 'AO VIVO',
                 style: TextStyle(
                   fontSize: 8,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFFEF4444),
+                  letterSpacing: 0.3,
+                  color: Color(0xFFC084FC),
                 ),
               ),
             ),
@@ -2132,7 +5284,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     );
   }
 
-  Widget _buildSidebarMemberRow(String name, String role, Color color) {
+  Widget _buildSidebarMemberRow(
+    String name,
+    String role,
+    Color color,
+    bool isDark,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
       child: Row(
@@ -2147,7 +5304,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             child: Center(
               child: Text(
                 name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
               ),
             ),
           ),
@@ -2158,7 +5319,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               children: [
                 Text(
                   name,
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
                 ),
                 Text(
                   role,
@@ -2173,21 +5338,19 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   // Docked Voice Footer at bottom right of sidebar
-  Widget _buildDockedVoiceFooter(bool isDark) {
-    if (!_isInVoice) {
-      return const SizedBox.shrink();
-    }
-    final channelName = _connectedVoiceChannelId != null && _activeChannel != null
-        ? _activeChannel!.name
-        : 'geral';
-
+  Widget _buildDockedVoiceFooter(
+    bool isDark,
+    VoiceState voiceState,
+    VoiceStateNotifier voiceNotifier,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF10111A) : const Color(0xFFF1F5F9),
+        color: isDark ? const Color(0xFF141522) : const Color(0xFFFFFFFF),
         border: Border(
           top: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
+            width: 1,
           ),
         ),
       ),
@@ -2197,69 +5360,152 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           Row(
             children: [
               Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF4ADE80),
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF22C55E).withValues(alpha: 0.65),
+                      blurRadius: 7,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Text(
                 'Conectado',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF4ADE80),
+                  color: const Color(0xFF22C55E),
                 ),
               ),
               const Spacer(),
               Text(
                 'Conexão estável',
                 style: GoogleFonts.inter(
-                  fontSize: 9.5,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF10B981).withValues(alpha: 0.9),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
-            '$channelName · ${widget.server.name}',
+            '${_connectedVoiceChannelId != null && _activeChannel != null ? _activeChannel!.name : "geral"} · ${widget.server.name}',
             style: GoogleFonts.inter(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             children: [
-              IconButton(
-                icon: Icon(_isMicMuted ? LucideIcons.micOff : LucideIcons.mic, size: 14),
-                onPressed: () => setState(() => _isMicMuted = !_isMicMuted),
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                padding: EdgeInsets.zero,
+              Tooltip(
+                message: voiceState.isMicMuted
+                    ? 'Desmutar Microfone'
+                    : 'Mutar Microfone',
+                child: InkWell(
+                  onTap: () => voiceNotifier.toggleMic(),
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: voiceState.isMicMuted
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.2)
+                          : (isDark
+                                ? const Color(0xFF1E2030)
+                                : const Color(0xFFF1F5F9)),
+                      borderRadius: BorderRadius.circular(10),
+                      border: isDark
+                          ? null
+                          : Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        voiceState.isMicMuted
+                            ? LucideIcons.micOff
+                            : LucideIcons.mic,
+                        size: 16,
+                        color: voiceState.isMicMuted
+                            ? const Color(0xFFEF4444)
+                            : (isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF475569)),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              IconButton(
-                icon: Icon(_isDeafened ? LucideIcons.headphones : LucideIcons.headphones, size: 14),
-                onPressed: () => setState(() => _isDeafened = !_isDeafened),
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                padding: EdgeInsets.zero,
+              const SizedBox(width: 8),
+              Tooltip(
+                message: voiceState.isDeafened
+                    ? 'Ativar Áudio'
+                    : 'Desativar Áudio',
+                child: InkWell(
+                  onTap: () => voiceNotifier.toggleDeafened(),
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: voiceState.isDeafened
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.2)
+                          : (isDark
+                                ? const Color(0xFF1E2030)
+                                : const Color(0xFFF1F5F9)),
+                      borderRadius: BorderRadius.circular(10),
+                      border: isDark
+                          ? null
+                          : Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        LucideIcons.headphones,
+                        size: 16,
+                        color: voiceState.isDeafened
+                            ? const Color(0xFFEF4444)
+                            : (isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF475569)),
+                      ),
+                    ),
+                  ),
+                ),
               ),
               const Spacer(),
-              ElevatedButton(
-                onPressed: _leaveVoice,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  minimumSize: const Size(0, 24),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9999)),
+              InkWell(
+                onTap: _leaveVoice,
+                mouseCursor: SystemMouseCursors.click,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Sair',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ),
-                child: const Text('Sair', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -2270,17 +5516,79 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 }
 
 class _ChatMessage {
+  final String id;
   final String author;
   final Color authorColor;
   final String content;
-  final DateTime timestamp;
+  final bool isEdited;
+  final DateTime? timestamp;
 
   const _ChatMessage({
+    required this.id,
     required this.author,
     required this.authorColor,
     required this.content,
-    required this.timestamp,
+    this.isEdited = false,
+    this.timestamp,
   });
+
+  _ChatMessage copyWith({
+    String? id,
+    String? author,
+    Color? authorColor,
+    String? content,
+    bool? isEdited,
+    DateTime? timestamp,
+  }) {
+    return _ChatMessage(
+      id: id ?? this.id,
+      author: author ?? this.author,
+      authorColor: authorColor ?? this.authorColor,
+      content: content ?? this.content,
+      isEdited: isEdited ?? this.isEdited,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'author': author,
+    'authorColor': authorColor.toARGB32(),
+    'content': content,
+    'is_edited': isEdited,
+    'timestamp': timestamp?.toIso8601String(),
+  };
+
+    factory _ChatMessage.fromJson(Map<String, dynamic> json) => _ChatMessage(
+    id:
+        json['id'] as String? ??
+        'msg_${json['timestamp'] ?? DateTime.now().microsecondsSinceEpoch}',
+    author: json['author'] as String? ?? 'Usuário',
+    authorColor: Color(json['authorColor'] as int? ?? 0xFFF5CBA7),
+    content: json['content'] as String? ?? '',
+    isEdited: json['is_edited'] as bool? ?? false,
+    timestamp: json['timestamp'] != null
+        ? DateTime.tryParse(json['timestamp'] as String)
+        : null,
+  );
+
+  factory _ChatMessage.fromApi(Map<String, dynamic> m, Color defaultColor) {
+    final authorName = (m['author'] is Map)
+        ? (m['author']['username'] ?? 'Usuário')
+        : (m['author_id'] ?? 'Usuário');
+    return _ChatMessage(
+      id: (m['id'] ?? 'msg_${DateTime.now().microsecondsSinceEpoch}').toString(),
+      author: authorName.toString(),
+      authorColor: defaultColor,
+      content: (m['content'] ?? '').toString(),
+      isEdited: m['is_edited'] == true,
+      timestamp: m['created_at'] != null
+          ? DateTime.tryParse(m['created_at'].toString())
+          : (m['timestamp'] != null
+              ? DateTime.tryParse(m['timestamp'].toString())
+              : null),
+    );
+  }
 }
 
 // Custom Painter for Immersive Simulation/Racing Video Stage
@@ -2292,11 +5600,7 @@ class _RacingStreamCanvasPainter extends CustomPainter {
     // Asphalt Track Simulation
     final trackPaint = Paint()
       ..shader = const LinearGradient(
-        colors: [
-          Color(0xFF1E293B),
-          Color(0xFF0F172A),
-          Color(0xFF020617),
-        ],
+        colors: [Color(0xFF1E293B), Color(0xFF0F172A), Color(0xFF020617)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
@@ -2317,7 +5621,8 @@ class _RacingStreamCanvasPainter extends CustomPainter {
     }
 
     // Racing Kerb Red-White Strip
-    final kerbPaint = Paint()..color = const Color(0xFFEF4444).withValues(alpha: 0.4);
+    final kerbPaint = Paint()
+      ..color = const Color(0xFFEF4444).withValues(alpha: 0.4);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, size.height * 0.72, size.width, 16),

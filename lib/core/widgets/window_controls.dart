@@ -164,6 +164,7 @@ class _WindowButtonState extends State<_WindowButton> {
       message: widget.tooltip,
       waitDuration: const Duration(milliseconds: 600),
       child: MouseRegion(
+        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(

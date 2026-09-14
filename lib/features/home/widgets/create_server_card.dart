@@ -26,12 +26,14 @@ class _CreateServerCardState extends State<CreateServerCard> {
     final isDark = theme.brightness == Brightness.dark;
 
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: InkWell(
         onTap: () {
           CreateServerDialog.show(context);
         },
+        mouseCursor: SystemMouseCursors.click,
         borderRadius: BorderRadius.circular(14),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),

@@ -90,6 +90,18 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/servers/{id}/channels", serverHandler.CreateChannel).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.ListMessages).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.SendMessage).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages/{messageId}", serverHandler.UpdateMessage).Methods("PUT", "PATCH", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages/{messageId}", serverHandler.DeleteMessage).Methods("DELETE", "OPTIONS")
+
+	// Membros do Servidor & Convites
+	protected.HandleFunc("/servers/{id}/members", serverHandler.ListMembers).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/members", serverHandler.AddMember).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/members/{userId}", serverHandler.RemoveMember).Methods("DELETE", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/join", serverHandler.JoinServer).Methods("POST", "OPTIONS")
+
+	// Busca de Usuários
+	protected.HandleFunc("/users/search", authHandler.SearchUsers).Methods("GET", "OPTIONS")
+
 
 	// Auditoria
 	protected.HandleFunc("/audit-logs", func(w http.ResponseWriter, req *http.Request) {
@@ -109,10 +121,18 @@ func (r *Router) SetupRoutes() http.Handler {
 // Middlewares
 func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", r.cfg.AllowedOrigins)
+		origin := req.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		} else if r.cfg.AllowedOrigins != "" && r.cfg.AllowedOrigins != "*" {
+			w.Header().Set("Access-Control-Allow-Origin", r.cfg.AllowedOrigins)
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Origin, X-Requested-With")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if req.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -147,6 +167,12 @@ func (r *Router) recoveryMiddleware(next http.Handler) http.Handler {
 
 func (r *Router) jwtAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Preflight OPTIONS requests should bypass JWT auth
+		if req.Method == "OPTIONS" {
+			next.ServeHTTP(w, req)
+			return
+		}
+
 		authHeader := req.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, `{"error":"Token de autorização ausente"}`, http.StatusUnauthorized)

@@ -213,15 +213,19 @@ class HubRightPanel extends ConsumerWidget {
           color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
         ),
         const SizedBox(width: 6),
-        Text(
-          title,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            color: isDark
-                ? AppColors.darkTextMuted
-                : AppColors.lightTextMuted,
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: isDark
+                  ? AppColors.darkTextMuted
+                  : AppColors.lightTextMuted,
+            ),
           ),
         ),
         if (count != null) ...[
@@ -307,6 +311,7 @@ class HubRightPanel extends ConsumerWidget {
             const SizedBox(height: 8),
             InkWell(
               onTap: onAction,
+              mouseCursor: SystemMouseCursors.click,
               borderRadius: BorderRadius.circular(6),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -351,30 +356,37 @@ class HubRightPanel extends ConsumerWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isOnline
-                    ? (isDark ? AppColors.darkSage : AppColors.lightSage)
-                    : (isDark ? AppColors.darkDanger : AppColors.lightDanger),
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isOnline
+                      ? (isDark ? AppColors.darkSage : AppColors.lightSage)
+                      : (isDark ? AppColors.darkDanger : AppColors.lightDanger),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(width: 8),
         Text(
           status,
           style: GoogleFonts.jetBrainsMono(

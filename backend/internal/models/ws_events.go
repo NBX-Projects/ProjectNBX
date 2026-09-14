@@ -7,6 +7,8 @@ type EventType string
 
 const (
 	EventChatMessage    EventType = "CHAT_MESSAGE"
+	EventMessageUpdate  EventType = "MESSAGE_UPDATE"
+	EventMessageDelete  EventType = "MESSAGE_DELETE"
 	EventUserPresence   EventType = "USER_PRESENCE"
 	EventVoiceState     EventType = "VOICE_STATE"
 	EventChannelJoin    EventType = "CHANNEL_JOIN"
