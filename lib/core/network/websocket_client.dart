@@ -119,7 +119,7 @@ class WebSocketClient {
       channel.ready.then((_) {
         _isConnected = true;
         _flushPendingQueue();
-      }).catchError((e) {
+      }).catchError((Object e) {
         debugPrint('[WebSocket] Erro na verificação ready do socket: $e');
       });
 
@@ -214,7 +214,7 @@ class WebSocketClient {
       if (_channel != null) {
         _channel!.ready.then((_) {
           _channel?.sink.add(msg);
-        }).catchError((_) {
+        }).catchError((Object _) {
           _channel?.sink.add(msg);
         });
       } else {
