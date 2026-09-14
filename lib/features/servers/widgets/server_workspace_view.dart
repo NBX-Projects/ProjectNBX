@@ -262,7 +262,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       setState(() {
         for (final item in list) {
           if (item is Map) {
-            final p = _VoiceParticipantInfo.fromJson(Map<String, dynamic>.from(item));
+            final p = VoiceParticipantInfo.fromJson(Map<String, dynamic>.from(item));
             if (p.channelId.isNotEmpty && p.isInVoice) {
               _voiceParticipants.putIfAbsent(p.channelId, () => {})[p.key] = p;
             }
