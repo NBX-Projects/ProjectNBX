@@ -281,6 +281,12 @@ func (h *ServerHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
 
+	server, errS := h.repo.GetServerByID(serverID)
+	if errS != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
 	members, err := h.repo.ListServerMembers(serverID)
 	if err != nil {
 		http.Error(w, `{"error":"Erro ao listar membros do servidor"}`, http.StatusInternalServerError)
@@ -294,6 +300,18 @@ func (h *ServerHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
+	currentUserID, _ := r.Context().Value("user_id").(string)
+
+	server, errS := h.repo.GetServerByID(serverID)
+	if errS != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if currentUserID != "" && server.OwnerID != currentUserID {
+		http.Error(w, `{"error":"Sem permissão para adicionar membros a este servidor"}`, http.StatusForbidden)
+		return
+	}
 
 	var req models.AddMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -322,9 +340,8 @@ func (h *ServerHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server, _ := h.repo.GetServerByID(serverID)
 	role := "member"
-	if server != nil && server.OwnerID == targetUser.ID {
+	if server.OwnerID == targetUser.ID {
 		role = "owner"
 	}
 
@@ -337,7 +354,7 @@ func (h *ServerHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(member)
 }
 

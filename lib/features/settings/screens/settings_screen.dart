@@ -147,15 +147,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  strings.settingsTitle,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
+                Expanded(
+                  child: Text(
+                    strings.settingsTitle,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -237,14 +240,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           : AppColors.lightDanger,
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      strings.logOut,
-                      style: GoogleFonts.inter(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppColors.darkDanger
-                            : AppColors.lightDanger,
+                    Expanded(
+                      child: Text(
+                        strings.logOut,
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkDanger
+                              : AppColors.lightDanger,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -914,15 +920,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildSectionHeaderTitle(
-              isDark,
-              strings.voiceAndVideo,
-              strings.voiceDescription,
-            ),
-            Tooltip(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: _buildSectionHeaderTitle(
+                  isDark,
+                  strings.voiceAndVideo,
+                  strings.voiceDescription,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Tooltip(
               message: 'Detectar novos microfones e fones conectados',
               child: InkWell(
                 onTap: audioState.isLoading

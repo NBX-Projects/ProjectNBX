@@ -501,14 +501,17 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                       color: widget.accentColor,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Convidar Pessoas',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary,
+                    Flexible(
+                      child: Text(
+                        'Convidar Pessoas',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -531,7 +534,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
 
             ...membersList.map((m) {
               final user = m['user'] as Map<String, dynamic>? ?? {};
-              final uName = user['username'] ?? widget.username;
+              final uName = user['username'] ?? m['username'] ?? widget.username;
               final role = m['role'] ?? 'member';
               final isOwner = role == 'owner';
 

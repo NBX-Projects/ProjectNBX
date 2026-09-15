@@ -7,6 +7,7 @@ import (
 
 	"github.com/projectnbx/backend/config"
 	"github.com/projectnbx/backend/internal/auth"
+	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
 	"github.com/projectnbx/backend/internal/websocket"
 )
@@ -19,7 +20,7 @@ func TestRouter_SetupRoutes(t *testing.T) {
 		AllowedOrigins: "*",
 	}
 	repo := repository.NewMemoryRepository()
-	jwtService := auth.NewJWTService(cfg.JWTSecret, "24h")
+	jwtService := auth.NewJWTService(cfg.JWTSecret)
 	hub := websocket.NewHub(nil)
 
 	r := NewRouter(cfg, repo, jwtService, hub)
@@ -45,6 +46,35 @@ func TestRouter_SetupRoutes(t *testing.T) {
 
 	if optRR.Code != http.StatusOK {
 		t.Errorf("Expected status 200 OK for OPTIONS, got %d", optRR.Code)
+	}
+
+	// Test Protected Route without token
+	protReq := httptest.NewRequest("GET", "/api/servers", nil)
+	protRR := httptest.NewRecorder()
+	handler.ServeHTTP(protRR, protReq)
+
+	if protRR.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 Unauthorized for /api/servers without token, got %d", protRR.Code)
+	}
+
+	// Test Protected Route with valid token
+	user := &models.User{
+		ID:       "usr_dev_1",
+		Username: "DarkLord_X",
+		Email:    "dev@projectnbx.com",
+	}
+	token, err := jwtService.GenerateToken(user)
+	if err != nil {
+		t.Fatalf("Failed to generate test token: %v", err)
+	}
+
+	authReq := httptest.NewRequest("GET", "/api/servers", nil)
+	authReq.Header.Set("Authorization", "Bearer "+token)
+	authRR := httptest.NewRecorder()
+	handler.ServeHTTP(authRR, authReq)
+
+	if authRR.Code != http.StatusOK {
+		t.Errorf("Expected status 200 OK for /api/servers with token, got %d: %s", authRR.Code, authRR.Body.String())
 	}
 }
 

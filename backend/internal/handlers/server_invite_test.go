@@ -236,6 +236,11 @@ func TestServerHandler_MembersManagement(t *testing.T) {
 	}
 
 	// 2. Add member by username (success)
+	repo.CreateUser(&models.User{
+		ID:       "usr_gamer",
+		Username: "dev_gamer",
+		Email:    "gamer@projectnbx.com",
+	})
 	addReqBody, _ := json.Marshal(map[string]string{"username": "dev_gamer"})
 	reqAdd := newAuthRequest("POST", "/api/servers/1/members", addReqBody, "usr_dev_1", map[string]string{"id": "1"})
 	rrAdd := httptest.NewRecorder()
@@ -245,7 +250,7 @@ func TestServerHandler_MembersManagement(t *testing.T) {
 	}
 
 	// Add member by email (success)
-	addEmailBody, _ := json.Marshal(map[string]string{"email": "dev@projectnbx.com"})
+	addEmailBody, _ := json.Marshal(map[string]string{"email": "dev@nbx.com"})
 	reqAddEmail := newAuthRequest("POST", "/api/servers/1/members", addEmailBody, "usr_dev_1", map[string]string{"id": "1"})
 	rrAddEmail := httptest.NewRecorder()
 	handler.AddMember(rrAddEmail, reqAddEmail)

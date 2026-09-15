@@ -20,7 +20,7 @@ flutter test --coverage
 Write-Host "🐹 [2/3] Executando testes e gerando cobertura do Backend Go..." -ForegroundColor Cyan
 Push-Location "$PSScriptRoot\..\backend"
 try {
-    go test -v -coverprofile=coverage.out ./...
+    go test -v "-coverprofile=coverage.out" ./...
 } catch {
     Write-Warning "Aviso: alguns testes em Go podem precisar de mocks adicionais."
 } finally {

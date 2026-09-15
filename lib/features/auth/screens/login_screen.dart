@@ -132,12 +132,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 left: 0,
                 right: 0,
                 height: 52,
-                child: DragToMoveArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        const Spacer(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: DragToMoveArea(
+                          child: SizedBox.expand(),
+                        ),
+                      ),
                         // Server IP / Host Configuration Button
                         Tooltip(
                           message: 'Configurar IP do Servidor Backend',
@@ -275,16 +278,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-              ),
 
               // Central Form Content
-              Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 32,
-                  ),
-                  child: ConstrainedBox(
+              Positioned.fill(
+                top: 52,
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 32,
+                    ),
+                    child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 480),
                     child: AnimatedContainer(
                       duration: _themeAnimDuration,
@@ -677,7 +681,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
               ),
-            ],
+            ),
+          ],
           ),
         ),
       ),

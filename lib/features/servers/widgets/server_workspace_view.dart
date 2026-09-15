@@ -101,7 +101,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       await _disconnectFromLiveKitVoice();
       final apiClient = ref.read(apiClientProvider);
       final res = await apiClient.getVoiceToken(channelId);
-      final token = res['token'] as String;
+      final token = (res['token'] as String?) ?? '';
+      if (token.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isConnectingLiveKit = false;
+            _isLiveKitConnected = false;
+          });
+        }
+        return;
+      }
       const defaultLiveKitUrl = String.fromEnvironment('LIVEKIT_URL', defaultValue: 'ws://localhost:7880');
       var serverUrl = (res['server_url'] as String?) ?? defaultLiveKitUrl;
       if (serverUrl.isEmpty) {

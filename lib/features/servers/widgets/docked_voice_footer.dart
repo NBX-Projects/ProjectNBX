@@ -65,12 +65,15 @@ class DockedVoiceFooter extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Text(
-                'Conexão estável',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.9),
+              Flexible(
+                child: Text(
+                  'Conexão estável',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF10B981).withValues(alpha: 0.9),
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
