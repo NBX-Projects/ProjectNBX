@@ -29,7 +29,7 @@ func LoadConfig() *Config {
 		LiveKitAPIKey:  getEnv("LIVEKIT_API_KEY", "devkey"),
 		LiveKitSecret:  getEnv("LIVEKIT_API_SECRET", "secret"),
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "*"),
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://admin:nbx_pass@localhost:8190/nbx_stream?sslmode=disable"),
+		DatabaseURL:    getEnv("DATABASE_URL", "postgres://admin@localhost:8190/nbx_stream?sslmode=disable"),
 		MigrationsDir:  getEnv("MIGRATIONS_DIR", "migrations"),
 	}
 }
