@@ -65,8 +65,11 @@ class WebSocketClient {
       _currentServerId = serverId;
     }
 
-    // Se já estiver conectando ou já estiver conectado com canal ativo, não duplica conexão
+    // Se já estiver conectando ou já estiver conectado com canal ativo, envia VOICE_SYNC do servidor e retorna
     if (_isConnecting || (_channel != null && _isConnected)) {
+      if (serverId != null && serverId.isNotEmpty) {
+        sendEvent('VOICE_SYNC', <String, dynamic>{}, serverId: serverId);
+      }
       return;
     }
 

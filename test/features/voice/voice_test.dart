@@ -97,6 +97,14 @@ void main() {
       notifier.toggleDeafened();
       expect(notifier.state.isDeafened, false);
 
+      // Unmuting mic while deafened automatically un-deafens and enables audio
+      notifier.setDeafened(true);
+      expect(notifier.state.isDeafened, true);
+      expect(notifier.state.isMicMuted, true);
+      notifier.toggleMic();
+      expect(notifier.state.isMicMuted, false);
+      expect(notifier.state.isDeafened, false);
+
       // Explicit set
       notifier.setMicMuted(true);
       expect(notifier.state.isMicMuted, true);

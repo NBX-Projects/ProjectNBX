@@ -34,6 +34,8 @@ class ChannelChatView extends StatelessWidget {
   final VoidCallback onCancelEditing;
   final void Function(String messageId) onSaveEditing;
   final void Function(String messageId) onDeleteMessage;
+  final Map<String, Map<String, VoiceParticipantInfo>> voiceParticipants;
+  final String? clientSessionId;
 
   const ChannelChatView({
     super.key,
@@ -62,7 +64,15 @@ class ChannelChatView extends StatelessWidget {
     required this.onCancelEditing,
     required this.onSaveEditing,
     required this.onDeleteMessage,
+    this.voiceParticipants = const {},
+    this.clientSessionId,
   });
+
+  List<VoiceParticipantInfo> get _channelVoiceParticipants {
+    final map = voiceParticipants[channelKey];
+    if (map == null) return [];
+    return map.values.where((p) => p.isInVoice).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +325,176 @@ class ChannelChatView extends StatelessWidget {
             ),
           ),
 
+          // 1.1 Barra de Participantes em Voz no Canal
+          if (_channelVoiceParticipants.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0F261B) : const Color(0xFFE6F9EE),
+                border: Border(
+                  bottom: BorderSide(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF22C55E),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_channelVoiceParticipants.length} em call:',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF22C55E),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _channelVoiceParticipants.map((p) {
+                          final isMe = clientSessionId != null
+                              ? p.sessionId == clientSessionId
+                              : p.username == username;
+                          final devLabel = p.device == 'mobile'
+                              ? ' (Celular)'
+                              : p.device == 'desktop'
+                                  ? ' (Desktop)'
+                                  : '';
+                          final pColor = resolveAuthorColor(p.username, isDark);
+                          return Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1B3828)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF22C55E)
+                                    .withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: pColor.withValues(alpha: 0.3),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      getAuthorInitials(p.username),
+                                      style: TextStyle(
+                                        fontSize: 7.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: pColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${p.username}$devLabel${isMe ? " (Você)" : ""}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                if (p.isDeafened) ...[
+                                  const SizedBox(width: 4),
+                                  Tooltip(
+                                    message: 'Áudio desativado',
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.headphones,
+                                        size: 10,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ),
+                                ] else if (p.isMuted) ...[
+                                  const SizedBox(width: 4),
+                                  Tooltip(
+                                    message: 'Microfone mutado',
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.micOff,
+                                        size: 10,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  if (!isInVoice) ...[
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: onToggleVoiceChannel,
+                      borderRadius: BorderRadius.circular(9999),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF22C55E),
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(LucideIcons.phoneCall,
+                                size: 11, color: Colors.black),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Entrar',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
           // 2. Banner de Transmissão Ativa no Canal
           if (activeBroadcaster != null)
             ActiveLiveStreamBanner(
@@ -487,7 +667,16 @@ class ChannelChatView extends StatelessWidget {
 
           // 4. Message Input Bar
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              6,
+              20,
+              isMobile
+                  ? (MediaQuery.of(context).padding.bottom > 0
+                      ? MediaQuery.of(context).padding.bottom + 8.0
+                      : 12.0)
+                  : 16.0,
+            ),
             child: Container(
               height: 48,
               padding: const EdgeInsets.symmetric(horizontal: 14),

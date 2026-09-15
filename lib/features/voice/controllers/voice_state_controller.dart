@@ -39,7 +39,13 @@ class VoiceStateNotifier extends StateNotifier<VoiceState> {
   VoiceStateNotifier() : super(const VoiceState());
 
   void toggleMic() {
-    state = state.copyWith(isMicMuted: !state.isMicMuted);
+    final nextMuted = !state.isMicMuted;
+    if (!nextMuted && state.isDeafened) {
+      // Ao desmutar o microfone estando ensurdecido, também reativa o áudio
+      state = state.copyWith(isMicMuted: false, isDeafened: false);
+    } else {
+      state = state.copyWith(isMicMuted: nextMuted);
+    }
   }
 
   void toggleDeafened() {

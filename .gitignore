@@ -46,10 +46,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
+.gradle/
+**/android/.gradle/
 
 # FVM Version Cache
 .fvm/
 
 # Environment secrets
 .env
-*.env
+*.env

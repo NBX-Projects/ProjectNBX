@@ -94,6 +94,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     try {
       if (mounted) {
         setState(() {
+          _isInVoice = true;
+          _connectedVoiceChannelId = channelId;
           _isConnectingLiveKit = true;
           _isLiveKitConnected = false;
         });
@@ -105,6 +107,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       if (token.isEmpty) {
         if (mounted) {
           setState(() {
+            _isInVoice = false;
+            _connectedVoiceChannelId = null;
             _isConnectingLiveKit = false;
             _isLiveKitConnected = false;
           });
@@ -141,7 +145,26 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           _syncLiveKitParticipant(event.participant, channelId, true);
         } else if (event is ParticipantDisconnectedEvent) {
           _syncLiveKitParticipant(event.participant, channelId, false);
-        } else if (event is TrackMutedEvent || event is TrackUnmutedEvent) {
+        } else if (event is TrackSubscribedEvent) {
+          final isDeafened = ref.read(voiceStateProvider).isDeafened;
+          if (isDeafened && event.track is RemoteAudioTrack) {
+            event.track.disable();
+            event.track.mediaStreamTrack.enabled = false;
+          }
+          setState(() {});
+        } else if (event is TrackMutedEvent) {
+          final uid = event.participant.identity;
+          if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+            _voiceParticipants[channelId]![uid] =
+                _voiceParticipants[channelId]![uid]!.copyWith(isMuted: true);
+          }
+          setState(() {});
+        } else if (event is TrackUnmutedEvent) {
+          final uid = event.participant.identity;
+          if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+            _voiceParticipants[channelId]![uid] =
+                _voiceParticipants[channelId]![uid]!.copyWith(isMuted: false);
+          }
           setState(() {});
         }
       });
@@ -150,9 +173,24 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         serverUrl,
         token,
       );
+      final currentVoiceState = ref.read(voiceStateProvider);
+      final shouldMuteMic = currentVoiceState.isMicMuted || currentVoiceState.isDeafened;
       try {
-        await room.localParticipant?.setMicrophoneEnabled(true);
+        await room.localParticipant?.setMicrophoneEnabled(!shouldMuteMic);
       } catch (_) {}
+
+      // Se já estiver ensurdecido ao conectar, muta o áudio remoto imediatamente
+      if (currentVoiceState.isDeafened) {
+        for (final remote in room.remoteParticipants.values) {
+          for (final pub in remote.audioTrackPublications) {
+            final t = pub.track;
+            if (t != null) {
+              await t.disable();
+              t.mediaStreamTrack.enabled = false;
+            }
+          }
+        }
+      }
 
       // Sincroniza participantes confirmados pelo LiveKit
       final local = room.localParticipant;
@@ -164,7 +202,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
 
       if (mounted) {
+        ref.read(voiceStateProvider.notifier).connectVoice(widget.server.id, channelId);
         setState(() {
+          _isInVoice = true;
+          _connectedVoiceChannelId = channelId;
           _isConnectingLiveKit = false;
           _isLiveKitConnected = true;
           final uid = ref.read(authControllerProvider).user?.id ?? '';
@@ -180,6 +221,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     } catch (e) {
       if (mounted) {
         setState(() {
+          _isInVoice = false;
+          _connectedVoiceChannelId = null;
           _isConnectingLiveKit = false;
           _isLiveKitConnected = false;
         });
@@ -213,14 +256,22 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     setState(() {
       final chMap = _voiceParticipants.putIfAbsent(channelId, () => {});
       if (joined) {
+        final existing = chMap[uid];
         chMap[uid] = VoiceParticipantInfo(
-          sessionId: participant.sid.isNotEmpty ? participant.sid : uid,
+          sessionId: participant.sid.isNotEmpty ? participant.sid : (existing?.sessionId ?? uid),
           userId: uid,
           username: uname,
           serverId: widget.server.id,
           channelId: channelId,
+          device: existing?.device ?? 'desktop',
           isInVoice: true,
-          isMuted: participant.isMuted,
+          isConnecting: false,
+          isTransmitting: existing?.isTransmitting ?? false,
+          streamTitle: existing?.streamTitle,
+          previewType: existing?.previewType,
+          thumbnail: existing?.thumbnail,
+          isMuted: participant.isMuted || (existing?.isMuted ?? false),
+          isDeafened: existing?.isDeafened ?? false,
           isSpeaking: participant.isSpeaking,
           updatedAt: DateTime.now(),
         );
@@ -259,6 +310,85 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     _initWebSocketAndSync();
   }
 
+  Future<void> _handleMicToggle() async {
+    final nextState = ref.read(voiceStateProvider);
+    await _applyMicState(nextState.isMicMuted);
+  }
+
+  Future<void> _handleDeafenToggle() async {
+    final nextState = ref.read(voiceStateProvider);
+    await _applyMicState(nextState.isMicMuted);
+    await _applyDeafenState(nextState.isDeafened);
+  }
+
+  Future<void> _applyMicState(bool isMuted) async {
+    final isDeafened = ref.read(voiceStateProvider).isDeafened;
+    final shouldMute = isMuted || isDeafened;
+    try {
+      await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMute);
+      debugPrint('[LiveKit] Microfone alterado: isMuted=$isMuted, shouldMute=$shouldMute');
+    } catch (e) {
+      debugPrint('[LiveKit] Erro ao alterar microfone: $e');
+    }
+    final uid = ref.read(authControllerProvider).user?.id ?? '';
+    final cid = _connectedVoiceChannelId ?? _activeChannel?.id;
+    if (cid != null && uid.isNotEmpty && mounted) {
+      setState(() {
+        final chMap = _voiceParticipants[cid];
+        if (chMap != null && chMap[uid] != null) {
+          chMap[uid] = chMap[uid]!.copyWith(isMuted: isMuted);
+        }
+      });
+    }
+    _broadcastVoiceState(
+      isInVoice: _isInVoice,
+      isMuted: isMuted,
+      isDeafened: isDeafened,
+    );
+  }
+
+  Future<void> _applyDeafenState(bool isDeafened) async {
+    try {
+      if (_liveKitRoom != null) {
+        for (final p in _liveKitRoom!.remoteParticipants.values) {
+          for (final pub in p.audioTrackPublications) {
+            final t = pub.track;
+            if (t != null) {
+              if (isDeafened) {
+                await t.disable();
+              } else {
+                await t.enable();
+              }
+              t.mediaStreamTrack.enabled = !isDeafened;
+            }
+          }
+        }
+        final voiceState = ref.read(voiceStateProvider);
+        final shouldMuteMic = isDeafened || voiceState.isMicMuted;
+        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMuteMic);
+      }
+      debugPrint('[LiveKit] Áudio alterado (deafen): isDeafened=$isDeafened');
+    } catch (e) {
+      debugPrint('[LiveKit] Erro ao alterar áudio (deafen): $e');
+    }
+    final uid = ref.read(authControllerProvider).user?.id ?? '';
+    final cid = _connectedVoiceChannelId ?? _activeChannel?.id;
+    if (cid != null && uid.isNotEmpty && mounted) {
+      setState(() {
+        final chMap = _voiceParticipants[cid];
+        if (chMap != null && chMap[uid] != null) {
+          chMap[uid] = chMap[uid]!.copyWith(isDeafened: isDeafened);
+        }
+      });
+    }
+    final voiceState = ref.read(voiceStateProvider);
+    _broadcastVoiceState(
+      isInVoice: _isInVoice,
+      isMuted: voiceState.isMicMuted,
+      isDeafened: isDeafened,
+    );
+  }
+
   void _broadcastVoiceState({
     required bool isInVoice,
     bool? isTransmitting,
@@ -267,6 +397,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     String? previewType,
     String? thumbnail,
     String? channelId,
+    bool? isMuted,
+    bool? isDeafened,
   }) {
     final user = ref.read(authControllerProvider).user;
     final cid =
@@ -278,6 +410,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final isMobile = defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
     final deviceStr = isMobile ? 'mobile' : 'desktop';
+    final voiceState = ref.read(voiceStateProvider);
+    final muted = isMuted ?? voiceState.isMicMuted;
+    final deafened = isDeafened ?? voiceState.isDeafened;
 
     final payload = <String, dynamic>{
       'session_id': _clientSessionId,
@@ -295,6 +430,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         'preview_type': previewType ?? _activeScreenShareConfig?.previewType,
       if (thumbnail != null || _activeScreenShareConfig?.thumbnail != null)
         'thumbnail': thumbnail ?? _activeScreenShareConfig?.thumbnail,
+      'is_muted': muted,
+      'is_deafened': deafened,
     };
 
     if (cid.isNotEmpty) {
@@ -695,9 +832,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     } catch (_) {}
   }
 
-  void _openHybridChannel(ChannelModel channel) {
+  void _openHybridChannel(ChannelModel channel, {bool joinVoice = false}) {
+    final shouldJoin = joinVoice || channel.type == ChannelType.voice;
     final prevChannelId = _connectedVoiceChannelId;
-    if (prevChannelId != null && prevChannelId != channel.id) {
+    if (shouldJoin && prevChannelId != null && prevChannelId != channel.id) {
       _disconnectFromLiveKitVoice();
       _broadcastVoiceState(isInVoice: false, channelId: prevChannelId);
     }
@@ -707,30 +845,34 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     setState(() {
       _activeChannel = channel;
       _viewMode = ServerViewMode.channel;
-      _isInVoice = true;
-      _connectedVoiceChannelId = channel.id;
-      _isConnectingLiveKit = true;
-      _isLiveKitConnected = false;
+      if (shouldJoin) {
+        _isInVoice = true;
+        _connectedVoiceChannelId = channel.id;
+        _isConnectingLiveKit = true;
+        _isLiveKitConnected = false;
 
-      if (uid.isNotEmpty) {
-        final chMap = _voiceParticipants.putIfAbsent(channel.id, () => {});
-        chMap[uid] = VoiceParticipantInfo(
-          sessionId: _clientSessionId,
-          userId: uid,
-          username: uname,
-          serverId: widget.server.id,
-          channelId: channel.id,
-          isInVoice: true,
-          isConnecting: true,
-          updatedAt: DateTime.now(),
-        );
+        if (uid.isNotEmpty) {
+          final chMap = _voiceParticipants.putIfAbsent(channel.id, () => {});
+          chMap[uid] = VoiceParticipantInfo(
+            sessionId: _clientSessionId,
+            userId: uid,
+            username: uname,
+            serverId: widget.server.id,
+            channelId: channel.id,
+            isInVoice: true,
+            isConnecting: true,
+            updatedAt: DateTime.now(),
+          );
+        }
       }
     });
 
-    _broadcastVoiceState(isInVoice: true, channelId: channel.id, isConnecting: true);
+    if (shouldJoin) {
+      _broadcastVoiceState(isInVoice: true, channelId: channel.id, isConnecting: true);
+      _connectToLiveKitVoice(channel.id);
+    }
     ref.read(serversControllerProvider.notifier).selectChannel(channel.id);
     _loadChannelFromApi(channel.id);
-    _connectToLiveKitVoice(channel.id);
   }
 
   Future<void> _loadChannelFromApi(String channelId) async {
@@ -764,6 +906,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   void _leaveVoice() {
+    ref.read(voiceStateProvider.notifier).disconnectVoice();
     _streamRefreshTimer?.cancel();
     _localScreenShareTrack?.stop();
     _localScreenShareTrack?.dispose();
@@ -986,8 +1129,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     bool isDark,
     List<ChannelModel> effectiveChannels,
     String username,
-    VoiceState voiceState,
-    VoiceStateNotifier voiceNotifier,
   ) {
     showModalBottomSheet<void>(
       context: context,
@@ -996,56 +1137,75 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) {
-        return SizedBox(
-          height: MediaQuery.of(context).size.height * 0.75,
-          child: Column(
-            children: [
-              // Handle
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 8),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black26,
-                  borderRadius: BorderRadius.circular(2),
+        return Consumer(
+          builder: (modalContext, ref, _) {
+            final liveVoiceState = ref.watch(voiceStateProvider);
+            final liveVoiceNotifier = ref.read(voiceStateProvider.notifier);
+            return SafeArea(
+              top: false,
+              bottom: true,
+              child: SizedBox(
+                width: double.infinity,
+                height: MediaQuery.of(modalContext).size.height * 0.78,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(top: 10, bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black26,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ServerRightSidebar(
+                        isDark: isDark,
+                        server: widget.server,
+                        channels: effectiveChannels,
+                        activeChannel: _activeChannel,
+                        username: username,
+                        accentColor: _selectedAccentColor,
+                        clientSessionId: _clientSessionId,
+                        voiceParticipants: _voiceParticipants,
+                        serverMembers: _serverMembers,
+                        voiceState: liveVoiceState,
+                        voiceNotifier: liveVoiceNotifier,
+                        isInVoice: _isInVoice || liveVoiceState.isConnected,
+                        width: double.infinity,
+                        onChannelSelected: (c) {
+                          Navigator.pop(ctx);
+                          _openHybridChannel(c);
+                        },
+                        onWatchStream: (p) {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _watchingRemoteStream = p;
+                            _isChatVisible = false;
+                            _isRightSidebarVisible = false;
+                          });
+                        },
+                        onLeaveVoice: () {
+                          Navigator.pop(ctx);
+                          _leaveVoice();
+                        },
+                        onMembersUpdated: _loadServerMembers,
+                        onToggleMic: _handleMicToggle,
+                        onToggleDeafened: _handleDeafenToggle,
+                        connectedVoiceChannelId: _connectedVoiceChannelId ?? liveVoiceState.connectedChannelId,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Expanded(
-                child: ServerRightSidebar(
-                  isDark: isDark,
-                  server: widget.server,
-                  channels: effectiveChannels,
-                  activeChannel: _activeChannel,
-                  username: username,
-                  accentColor: _selectedAccentColor,
-                  clientSessionId: _clientSessionId,
-                  voiceParticipants: _voiceParticipants,
-                  serverMembers: _serverMembers,
-                  voiceState: voiceState,
-                  voiceNotifier: voiceNotifier,
-                  onChannelSelected: (c) {
-                    Navigator.pop(ctx);
-                    _openHybridChannel(c);
-                  },
-                  onWatchStream: (p) {
-                    Navigator.pop(ctx);
-                    setState(() {
-                      _watchingRemoteStream = p;
-                      _isChatVisible = false;
-                      _isRightSidebarVisible = false;
-                    });
-                  },
-                  onLeaveVoice: () {
-                    Navigator.pop(ctx);
-                    _leaveVoice();
-                  },
-                  onMembersUpdated: _loadServerMembers,
-                  connectedVoiceChannelId: _connectedVoiceChannelId,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -1085,12 +1245,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         isRightSidebarVisible: _isRightSidebarVisible,
         accentColor: _selectedAccentColor,
         activeBroadcaster: _activeBroadcaster,
+        voiceParticipants: _voiceParticipants,
+        clientSessionId: _clientSessionId,
         onToggleTransmission: _toggleTransmission,
         onToggleVoiceChannel: () {
           if (_isInVoice) {
             _leaveVoice();
           } else if (_activeChannel != null) {
-            _openHybridChannel(_activeChannel!);
+            _connectToLiveKitVoice(_activeChannel!.id);
           }
         },
         onToggleRightSidebar: () => setState(
@@ -1239,6 +1401,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<VoiceState>(voiceStateProvider, (previous, next) {
+      if (previous?.isMicMuted != next.isMicMuted) {
+        _applyMicState(next.isMicMuted);
+      }
+      if (previous?.isDeafened != next.isDeafened) {
+        _applyDeafenState(next.isDeafened);
+      }
+    });
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authControllerProvider);
@@ -1271,6 +1442,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           activeChannel: _activeChannel,
           accentColor: _selectedAccentColor,
           isRightSidebarVisible: _isRightSidebarVisible,
+          totalInVoice: _voiceParticipants.values.fold<int>(
+            0,
+            (sum, m) => sum + m.values.where((p) => p.isInVoice).length,
+          ),
           onBackToHome: () => setState(() {
             _viewMode = ServerViewMode.home;
             _watchingRemoteStream = null;
@@ -1289,8 +1464,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             isDark,
             effectiveChannels,
             username,
-            voiceState,
-            voiceNotifier,
           ),
         ),
 
@@ -1316,6 +1489,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         ),
                         onSaveCustomization: _saveCustomization,
                         onOpenChannel: (c) => _openHybridChannel(c),
+                        voiceParticipants: _voiceParticipants,
+                        clientSessionId: _clientSessionId,
+                        connectedVoiceChannelId: _connectedVoiceChannelId,
+                        onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
+                        onWatchStream: (p) => setState(() {
+                          _watchingRemoteStream = p;
+                          _isChatVisible = false;
+                          _isRightSidebarVisible = false;
+                        }),
                       )
                     : _buildHybridChannelStage(
                         context,
@@ -1350,6 +1532,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                               ),
                               onSaveCustomization: _saveCustomization,
                               onOpenChannel: (c) => _openHybridChannel(c),
+                              voiceParticipants: _voiceParticipants,
+                              clientSessionId: _clientSessionId,
+                              connectedVoiceChannelId: _connectedVoiceChannelId,
+                              onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
+                              onWatchStream: (p) => setState(() {
+                                _watchingRemoteStream = p;
+                                _isChatVisible = false;
+                                _isRightSidebarVisible = false;
+                              }),
                             )
                           : _buildHybridChannelStage(
                               context,
@@ -1375,6 +1566,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         serverMembers: _serverMembers,
                         voiceState: voiceState,
                         voiceNotifier: voiceNotifier,
+                        isInVoice: _isInVoice,
                         onChannelSelected: (c) => _openHybridChannel(c),
                         onWatchStream: (p) => setState(() {
                           _watchingRemoteStream = p;
@@ -1383,6 +1575,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         }),
                         onLeaveVoice: _leaveVoice,
                         onMembersUpdated: _loadServerMembers,
+                        onToggleMic: _handleMicToggle,
+                        onToggleDeafened: _handleDeafenToggle,
                         connectedVoiceChannelId: _connectedVoiceChannelId,
                       ),
                   ],

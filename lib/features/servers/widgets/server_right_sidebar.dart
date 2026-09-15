@@ -28,7 +28,11 @@ class ServerRightSidebar extends StatefulWidget {
   final ValueChanged<VoiceParticipantInfo>? onWatchStream;
   final VoidCallback onLeaveVoice;
   final VoidCallback? onMembersUpdated;
+  final VoidCallback? onToggleMic;
+  final VoidCallback? onToggleDeafened;
   final String? connectedVoiceChannelId;
+  final bool isInVoice;
+  final double? width;
   final ServerSidebarTab initialTab;
 
   const ServerRightSidebar({
@@ -48,7 +52,11 @@ class ServerRightSidebar extends StatefulWidget {
     this.onWatchStream,
     required this.onLeaveVoice,
     this.onMembersUpdated,
+    this.onToggleMic,
+    this.onToggleDeafened,
     this.connectedVoiceChannelId,
+    this.isInVoice = false,
+    this.width,
     this.initialTab = ServerSidebarTab.canais,
   });
 
@@ -77,21 +85,32 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
     final activeCh = widget.activeChannel ??
         (widget.channels.isNotEmpty ? widget.channels.first : null);
 
-    final channelName = widget.connectedVoiceChannelId != null && activeCh != null
+    final isInVoice = widget.isInVoice || widget.voiceState.isConnected;
+    final voiceChannelId = widget.connectedVoiceChannelId ?? widget.voiceState.connectedChannelId;
+    final hasActiveVoice = isInVoice && voiceChannelId != null;
+
+    final channelName = voiceChannelId != null && activeCh != null
         ? activeCh.name
         : 'geral';
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final effectiveWidth = widget.width ?? (isMobile ? double.infinity : 250.0);
+
     return Container(
-      width: 250,
+      width: effectiveWidth,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141522) : const Color(0xFFFAF9F6),
-        border: Border(
-          left: BorderSide(
-            color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
-          ),
-        ),
+        border: isMobile
+            ? null
+            : Border(
+                left: BorderSide(
+                  color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
+                ),
+              ),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header Tabs: Canais | Membros | Resumo
           Container(
@@ -129,15 +148,24 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
           // Tab Content
           Expanded(child: _buildTabContent(activeCh)),
 
-          // Bottom Voice Connection Status (Docked Footer)
-          DockedVoiceFooter(
-            isDark: isDark,
-            channelName: channelName,
-            serverName: widget.server.name,
-            voiceState: widget.voiceState,
-            voiceNotifier: widget.voiceNotifier,
-            onLeaveVoice: widget.onLeaveVoice,
-          ),
+          // Bottom Voice Connection Status (Docked Footer) - visível APENAS quando o usuário estiver em chamada
+          if (hasActiveVoice)
+            DockedVoiceFooter(
+              isDark: isDark,
+              channelName: channelName,
+              serverName: widget.server.name,
+              voiceState: widget.voiceState,
+              voiceNotifier: widget.voiceNotifier,
+              onLeaveVoice: widget.onLeaveVoice,
+              onToggleMic: widget.onToggleMic,
+              onToggleDeafened: widget.onToggleDeafened,
+            )
+          else if (isMobile)
+            SizedBox(
+              height: MediaQuery.of(context).padding.bottom > 0
+                  ? MediaQuery.of(context).padding.bottom + 8.0
+                  : 12.0,
+            ),
         ],
       ),
     );
@@ -315,6 +343,12 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                         child: Column(
                           children: activeParticipants.map((p) {
                             final isMe = p.sessionId == widget.clientSessionId;
+                            final isMuted = isMe
+                                ? widget.voiceState.isMicMuted
+                                : p.isMuted;
+                            final isDeafened = isMe
+                                ? widget.voiceState.isDeafened
+                                : p.isDeafened;
                             final devLabel = p.device == 'mobile'
                                 ? ' (Celular)'
                                 : p.device == 'desktop'
@@ -335,6 +369,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 color: resolveAuthorColor(p.username, isDark),
                                 isConnecting: p.isConnecting,
                                 isLive: p.isTransmitting,
+                                isMuted: isMuted,
+                                isDeafened: isDeafened,
                                 isDark: isDark,
                               ),
                             );
@@ -421,6 +457,12 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                         child: Column(
                           children: chParticipants.map((p) {
                             final isMe = p.sessionId == widget.clientSessionId;
+                            final isMuted = isMe
+                                ? widget.voiceState.isMicMuted
+                                : p.isMuted;
+                            final isDeafened = isMe
+                                ? widget.voiceState.isDeafened
+                                : p.isDeafened;
                             final devLabel = p.device == 'mobile'
                                 ? ' (Celular)'
                                 : p.device == 'desktop'
@@ -441,6 +483,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 color: resolveAuthorColor(p.username, isDark),
                                 isConnecting: p.isConnecting,
                                 isLive: p.isTransmitting,
+                                isMuted: isMuted,
+                                isDeafened: isDeafened,
                                 isDark: isDark,
                               ),
                             );
@@ -613,6 +657,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
     required Color color,
     bool isConnecting = false,
     required bool isLive,
+    bool isMuted = false,
+    bool isDeafened = false,
     required bool isDark,
   }) {
     return Padding(
@@ -638,10 +684,12 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
               ),
             ),
           ),
+          const SizedBox(width: 8),
           if (isConnecting)
             Tooltip(
               message: 'Conectando ao canal de voz...',
               child: Container(
+                margin: const EdgeInsets.only(right: 6),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 5,
                   vertical: 1.5,
@@ -678,9 +726,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                   ],
                 ),
               ),
-            )
-          else if (isLive)
-          const SizedBox(width: 8),
+            ),
           Expanded(
             child: Text(
               name,
@@ -695,7 +741,46 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (isLive)
+          if (isDeafened)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Tooltip(
+                message: 'Áudio desativado',
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(
+                    LucideIcons.headphones,
+                    size: 12,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
+              ),
+            )
+          else if (isMuted)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Tooltip(
+                message: 'Microfone mutado',
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(
+                    LucideIcons.micOff,
+                    size: 12,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
+              ),
+            ),
+          if (isLive) ...[
+            const SizedBox(width: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
@@ -712,6 +797,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );

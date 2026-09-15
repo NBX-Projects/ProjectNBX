@@ -11,6 +11,8 @@ class DockedVoiceFooter extends StatelessWidget {
   final VoiceState voiceState;
   final VoiceStateNotifier voiceNotifier;
   final VoidCallback onLeaveVoice;
+  final VoidCallback? onToggleMic;
+  final VoidCallback? onToggleDeafened;
 
   const DockedVoiceFooter({
     super.key,
@@ -20,12 +22,17 @@ class DockedVoiceFooter extends StatelessWidget {
     required this.voiceState,
     required this.voiceNotifier,
     required this.onLeaveVoice,
+    this.onToggleMic,
+    this.onToggleDeafened,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final effectiveBottom = bottomInset > 0 ? bottomInset + 10.0 : 12.0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.fromLTRB(14, 12, 14, effectiveBottom),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141522) : const Color(0xFFFFFFFF),
         border: Border(
@@ -98,7 +105,10 @@ class DockedVoiceFooter extends StatelessWidget {
                     ? 'Desmutar Microfone'
                     : 'Mutar Microfone',
                 child: InkWell(
-                  onTap: () => voiceNotifier.toggleMic(),
+                  onTap: () {
+                    voiceNotifier.toggleMic();
+                    onToggleMic?.call();
+                  },
                   mouseCursor: SystemMouseCursors.click,
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
@@ -112,8 +122,17 @@ class DockedVoiceFooter extends StatelessWidget {
                               : const Color(0xFFF1F5F9)),
                       borderRadius: BorderRadius.circular(10),
                       border: isDark
-                          ? null
-                          : Border.all(color: const Color(0xFFE2E8F0)),
+                          ? (voiceState.isMicMuted
+                              ? Border.all(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                                  width: 1,
+                                )
+                              : null)
+                          : Border.all(
+                              color: voiceState.isMicMuted
+                                  ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                                  : const Color(0xFFE2E8F0),
+                            ),
                     ),
                     child: Center(
                       child: Icon(
@@ -137,7 +156,10 @@ class DockedVoiceFooter extends StatelessWidget {
                     ? 'Ativar Áudio'
                     : 'Desativar Áudio',
                 child: InkWell(
-                  onTap: () => voiceNotifier.toggleDeafened(),
+                  onTap: () {
+                    voiceNotifier.toggleDeafened();
+                    onToggleDeafened?.call();
+                  },
                   mouseCursor: SystemMouseCursors.click,
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
@@ -151,18 +173,41 @@ class DockedVoiceFooter extends StatelessWidget {
                               : const Color(0xFFF1F5F9)),
                       borderRadius: BorderRadius.circular(10),
                       border: isDark
-                          ? null
-                          : Border.all(color: const Color(0xFFE2E8F0)),
+                          ? (voiceState.isDeafened
+                              ? Border.all(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                                  width: 1,
+                                )
+                              : null)
+                          : Border.all(
+                              color: voiceState.isDeafened
+                                  ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                                  : const Color(0xFFE2E8F0),
+                            ),
                     ),
                     child: Center(
-                      child: Icon(
-                        LucideIcons.headphones,
-                        size: 16,
-                        color: voiceState.isDeafened
-                            ? const Color(0xFFEF4444)
-                            : (isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF475569)),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.headphones,
+                            size: 16,
+                            color: voiceState.isDeafened
+                                ? const Color(0xFFEF4444)
+                                : (isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF475569)),
+                          ),
+                          if (voiceState.isDeafened)
+                            Transform.rotate(
+                              angle: -0.785398,
+                              child: Container(
+                                width: 18,
+                                height: 1.6,
+                                color: const Color(0xFFEF4444),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 
 class ServerHomeView extends StatelessWidget {
   final ServerModel server;
@@ -21,6 +23,11 @@ class ServerHomeView extends StatelessWidget {
   final List<List<Color>> bannerPresets;
   final List<Color> accentPalette;
   final ValueChanged<ChannelModel> onOpenChannel;
+  final Map<String, Map<String, VoiceParticipantInfo>> voiceParticipants;
+  final String? clientSessionId;
+  final String? connectedVoiceChannelId;
+  final ValueChanged<ChannelModel>? onJoinVoice;
+  final ValueChanged<VoiceParticipantInfo>? onWatchStream;
 
   const ServerHomeView({
     super.key,
@@ -39,20 +46,51 @@ class ServerHomeView extends StatelessWidget {
     this.bannerPresets = AppColors.bannerPresets,
     this.accentPalette = AppColors.serverAccentPalette,
     required this.onOpenChannel,
+    this.voiceParticipants = const {},
+    this.clientSessionId,
+    this.connectedVoiceChannelId,
+    this.onJoinVoice,
+    this.onWatchStream,
   });
+
+  List<VoiceParticipantInfo> _getChannelVoiceParticipants(String channelId) {
+    final map = voiceParticipants[channelId];
+    if (map == null) return [];
+    return map.values.where((p) => p.isInVoice).toList();
+  }
+
+  int get totalMembersInCall {
+    return voiceParticipants.values.fold<int>(
+      0,
+      (sum, m) => sum + m.values.where((p) => p.isInVoice).length,
+    );
+  }
+
+  List<VoiceParticipantInfo> get allActiveVoiceParticipants {
+    final list = <VoiceParticipantInfo>[];
+    for (final chMap in voiceParticipants.values) {
+      for (final p in chMap.values) {
+        if (p.isInVoice) list.add(p);
+      }
+    }
+    return list;
+  }
 
   @override
   Widget build(BuildContext context) {
     final memberCount = server.memberCount < 1 ? 1 : server.memberCount;
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Container(
       color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
       child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 14 : 24,
-          vertical: isMobile ? 14 : 20,
+        padding: EdgeInsets.fromLTRB(
+          isMobile ? 14 : 24,
+          isMobile ? 14 : 20,
+          isMobile ? 14 : 24,
+          isMobile ? (bottomInset > 0 ? bottomInset + 20.0 : 24.0) : 20.0,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,7 +98,18 @@ class ServerHomeView extends StatelessWidget {
             // Top Hero Banner
             _buildServerHeroBanner(context, isMobile: isMobile),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Active Call Banner (destaque quando há pessoas em chamada)
+            if (totalMembersInCall > 0) ...[
+              _buildActiveCallBanner(context, isMobile: isMobile),
+              const SizedBox(height: 16),
+            ],
+
+            // Canais do Servidor (visão direta com participantes em voz)
+            _buildChannelsSection(isMobile: isMobile),
+
+            const SizedBox(height: 16),
 
             // Activity + Media Listening Section
             if (isMobile) ...[
@@ -398,8 +447,551 @@ class ServerHomeView extends StatelessWidget {
     );
   }
 
+  Widget _buildActiveCallBanner(BuildContext context, {bool isMobile = false}) {
+    ChannelModel? callChannel;
+    List<VoiceParticipantInfo> activeCallParticipants = [];
+    for (final ch in channels) {
+      final pList = _getChannelVoiceParticipants(ch.id);
+      if (pList.isNotEmpty) {
+        callChannel = ch;
+        activeCallParticipants = pList;
+        break;
+      }
+    }
+    if (callChannel == null && channels.isNotEmpty) {
+      callChannel = channels.first;
+      activeCallParticipants = _getChannelVoiceParticipants(callChannel.id);
+    }
+    if (callChannel == null || activeCallParticipants.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final channel = callChannel;
+
+    final isUserInThisCall = activeCallParticipants.any(
+      (p) => clientSessionId != null
+          ? p.sessionId == clientSessionId
+          : p.username == username,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 14 : 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF132219) : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF22C55E).withValues(alpha: isDark ? 0.6 : 0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF22C55E),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'CHAMADA DE VOZ AO VIVO',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: const Color(0xFF22C55E),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(9999),
+                  border: Border.all(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.volume2,
+                        size: 12, color: Color(0xFF22C55E)),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${activeCallParticipants.length} ${activeCallParticipants.length == 1 ? "na sala" : "na sala"}',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF22C55E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: isMobile ? 38 : 44,
+                height: isMobile ? 38 : 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: Icon(
+                    LucideIcons.phoneCall,
+                    size: 20,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '# ${channel.name}',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: isMobile ? 15 : 17,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Sala de voz ativa com áudio em tempo real',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? Colors.white70
+                            : const Color(0xFF475569),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                onPressed: () {
+                  onOpenChannel(channel);
+                  if (!isUserInThisCall && onJoinVoice != null) {
+                    onJoinVoice!(channel);
+                  }
+                },
+                icon: Icon(
+                  isUserInThisCall
+                      ? LucideIcons.check
+                      : LucideIcons.phoneCall,
+                  size: 13,
+                ),
+                label: Text(
+                  isUserInThisCall ? 'Conectado' : 'Entrar na Voz',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF22C55E),
+                  foregroundColor: Colors.black,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 12 : 16,
+                    vertical: isMobile ? 8 : 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Participantes conectados com avatar e dispositivo
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: activeCallParticipants.map((p) {
+              final isMe = clientSessionId != null
+                  ? p.sessionId == clientSessionId
+                  : p.username == username;
+              final devLabel = p.device == 'mobile'
+                  ? ' (Celular)'
+                  : p.device == 'desktop'
+                      ? ' (Desktop)'
+                      : '';
+              final displayName =
+                  '${p.username}$devLabel${isMe ? " (Você)" : ""}';
+              final color = resolveAuthorColor(p.username, isDark);
+
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E2F24)
+                      : const Color(0xFFE2FBE8),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.25),
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: color, width: 1),
+                      ),
+                      child: Center(
+                        child: Text(
+                          getAuthorInitials(p.username),
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      displayName,
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (p.isDeafened) ...[
+                      const SizedBox(width: 5),
+                      Tooltip(
+                        message: 'Áudio desativado',
+                        child: Container(
+                          padding: const EdgeInsets.all(2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Icon(
+                            LucideIcons.headphones,
+                            size: 10.5,
+                            color: Color(0xFFEF4444),
+                          ),
+                        ),
+                      ),
+                    ] else if (p.isMuted) ...[
+                      const SizedBox(width: 5),
+                      Tooltip(
+                        message: 'Microfone mutado',
+                        child: Container(
+                          padding: const EdgeInsets.all(2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Icon(
+                            LucideIcons.micOff,
+                            size: 10.5,
+                            color: Color(0xFFEF4444),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (p.isTransmitting) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9333EA).withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'LIVE',
+                          style: TextStyle(
+                            fontSize: 7.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFC084FC),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChannelsSection({bool isMobile = false}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 14 : 20),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Canais do Servidor',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: isMobile ? 14.5 : 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: selectedAccentColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(9999),
+                ),
+                child: Text(
+                  '${channels.length} ${channels.length == 1 ? "canal" : "canais"}',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: selectedAccentColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...channels.map((ch) {
+            final chParticipants = _getChannelVoiceParticipants(ch.id);
+            final hasParticipants = chParticipants.isNotEmpty;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF161724)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hasParticipants
+                      ? const Color(0xFF22C55E).withValues(alpha: 0.5)
+                      : (isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder),
+                  width: hasParticipants ? 1.5 : 1,
+                ),
+              ),
+              child: InkWell(
+                onTap: () => onOpenChannel(ch),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            hasParticipants
+                                ? LucideIcons.volume2
+                                : LucideIcons.hash,
+                            size: 16,
+                            color: hasParticipants
+                                ? const Color(0xFF22C55E)
+                                : (isDark
+                                    ? Colors.white70
+                                    : const Color(0xFF64748B)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              ch.name,
+                              style: GoogleFonts.inter(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          if (hasParticipants) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF22C55E)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(9999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(LucideIcons.headphones,
+                                      size: 11, color: Color(0xFF22C55E)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${chParticipants.length} em call',
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF22C55E),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Icon(
+                            LucideIcons.chevronRight,
+                            size: 16,
+                            color: isDark
+                                ? Colors.white38
+                                : Colors.black38,
+                          ),
+                        ],
+                      ),
+                      if (hasParticipants) ...[
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 24),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: chParticipants.map((p) {
+                              final isMe = clientSessionId != null
+                                  ? p.sessionId == clientSessionId
+                                  : p.username == username;
+                              final devLabel = p.device == 'mobile'
+                                  ? ' (Celular)'
+                                  : p.device == 'desktop'
+                                      ? ' (Desktop)'
+                                      : '';
+                              final pColor =
+                                  resolveAuthorColor(p.username, isDark);
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          pColor.withValues(alpha: 0.3),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        getAuthorInitials(p.username),
+                                        style: TextStyle(
+                                          fontSize: 7.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: pColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${p.username}$devLabel${isMe ? " (Você)" : ""}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: const Color(0xFF22C55E),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (p.isDeafened) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.headphones,
+                                        size: 9.5,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ] else if (p.isMuted) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.micOff,
+                                        size: 9.5,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActivityCard(List<ChannelModel> channels,
       {bool isMobile = false}) {
+    final firstChannel = channels.isNotEmpty ? channels.first : null;
+    final chParticipants = firstChannel != null
+        ? _getChannelVoiceParticipants(firstChannel.id)
+        : <VoiceParticipantInfo>[];
+    final hasVoice = chParticipants.isNotEmpty;
+
     return Container(
       padding: EdgeInsets.all(isMobile ? 14 : 20),
       decoration: BoxDecoration(
@@ -481,13 +1073,18 @@ class ServerHomeView extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _buildActivityItem(
-            icon: LucideIcons.headphones,
-            title:
-                'Canal #${channels.isNotEmpty ? channels.first.name : "geral"} pronto',
-            subtitle: isTransmitting
-                ? 'Transmissão de tela ativa no canal'
-                : 'Conecte-se para conversar por texto, voz ou transmitir sua tela',
-            time: isTransmitting ? 'Ao Vivo' : 'Ativo',
+            icon: hasVoice ? LucideIcons.volume2 : LucideIcons.headphones,
+            title: hasVoice
+                ? 'Canal #${firstChannel?.name ?? "geral"} · ${chParticipants.length} em chamada'
+                : 'Canal #${firstChannel?.name ?? "geral"} pronto',
+            subtitle: hasVoice
+                ? '${chParticipants.map((p) => p.username).join(", ")} conversando na sala'
+                : (isTransmitting
+                    ? 'Transmissão de tela ativa no canal'
+                    : 'Conecte-se para conversar por texto, voz ou transmitir sua tela'),
+            time: hasVoice
+                ? 'Ao Vivo'
+                : (isTransmitting ? 'Ao Vivo' : 'Ativo'),
           ),
         ],
       ),
@@ -564,13 +1161,20 @@ class ServerHomeView extends StatelessWidget {
   }
 
   Widget _buildMediaListeningCard() {
+    final hasActiveVoice = allActiveVoiceParticipants.isNotEmpty;
+    final names = allActiveVoiceParticipants.map((p) => p.username).join(', ');
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF10281C) : const Color(0xFFECFDF5),
+        color: hasActiveVoice
+            ? (isDark ? const Color(0xFF132A1C) : const Color(0xFFDCFCE7))
+            : (isDark ? const Color(0xFF10281C) : const Color(0xFFECFDF5)),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+          color: hasActiveVoice
+              ? const Color(0xFF22C55E).withValues(alpha: 0.5)
+              : const Color(0xFF10B981).withValues(alpha: 0.3),
         ),
       ),
       child: Column(
@@ -578,17 +1182,26 @@ class ServerHomeView extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.radio,
-                  size: 14, color: Color(0xFF10B981)),
+              Icon(
+                hasActiveVoice ? LucideIcons.volume2 : LucideIcons.radio,
+                size: 14,
+                color: hasActiveVoice
+                    ? const Color(0xFF22C55E)
+                    : const Color(0xFF10B981),
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'CANAL HÍBRIDO',
+                  hasActiveVoice
+                      ? 'CHAMADA DE VOZ ATIVA (${allActiveVoiceParticipants.length})'
+                      : 'CANAL HÍBRIDO',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
-                    color: const Color(0xFF10B981),
+                    color: hasActiveVoice
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFF10B981),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -602,14 +1215,18 @@ class ServerHomeView extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981),
+                  color: hasActiveVoice
+                      ? const Color(0xFF22C55E)
+                      : const Color(0xFF10B981),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
                   child: Icon(
-                    isTransmitting
-                        ? LucideIcons.screenShare
-                        : LucideIcons.headphones,
+                    hasActiveVoice
+                        ? LucideIcons.phoneCall
+                        : (isTransmitting
+                            ? LucideIcons.screenShare
+                            : LucideIcons.headphones),
                     size: 18,
                     color: Colors.black,
                   ),
@@ -621,9 +1238,11 @@ class ServerHomeView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isTransmitting
-                          ? 'Transmissão Ativa'
-                          : 'Sala de Áudio e Texto',
+                      hasActiveVoice
+                          ? 'Voz em Andamento'
+                          : (isTransmitting
+                              ? 'Transmissão Ativa'
+                              : 'Sala de Áudio e Texto'),
                       style: GoogleFonts.spaceGrotesk(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
@@ -632,9 +1251,11 @@ class ServerHomeView extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      isTransmitting
-                          ? 'Transmissão de tela ao vivo'
-                          : 'Pronto para conversas e transmissões',
+                      hasActiveVoice
+                          ? '$names em chamada'
+                          : (isTransmitting
+                              ? 'Transmissão de tela ao vivo'
+                              : 'Pronto para conversas e transmissões'),
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: isDark ? Colors.white70 : Colors.black54,
@@ -725,6 +1346,30 @@ class ServerHomeView extends StatelessWidget {
                   ],
                 ),
               ),
+              if (totalMembersInCall > 0)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$totalMembersInCall',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF22C55E),
+                        ),
+                      ),
+                      Text(
+                        'em chamada',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF22C55E),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ],

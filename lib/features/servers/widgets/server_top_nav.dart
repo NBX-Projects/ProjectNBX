@@ -18,6 +18,7 @@ class ServerTopNav extends StatelessWidget {
   final VoidCallback onInviteMembers;
   final VoidCallback onToggleRightSidebar;
   final VoidCallback onOpenMobileChannelsSheet;
+  final int totalInVoice;
 
   const ServerTopNav({
     super.key,
@@ -32,6 +33,7 @@ class ServerTopNav extends StatelessWidget {
     required this.onInviteMembers,
     required this.onToggleRightSidebar,
     required this.onOpenMobileChannelsSheet,
+    this.totalInVoice = 0,
   });
 
   @override
@@ -215,18 +217,59 @@ class ServerTopNav extends StatelessWidget {
           const SizedBox(width: 8),
 
           if (isMobile) ...[
-            IconButton(
-              icon: Icon(
-                viewMode == ServerViewMode.channel
-                    ? LucideIcons.layers
-                    : LucideIcons.menu,
-                size: 18,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-              ),
-              tooltip: 'Canais e Membros',
-              onPressed: onOpenMobileChannelsSheet,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    viewMode == ServerViewMode.channel
+                        ? LucideIcons.layers
+                        : LucideIcons.menu,
+                    size: 18,
+                    color: totalInVoice > 0
+                        ? const Color(0xFF22C55E)
+                        : (isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
+                  ),
+                  tooltip: 'Canais e Membros',
+                  onPressed: onOpenMobileChannelsSheet,
+                ),
+                if (totalInVoice > 0)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4.5,
+                        vertical: 1.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF22C55E),
+                        borderRadius: BorderRadius.circular(9999),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF141522) : Colors.white,
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF22C55E).withValues(alpha: 0.5),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        totalInVoice > 9 ? '9+' : '$totalInVoice',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ] else ...[
             Tooltip(
