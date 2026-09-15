@@ -24,14 +24,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install Flutter Dependencies
-        run: flutter pub get
-
-      - name: Run Flutter Analyze
-        run: flutter analyze
-
-      - name: Run Flutter Tests & Generate LCOV
-        run: flutter test --coverage
+      - name: Flutter Analyze & Test Coverage
+        run: |
+          flutter analyze
+          flutter test --coverage
 
       # 2. Setup Go & Generate Coverage
       - name: Setup Go
