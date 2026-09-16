@@ -69,6 +69,9 @@ jobs:
           fi
           sed -i "s/APP_VERSION=.*/APP_VERSION=$VERSION/g" "$ENV_FILE"
 
+          # Garante que nenhuma propriedade org.gradle.java.home hardcoded quebre o CI
+          sed -i '/org.gradle.java.home/d' android/gradle.properties || true
+
       - name: Instalar Dependências
         run: flutter pub get
 
