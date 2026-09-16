@@ -8,11 +8,10 @@ RUN apk add --no-cache git ca-certificates
 
 # Cache de dependências
 COPY go.mod go.sum* ./
-RUN go mod download || true
+RUN go mod download
 
-# Copia código fonte
+# Copia código fonte e compila
 COPY . .
-RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server cmd/api/main.go
 
 # Etapa de Execução Final Leve
