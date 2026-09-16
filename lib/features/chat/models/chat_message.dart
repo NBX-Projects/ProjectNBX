@@ -17,6 +17,35 @@ class ChatMessage {
     this.timestamp,
   });
 
+  /// Converte qualquer string/dado de data (UTC ou local) para DateTime no fuso horário local.
+  static DateTime? parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value.toLocal();
+    final str = value.toString().trim();
+    if (str.isEmpty) return null;
+
+    var parsed = DateTime.tryParse(str);
+    if (parsed == null) return null;
+
+    // Se a string não contiver o sufixo 'Z' nem offset (+/-HH:MM),
+    // mas veio do servidor backend que armazena UTC, tratamos como UTC antes do toLocal()
+    if (!parsed.isUtc &&
+        !str.contains('Z') &&
+        !RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(str)) {
+      parsed = DateTime.utc(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+        parsed.millisecond,
+        parsed.microsecond,
+      );
+    }
+    return parsed.toLocal();
+  }
+
   ChatMessage copyWith({
     String? id,
     String? author,
@@ -41,7 +70,7 @@ class ChatMessage {
         'authorColor': authorColor.toARGB32(),
         'content': content,
         'is_edited': isEdited,
-        'timestamp': timestamp?.toIso8601String(),
+        'timestamp': timestamp?.toUtc().toIso8601String(),
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -51,9 +80,7 @@ class ChatMessage {
         authorColor: Color(json['authorColor'] as int? ?? 0xFFF5CBA7),
         content: json['content'] as String? ?? '',
         isEdited: json['is_edited'] as bool? ?? false,
-        timestamp: json['timestamp'] != null
-            ? DateTime.tryParse(json['timestamp'] as String)
-            : null,
+        timestamp: parseDateTime(json['timestamp']),
       );
 
   factory ChatMessage.fromApi(Map<String, dynamic> m, Color defaultColor) {
@@ -75,11 +102,7 @@ class ChatMessage {
       authorColor: defaultColor,
       content: (m['content'] ?? '').toString(),
       isEdited: m['is_edited'] == true,
-      timestamp: m['created_at'] != null
-          ? DateTime.tryParse(m['created_at'].toString())
-          : (m['timestamp'] != null
-              ? DateTime.tryParse(m['timestamp'].toString())
-              : null),
+      timestamp: parseDateTime(m['created_at'] ?? m['timestamp']),
     );
   }
 }
