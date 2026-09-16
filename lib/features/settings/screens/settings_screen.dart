@@ -14,6 +14,7 @@ import 'package:projectnbx/core/updater/widgets/update_dialog.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
+import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -48,9 +49,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   double _outputVolume = 0.90;
   bool _isPushToTalk = false;
   final String _pttKey = 'CAPS LOCK';
-  bool _noiseSuppression = true;
-  bool _echoCancellation = true;
-  bool _dtxEnabled = true;
 
   // Account Status
   String _userStatus = 'online';
@@ -113,6 +111,293 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNoiseGateCard(
+    bool isDark,
+    AppStrings strings,
+    AudioSettings audioSettings,
+    AudioSettingsNotifier notifier,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings.autoSensitivity,
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    Text(
+                      strings.autoSensitivityDesc,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: audioSettings.autoNoiseGate,
+                activeThumbColor: isDark
+                    ? AppColors.darkPrimary
+                    : AppColors.lightPrimary,
+                activeTrackColor:
+                    (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                        .withValues(alpha: 0.38),
+                onChanged: (val) => notifier.setAutoNoiseGate(val),
+              ),
+            ],
+          ),
+          if (!audioSettings.autoNoiseGate) ...[
+            const SizedBox(height: 16),
+            Divider(
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        strings.noiseGateThreshold,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                      Text(
+                        strings.noiseGateThresholdDesc,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.darkSurfaceElevated
+                        : AppColors.lightSurfaceElevated,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorderFocus
+                          : AppColors.lightBorderFocus,
+                    ),
+                  ),
+                  child: Text(
+                    '${(-60 + audioSettings.noiseGateThreshold * 50).toInt()} dB (${(audioSettings.noiseGateThreshold * 100).toInt()}%)',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppColors.darkPrimary
+                          : AppColors.lightPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Stack(
+                children: [
+                  Container(
+                    height: 10,
+                    width: double.infinity,
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
+                  ),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: audioSettings.noiseGateThreshold,
+                    child: Container(
+                      height: 10,
+                      color: Colors.redAccent.withValues(alpha: 0.65),
+                    ),
+                  ),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerRight,
+                    widthFactor: (1.0 - audioSettings.noiseGateThreshold).clamp(
+                      0.0,
+                      1.0,
+                    ),
+                    child: Container(
+                      height: 10,
+                      color: isDark
+                          ? AppColors.darkSage.withValues(alpha: 0.75)
+                          : AppColors.lightSage.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Silêncio (Corta Teclado / Cliques)',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 9.5,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                Text(
+                  'Transmissão Ativa (Voz)',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 9.5,
+                    color: isDark ? AppColors.darkSage : AppColors.lightSage,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: isDark
+                    ? AppColors.darkPrimary
+                    : AppColors.lightPrimary,
+                inactiveTrackColor: isDark
+                    ? AppColors.darkBorder
+                    : AppColors.lightBorder,
+                thumbColor: isDark
+                    ? AppColors.darkPrimary
+                    : AppColors.lightPrimary,
+                overlayColor:
+                    (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                        .withValues(alpha: 0.2),
+                trackHeight: 4,
+              ),
+              child: Slider(
+                value: audioSettings.noiseGateThreshold,
+                min: 0.0,
+                max: 1.0,
+                onChanged: (val) => notifier.setNoiseGateThreshold(val),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        strings.noiseGateRelease,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                      Text(
+                        strings.noiseGateReleaseDesc,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 140,
+                  child: SliderTheme(
+                    data: SliderThemeData(
+                      activeTrackColor: isDark
+                          ? AppColors.darkPrimary
+                          : AppColors.lightPrimary,
+                      inactiveTrackColor: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                      thumbColor: isDark
+                          ? AppColors.darkPrimary
+                          : AppColors.lightPrimary,
+                      overlayColor:
+                          (isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
+                              .withValues(alpha: 0.2),
+                      trackHeight: 3,
+                    ),
+                    child: Slider(
+                      value: audioSettings.noiseGateReleaseMs.toDouble(),
+                      min: 100,
+                      max: 600,
+                      divisions: 10,
+                      label: '${audioSettings.noiseGateReleaseMs}ms',
+                      onChanged: (val) =>
+                          notifier.setNoiseGateReleaseMs(val.toInt()),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 55,
+                  child: Text(
+                    '${audioSettings.noiseGateReleaseMs}ms',
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -886,6 +1171,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildVoiceSection(bool isDark, AppStrings strings) {
     final audioState = ref.watch(audioDevicesProvider);
     final audioNotifier = ref.read(audioDevicesProvider.notifier);
+    final audioSettings = ref.watch(audioSettingsProvider);
+    final audioSettingsNotifier = ref.read(audioSettingsProvider.notifier);
 
     final inputItems = audioState.inputDevices.isNotEmpty
         ? audioState.inputDevices.map((d) {
@@ -924,18 +1211,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: _buildSectionHeaderTitle(
-                  isDark,
-                  strings.voiceAndVideo,
-                  strings.voiceDescription,
-                ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: _buildSectionHeaderTitle(
+                isDark,
+                strings.voiceAndVideo,
+                strings.voiceDescription,
               ),
-              const SizedBox(width: 12),
-              Tooltip(
+            ),
+            const SizedBox(width: 12),
+            Tooltip(
               message: 'Detectar novos microfones e fones conectados',
               child: InkWell(
                 onTap: audioState.isLoading
@@ -1043,6 +1330,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
         const SizedBox(height: 20),
 
+        // Input Sensitivity & Noise Gate
+        Text(
+          strings.inputSensitivity,
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        _buildNoiseGateCard(
+          isDark,
+          strings,
+          audioSettings,
+          audioSettingsNotifier,
+        ),
+
+        const SizedBox(height: 16),
+        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+        const SizedBox(height: 20),
+
         // Voice Processing Toggles
         Text(
           strings.audioProcessing,
@@ -1058,22 +1367,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           isDark,
           strings.noiseSuppression,
           strings.noiseSuppressionDesc,
-          _noiseSuppression,
-          (val) => setState(() => _noiseSuppression = val),
+          audioSettings.noiseSuppression,
+          (val) => audioSettingsNotifier.setNoiseSuppression(val),
+        ),
+        _buildSwitchTile(
+          isDark,
+          strings.typingNoiseSuppression,
+          strings.typingNoiseSuppressionDesc,
+          audioSettings.typingNoiseDetection,
+          (val) => audioSettingsNotifier.setTypingNoiseDetection(val),
         ),
         _buildSwitchTile(
           isDark,
           strings.echoCancellation,
           strings.echoCancellationDesc,
-          _echoCancellation,
-          (val) => setState(() => _echoCancellation = val),
+          audioSettings.echoCancellation,
+          (val) => audioSettingsNotifier.setEchoCancellation(val),
+        ),
+        _buildSwitchTile(
+          isDark,
+          strings.compressor,
+          strings.compressorDesc,
+          audioSettings.compressorEnabled,
+          (val) => audioSettingsNotifier.setCompressorEnabled(val),
+        ),
+        _buildSwitchTile(
+          isDark,
+          strings.highPassFilter,
+          strings.highPassFilterDesc,
+          audioSettings.highPassFilter,
+          (val) => audioSettingsNotifier.setHighPassFilter(val),
         ),
         _buildSwitchTile(
           isDark,
           strings.vadOptimization,
           strings.vadOptimizationDesc,
-          _dtxEnabled,
-          (val) => setState(() => _dtxEnabled = val),
+          audioSettings.vadOptimization,
+          (val) => audioSettingsNotifier.setVadOptimization(val),
         ),
       ],
     );
@@ -1561,10 +1891,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: (isDark
-                                  ? AppColors.darkPrimary
-                                  : AppColors.lightPrimary)
-                              .withValues(alpha: 0.15),
+                          color:
+                              (isDark
+                                      ? AppColors.darkPrimary
+                                      : AppColors.lightPrimary)
+                                  .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
@@ -1607,14 +1938,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: (AppConfig.isDev
-                                          ? (isDark
-                                              ? AppColors.darkLavender
-                                              : AppColors.lightLavender)
-                                          : (isDark
-                                              ? AppColors.darkSage
-                                              : AppColors.lightSage))
-                                      .withValues(alpha: 0.18),
+                                  color:
+                                      (AppConfig.isDev
+                                              ? (isDark
+                                                    ? AppColors.darkLavender
+                                                    : AppColors.lightLavender)
+                                              : (isDark
+                                                    ? AppColors.darkSage
+                                                    : AppColors.lightSage))
+                                          .withValues(alpha: 0.18),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -1624,11 +1956,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     fontWeight: FontWeight.w800,
                                     color: AppConfig.isDev
                                         ? (isDark
-                                            ? AppColors.darkLavender
-                                            : AppColors.lightLavender)
+                                              ? AppColors.darkLavender
+                                              : AppColors.lightLavender)
                                         : (isDark
-                                            ? AppColors.darkSage
-                                            : AppColors.lightSage),
+                                              ? AppColors.darkSage
+                                              : AppColors.lightSage),
                                   ),
                                 ),
                               ),

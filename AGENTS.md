@@ -145,3 +145,20 @@ O projeto adota uma identidade visual única e moderna inspirada em estética de
 - **Zero Warnings:** Executar `flutter analyze` e garantir 0 warnings antes de qualquer commit ou entrega.
 - **Segurança:** Nunca comitar senhas, chaves de API do LiveKit ou segredos JWT hardcoded.
 - **Testes Automatizados:** Manter testes de unidade e widget para todos os novos fluxos e controllers.
+
+## 🛠️ 9. Diretrizes de Execução do Agente e Uso de Ferramentas
+
+### 🚫 Restrição Estrita de Edição via Shell / Terminal
+- **PROIBIDO usar comandos de terminal/shell (`cmd.exe`, PowerShell, bash, `sed`, `awk`, `echo`, `patch`, scripts Python/Node ou redirecionamentos)** para criar, sobrescrever ou alterar arquivos do projeto.
+- **SEMPRE utilizar as ferramentas nativas de edição de arquivo da IDE / Agent (`apply_diff`, `edit_file`, `write_file`)**, garantindo que as alterações passem pelo visualizador de *diff* do GoLand e do AndroidStudio para aprovação granular (pedaço por pedaço) pelo desenvolvedor.
+- O terminal só deve ser utilizado para **leitura/diagnóstico e execução de ferramentas de compilação/teste**, como:
+  - `go test ./...`, `go vet ./...`, `golangci-lint run`
+  - `flutter analyze`, `flutter test`
+  - Comandos do Docker (`docker compose ps`, etc.)
+
+### 🧩 Edições Estruturadas e Diffs
+- Não faça substituições cegas do arquivo inteiro (*full file overwrite*) quando apenas um trecho ou método específico for solicitado.
+- Preserve comentários, estruturas existentes e formatações locais ao propor edições parciais.
+- Antes de concluir uma tarefa, valide se os arquivos alterados seguem a formatação oficial (`gofmt` / `dart format`).
+
+---
