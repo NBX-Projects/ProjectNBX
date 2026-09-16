@@ -46,15 +46,6 @@ type VoiceParticipantState struct {
 	IsSpeaking     bool   `json:"is_speaking"`
 }
 
-// VoiceStatePayload informa se o usuário está mutado, ensurdecido ou falando
-type VoiceStatePayload struct {
-	UserID    string `json:"user_id"`
-	ChannelID string `json:"channel_id"`
-	IsMuted   bool   `json:"is_muted"`
-	IsDeafened bool  `json:"is_deafened"`
-	IsSpeaking bool  `json:"is_speaking"`
-}
-
 // PresencePayload informa o status de presença do usuário
 type PresencePayload struct {
 	UserID string `json:"user_id"`

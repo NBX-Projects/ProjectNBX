@@ -47,8 +47,5 @@
   "files.eol": "\n",
   "dart.flutterRunAdditionalArgs": [
     "--android-skip-build-dependency-validation"
-  ],
-  "dart.flutterAdditionalArgs": [
-    "--android-skip-build-dependency-validation"
   ]
 }

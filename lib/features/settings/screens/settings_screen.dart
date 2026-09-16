@@ -50,8 +50,355 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isPushToTalk = false;
   final String _pttKey = 'CAPS LOCK';
 
-  // Account Status
+  // Account Status & Profile Edit State
   String _userStatus = 'online';
+  bool _isEditingProfile = false;
+  bool _isSavingProfile = false;
+  final _profileFormKey = GlobalKey<FormState>();
+  final _nameEditController = TextEditingController();
+  final _usernameEditController = TextEditingController();
+  final _emailEditController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameEditController.dispose();
+    _usernameEditController.dispose();
+    _emailEditController.dispose();
+    super.dispose();
+  }
+
+  void _startEditingProfile(UserModel? user) {
+    setState(() {
+      _isEditingProfile = true;
+      _nameEditController.text = (user?.name.isNotEmpty == true) ? user!.name : (user?.username ?? '');
+      _usernameEditController.text = user?.username ?? '';
+      _emailEditController.text = user?.email ?? '';
+    });
+  }
+
+  void _cancelEditingProfile() {
+    setState(() {
+      _isEditingProfile = false;
+    });
+  }
+
+  Future<void> _saveProfile() async {
+    if (!_profileFormKey.currentState!.validate()) return;
+    setState(() => _isSavingProfile = true);
+
+    final success = await ref.read(authControllerProvider.notifier).updateProfile(
+      name: _nameEditController.text.trim(),
+      username: _usernameEditController.text.trim(),
+      email: _emailEditController.text.trim(),
+    );
+
+    if (mounted) {
+      setState(() => _isSavingProfile = false);
+      if (success) {
+        setState(() => _isEditingProfile = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF2D6A4F),
+            content: Text(
+              'Perfil atualizado com sucesso!',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      } else {
+        final error = ref.read(authControllerProvider).errorMessage ?? 'Falha ao atualizar perfil';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFE53935),
+            content: Text(
+              error,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showChangePasswordDialog(BuildContext context, bool isDark) async {
+    final formKey = GlobalKey<FormState>();
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool obscureCurrent = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isSaving = false;
+    String? errorMessage;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+            final onPrimaryColor = isDark ? AppColors.darkCanvas : Colors.white;
+            final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+            final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
+            final textPrimary = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+            final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+            return Dialog(
+              backgroundColor: cardBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: borderColor),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                LucideIcons.keyRound,
+                                size: 20,
+                                color: primaryColor,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Alterar Senha',
+                                    style: GoogleFonts.spaceGrotesk(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Confirme sua senha atual para definir uma nova',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      color: textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(LucideIcons.x, size: 18, color: textSecondary),
+                              onPressed: () => Navigator.of(dialogContext).pop(),
+                            ),
+                          ],
+                        ),
+                        if (errorMessage != null) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE53935).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFE53935).withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(LucideIcons.triangleAlert, size: 16, color: Color(0xFFE53935)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    errorMessage!,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: const Color(0xFFE53935),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        TextFormField(
+                          controller: currentPasswordController,
+                          obscureText: obscureCurrent,
+                          style: TextStyle(color: textPrimary, fontSize: 13.5),
+                          decoration: InputDecoration(
+                            labelText: 'Senha Atual',
+                            prefixIcon: Icon(LucideIcons.lock, size: 16, color: textSecondary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureCurrent ? LucideIcons.eyeOff : LucideIcons.eye,
+                                size: 16,
+                                color: textSecondary,
+                              ),
+                              onPressed: () {
+                                setDialogState(() => obscureCurrent = !obscureCurrent);
+                              },
+                            ),
+                          ),
+                          validator: (v) => (v == null || v.isEmpty) ? 'Informe sua senha atual' : null,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: newPasswordController,
+                          obscureText: obscureNew,
+                          style: TextStyle(color: textPrimary, fontSize: 13.5),
+                          decoration: InputDecoration(
+                            labelText: 'Nova Senha',
+                            prefixIcon: Icon(LucideIcons.key, size: 16, color: textSecondary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureNew ? LucideIcons.eyeOff : LucideIcons.eye,
+                                size: 16,
+                                color: textSecondary,
+                              ),
+                              onPressed: () {
+                                setDialogState(() => obscureNew = !obscureNew);
+                              },
+                            ),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Informe a nova senha';
+                            if (v.length < 6) return 'Mínimo de 6 caracteres';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: confirmPasswordController,
+                          obscureText: obscureConfirm,
+                          style: TextStyle(color: textPrimary, fontSize: 13.5),
+                          decoration: InputDecoration(
+                            labelText: 'Confirmar Nova Senha',
+                            prefixIcon: Icon(LucideIcons.checkCheck, size: 16, color: textSecondary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureConfirm ? LucideIcons.eyeOff : LucideIcons.eye,
+                                size: 16,
+                                color: textSecondary,
+                              ),
+                              onPressed: () {
+                                setDialogState(() => obscureConfirm = !obscureConfirm);
+                              },
+                            ),
+                          ),
+                          validator: (v) {
+                            if (v != newPasswordController.text) return 'As senhas não coincidem';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: isSaving ? null : () => Navigator.of(dialogContext).pop(),
+                              child: Text(
+                                'Cancelar',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 12.5,
+                                  color: textSecondary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                foregroundColor: onPrimaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              ),
+                              onPressed: isSaving
+                                  ? null
+                                  : () async {
+                                      if (!formKey.currentState!.validate()) return;
+                                      setDialogState(() {
+                                        isSaving = true;
+                                        errorMessage = null;
+                                      });
+                                      final success = await ref
+                                          .read(authControllerProvider.notifier)
+                                          .changePassword(
+                                            currentPassword: currentPasswordController.text,
+                                            newPassword: newPasswordController.text,
+                                          );
+                                      if (!dialogContext.mounted) return;
+                                      if (success) {
+                                        Navigator.of(dialogContext).pop();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: const Color(0xFF2D6A4F),
+                                            content: Text(
+                                              'Senha alterada com sucesso!',
+                                              style: GoogleFonts.inter(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      } else {
+                                        final err = ref.read(authControllerProvider).errorMessage ?? 'Falha ao alterar senha';
+                                        setDialogState(() {
+                                          isSaving = false;
+                                          errorMessage = err;
+                                        });
+                                      }
+                                    },
+                              child: isSaving
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : Text(
+                                      'Salvar Nova Senha',
+                                      style: GoogleFonts.jetBrainsMono(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    currentPasswordController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -702,8 +1049,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     UserModel? user,
     AppStrings strings,
   ) {
-    final username = user?.username ?? 'Sr. 6Seven';
-    final email = user?.email ?? 'dev@projectnbx.com';
+    final displayName = (user?.name.isNotEmpty == true)
+        ? user!.name
+        : (user?.username.isNotEmpty == true ? user!.username : 'Taui Silva Lima');
+    final username = user?.username.isNotEmpty == true ? user!.username : 'tauilima';
+    final email = user?.email.isNotEmpty == true ? user!.email : 'tauisilva@gmail.com';
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
+
+    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final onPrimaryColor = isDark ? AppColors.darkCanvas : Colors.white;
+    final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
+    final textPrimary = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    final dangerColor = isDark ? AppColors.darkDanger : AppColors.lightDanger;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -711,147 +1071,506 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildSectionHeaderTitle(
           isDark,
           strings.myAccount,
-          strings.accountDescription,
+          'Gerencie seus dados pessoais, credenciais de acesso e segurança da conta',
         ),
         const SizedBox(height: 24),
 
-        // User Profile Card
+        // 1. User Profile Details Card
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-            ),
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header Row: Avatar, Main Names, Status Badge & Edit Action
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 64,
-                    height: 64,
+                    width: 68,
+                    height: 68,
                     decoration: BoxDecoration(
                       color: isDark
                           ? AppColors.darkLavender
                           : AppColors.lightLavender,
                       shape: BoxShape.circle,
+                      border: Border.all(
+                        color: borderColor,
+                        width: 2,
+                      ),
                     ),
                     child: Center(
                       child: Text(
-                        username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                        initial,
                         style: GoogleFonts.jetBrainsMono(
-                          fontSize: 26,
+                          fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: isDark ? Colors.black : Colors.white,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 18),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                style: (isDark
+                                        ? GoogleFonts.spaceGrotesk()
+                                        : GoogleFonts.plusJakartaSans())
+                                    .copyWith(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: (isDark
+                                        ? AppColors.darkSage
+                                        : AppColors.lightSage)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(9999),
+                                border: Border.all(
+                                  color: (isDark
+                                          ? AppColors.darkSage
+                                          : AppColors.lightSage)
+                                      .withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Text(
+                                strings.connected,
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark
+                                      ? AppColors.darkSage
+                                      : AppColors.lightSage,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
                         Text(
-                          username,
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? AppColors.darkTextPrimary
-                                : AppColors.lightTextPrimary,
+                          '@$username',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: primaryColor,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           email,
                           style: GoogleFonts.inter(
                             fontSize: 12.5,
-                            color: isDark
-                                ? AppColors.darkTextMuted
-                                : AppColors.lightTextMuted,
+                            color: textMuted,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (isDark ? AppColors.darkSage : AppColors.lightSage)
-                          .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color:
-                            (isDark ? AppColors.darkSage : AppColors.lightSage)
-                                .withValues(alpha: 0.3),
+                  if (!_isEditingProfile)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark
+                            ? AppColors.darkSurfaceElevated
+                            : AppColors.lightSurfaceElevated,
+                        foregroundColor: textPrimary,
+                        elevation: 0,
+                        side: BorderSide(color: borderColor),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                      ),
+                      onPressed: () => _startEditingProfile(user),
+                      icon: const Icon(LucideIcons.pencil, size: 14),
+                      label: Text(
+                        'Editar Perfil',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      strings.connected,
+                ],
+              ),
+
+              const SizedBox(height: 20),
+              Divider(color: borderColor),
+              const SizedBox(height: 16),
+
+              // Interactive Edit Form or Readonly Information
+              if (_isEditingProfile) ...[
+                Form(
+                  key: _profileFormKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Atualizar Informações Cadastrais',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _nameEditController,
+                        style: TextStyle(color: textPrimary, fontSize: 13.5),
+                        decoration: InputDecoration(
+                          labelText: 'Nome Completo',
+                          hintText: 'Ex: Taui Silva Lima',
+                          prefixIcon: Icon(
+                            LucideIcons.idCard,
+                            size: 16,
+                            color: textSecondary,
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Informe seu nome completo';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _usernameEditController,
+                        style: TextStyle(color: textPrimary, fontSize: 13.5),
+                        decoration: InputDecoration(
+                          labelText: 'Nome de Usuário',
+                          hintText: 'Ex: tauilima',
+                          prefixIcon: Icon(
+                            LucideIcons.user,
+                            size: 16,
+                            color: textSecondary,
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Informe seu nome de usuário';
+                          }
+                          if (v.trim().contains(' ')) {
+                            return 'Nome de usuário não pode conter espaços';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _emailEditController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(color: textPrimary, fontSize: 13.5),
+                        decoration: InputDecoration(
+                          labelText: 'E-mail',
+                          hintText: 'Ex: tauisilva@gmail.com',
+                          prefixIcon: Icon(
+                            LucideIcons.mail,
+                            size: 16,
+                            color: textSecondary,
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Informe seu e-mail';
+                          }
+                          if (!v.contains('@') || !v.contains('.')) {
+                            return 'Informe um e-mail válido';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: _isSavingProfile ? null : _cancelEditingProfile,
+                            child: Text(
+                              'Cancelar',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12.5,
+                                color: textSecondary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              foregroundColor: onPrimaryColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9999),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                                vertical: 12,
+                              ),
+                            ),
+                            onPressed: _isSavingProfile ? null : _saveProfile,
+                            child: _isSavingProfile
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    'Salvar Alterações',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                _buildAccountRow(
+                  isDark,
+                  'Nome Completo',
+                  displayName,
+                ),
+                const SizedBox(height: 14),
+                _buildAccountRow(
+                  isDark,
+                  'Nome de Usuário',
+                  '@$username',
+                ),
+                const SizedBox(height: 14),
+                _buildAccountRow(
+                  isDark,
+                  'E-mail Cadastrado',
+                  email,
+                ),
+                const SizedBox(height: 14),
+                _buildAccountRow(
+                  isDark,
+                  strings.currentStatus,
+                  _userStatus == 'online'
+                      ? strings.currentStatusOnline
+                      : strings.currentStatusAway,
+                  action: DropdownButton<String>(
+                    value: _userStatus,
+                    dropdownColor: cardBg,
+                    underline: const SizedBox(),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: textPrimary,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'online',
+                        child: Text('🟢 ${strings.online}'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'idle',
+                        child: Text('🟡 ${strings.idle}'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'dnd',
+                        child: Text('🔴 ${strings.dnd}'),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setState(() => _userStatus = val);
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // 2. Security & Password Card
+        Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      LucideIcons.shieldCheck,
+                      size: 20,
+                      color: primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Segurança & Senha',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Sua conta é protegida por criptografia de alta segurança bcrypt',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: onPrimaryColor,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
+                    ),
+                    onPressed: () => _showChangePasswordDialog(context, isDark),
+                    icon: const Icon(LucideIcons.keyRound, size: 14),
+                    label: Text(
+                      'Alterar Senha',
                       style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppColors.darkSage
-                            : AppColors.lightSage,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              Divider(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              ),
               const SizedBox(height: 16),
-              _buildAccountRow(
-                isDark,
-                strings.currentStatus,
-                _userStatus == 'online'
-                    ? strings.currentStatusOnline
-                    : strings.currentStatusAway,
-                action: DropdownButton<String>(
-                  value: _userStatus,
-                  dropdownColor: isDark
-                      ? AppColors.darkSurface
-                      : AppColors.lightSurface,
-                  underline: const SizedBox(),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: 'online',
-                      child: Text('🟢 ${strings.online}'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'idle',
-                      child: Text('🟡 ${strings.idle}'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'dnd',
-                      child: Text('🔴 ${strings.dnd}'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _userStatus = val);
-                  },
-                ),
-              ),
+              Divider(color: borderColor),
               const SizedBox(height: 12),
               _buildAccountRow(
                 isDark,
-                strings.securitySession,
-                strings.sessionActive,
-                badgeText: strings.active,
+                'Autenticação de Acesso',
+                'Login habilitado por E-mail ou Nome de Usuário',
+                badgeText: 'Ativo',
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // 3. Logout & Session Management Card
+        Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: dangerColor.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: dangerColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  LucideIcons.logOut,
+                  size: 20,
+                  color: dangerColor,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Encerrar Sessão',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Desconectar seu usuário deste dispositivo com segurança',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: dangerColor,
+                  side: BorderSide(color: dangerColor.withValues(alpha: 0.6)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  ref.read(authControllerProvider.notifier).logout();
+                },
+                icon: const Icon(LucideIcons.logOut, size: 14),
+                label: Text(
+                  'Sair da Conta',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
@@ -870,34 +1589,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppColors.darkTextMuted
-                    : AppColors.lightTextMuted,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppColors.darkTextMuted
+                      : AppColors.lightTextMuted,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        ?action,
-        if (badgeText != null)
+        if (action != null) ...[
+          const SizedBox(width: 8),
+          action,
+        ],
+        if (badgeText != null) ...[
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
@@ -915,6 +1641,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
+        ],
       ],
     );
   }

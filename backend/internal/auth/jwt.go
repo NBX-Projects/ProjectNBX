@@ -1,12 +1,54 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/projectnbx/backend/internal/models"
 )
+
+type contextKey string
+
+const (
+	contextKeyUserID   contextKey = "user_id"
+	contextKeyUsername contextKey = "username"
+)
+
+// WithUserContext adiciona userID e username tipados ao context
+func WithUserContext(ctx context.Context, userID, username string) context.Context {
+	ctx = context.WithValue(ctx, contextKeyUserID, userID)
+	return context.WithValue(ctx, contextKeyUsername, username)
+}
+
+// GetUserID extrai o userID do context com fallback para retrocompatibilidade
+func GetUserID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if id, ok := ctx.Value(contextKeyUserID).(string); ok && id != "" {
+		return id
+	}
+	if id, ok := ctx.Value("user_id").(string); ok {
+		return id
+	}
+	return ""
+}
+
+// GetUsername extrai o username do context com fallback para retrocompatibilidade
+func GetUsername(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if u, ok := ctx.Value(contextKeyUsername).(string); ok && u != "" {
+		return u
+	}
+	if u, ok := ctx.Value("username").(string); ok {
+		return u
+	}
+	return ""
+}
 
 type JWTService struct {
 	secretKey []byte

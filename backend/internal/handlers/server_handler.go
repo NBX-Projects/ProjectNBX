@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/projectnbx/backend/internal/auth"
 	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
 	"github.com/projectnbx/backend/internal/websocket"
@@ -61,7 +62,7 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, _ := r.Context().Value("user_id").(string)
+	userID := auth.GetUserID(r.Context())
 	server := &models.Server{
 		Name:    req.Name,
 		IconURL: req.IconURL,
@@ -207,7 +208,7 @@ func (h *ServerHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, _ := r.Context().Value("user_id").(string)
+	userID := auth.GetUserID(r.Context())
 	existing, err := h.repo.GetMessageByID(messageID)
 	if err == nil && existing != nil && existing.AuthorID != "" && userID != "" && existing.AuthorID != userID {
 		http.Error(w, `{"error":"Sem permissão para editar esta mensagem"}`, http.StatusForbidden)
@@ -234,12 +235,12 @@ func (h *ServerHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payloadBytes, _ := json.Marshal(updatedMsg)
-	h.hub.Broadcast <- &models.WSEvent{
+	h.hub.BroadcastEvent(&models.WSEvent{
 		Type:      models.EventMessageUpdate,
 		Payload:   payloadBytes,
 		ChannelID: channelID,
 		ServerID:  serverID,
-	}
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedMsg)
@@ -251,7 +252,7 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	channelID := vars["channelId"]
 	messageID := vars["messageId"]
 
-	userID, _ := r.Context().Value("user_id").(string)
+	userID := auth.GetUserID(r.Context())
 	existing, err := h.repo.GetMessageByID(messageID)
 	if err == nil && existing != nil && existing.AuthorID != "" && userID != "" && existing.AuthorID != userID {
 		server, errS := h.repo.GetServerByID(serverID)
@@ -267,12 +268,12 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payloadBytes, _ := json.Marshal(map[string]string{"id": messageID})
-	h.hub.Broadcast <- &models.WSEvent{
+	h.hub.BroadcastEvent(&models.WSEvent{
 		Type:      models.EventMessageDelete,
 		Payload:   payloadBytes,
 		ChannelID: channelID,
 		ServerID:  serverID,
-	}
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -300,7 +301,7 @@ func (h *ServerHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
-	currentUserID, _ := r.Context().Value("user_id").(string)
+	currentUserID := auth.GetUserID(r.Context())
 
 	server, errS := h.repo.GetServerByID(serverID)
 	if errS != nil || server == nil {
@@ -363,7 +364,7 @@ func (h *ServerHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	serverID := vars["id"]
 	targetUserID := vars["userId"]
 
-	currentUserID, _ := r.Context().Value("user_id").(string)
+	currentUserID := auth.GetUserID(r.Context())
 	server, err := h.repo.GetServerByID(serverID)
 	if err != nil || server == nil {
 		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
@@ -391,7 +392,7 @@ func (h *ServerHandler) JoinServer(w http.ResponseWriter, r *http.Request) {
 		codeOrID = strings.TrimSpace(vars["code"])
 	}
 
-	currentUserID, _ := r.Context().Value("user_id").(string)
+	currentUserID := auth.GetUserID(r.Context())
 	if currentUserID == "" {
 		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
 		return
@@ -444,7 +445,7 @@ func (h *ServerHandler) JoinServer(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
-	currentUserID, _ := r.Context().Value("user_id").(string)
+	currentUserID := auth.GetUserID(r.Context())
 
 	if currentUserID == "" {
 		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
@@ -529,7 +530,7 @@ func (h *ServerHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	code := vars["code"]
-	currentUserID, _ := r.Context().Value("user_id").(string)
+	currentUserID := auth.GetUserID(r.Context())
 
 	if currentUserID == "" {
 		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)

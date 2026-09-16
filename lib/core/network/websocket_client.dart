@@ -214,15 +214,13 @@ class WebSocketClient {
       }
       final msg = jsonEncode(payloadMap);
 
-      if (_channel != null) {
-        _channel!.ready.then((_) {
-          _channel?.sink.add(msg);
-        }).catchError((Object _) {
-          _channel?.sink.add(msg);
-        });
+      if (_channel != null && _isConnected) {
+        _channel!.sink.add(msg);
       } else {
         _pendingOutgoingQueue.add(msg);
-        connect(serverId: serverId ?? _currentServerId);
+        if (!_isConnecting) {
+          connect(serverId: serverId ?? _currentServerId);
+        }
       }
     } catch (e) {
       debugPrint('[WebSocket] Erro ao enviar mensagem: $e');

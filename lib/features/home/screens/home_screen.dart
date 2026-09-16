@@ -205,7 +205,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     VoiceState voiceState,
     VoiceStateNotifier voiceNotifier,
   ) {
-    final username = user?.username ?? 'Sr. 6Seven';
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
     final isDesktopPlatform =
@@ -225,21 +224,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       child: Row(
         children: [
-          // Logo Icon Badge
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              LucideIcons.zap,
-              size: 18,
-              color: isDark ? Colors.black : Colors.white,
-            ),
-          ),
-          const SizedBox(width: 10),
-
           if (isMobile) ...[
             Text(
               'ProjectNBX',
@@ -252,12 +236,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ] else ...[
-            // Search Box
+            // Search Box (ampliado)
             Flexible(
               child: Container(
-                height: 38,
-                constraints: const BoxConstraints(maxWidth: 380),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                height: 40,
+                constraints: const BoxConstraints(maxWidth: 540),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.darkInput : AppColors.lightSurface,
                   borderRadius: BorderRadius.circular(10),
@@ -271,17 +255,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     Icon(
                       LucideIcons.search,
-                      size: 15,
+                      size: 16,
                       color: isDark
                           ? AppColors.darkTextMuted
                           : AppColors.lightTextMuted,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         strings.searchPlaceholder,
                         style: GoogleFonts.inter(
-                          fontSize: 12,
+                          fontSize: 13,
                           color: isDark
                               ? AppColors.darkTextMuted
                               : AppColors.lightTextMuted,
@@ -291,8 +275,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+                        horizontal: 7,
+                        vertical: 2.5,
                       ),
                       decoration: BoxDecoration(
                         color: isDark
@@ -303,7 +287,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Text(
                         'Ctrl K',
                         style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9,
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: isDark
                               ? AppColors.darkTextMuted
@@ -442,75 +426,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             tooltip: strings.navSettings,
             onPressed: () => SettingsScreen.show(context),
           ),
-          const SizedBox(width: 6),
-
-          // User Profile Pill with Logout
-          InkWell(
-            onTap: () {
-              ref.read(authControllerProvider.notifier).logout();
-            },
-            mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(9999),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 6 : 10,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkLavender
-                          : AppColors.lightLavender,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.black : Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (!isMobile) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      username,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      LucideIcons.logOut,
-                      size: 14,
-                      color: isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          const SizedBox(width: 4),
 
           if (isDesktopPlatform) ...[
             const SizedBox(width: 10),

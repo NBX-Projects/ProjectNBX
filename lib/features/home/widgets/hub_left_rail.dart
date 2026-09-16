@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
 import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
+import 'package:projectnbx/features/settings/screens/settings_screen.dart';
 
 class HubLeftRail extends ConsumerWidget {
   final String activeTab;
@@ -62,16 +63,15 @@ class HubLeftRail extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final serversState = ref.watch(serversControllerProvider);
+    final authState = ref.watch(authControllerProvider);
+    final user = authState.user;
+    final displayName = user?.displayName ?? user?.username ?? 'Taui';
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
     final strings = ref.watch(stringsProvider);
     final servers = serversState.servers;
 
     final navItems = [
       {'id': 'home', 'icon': LucideIcons.house, 'tooltip': strings.navHome},
-      {'id': 'favorites', 'icon': LucideIcons.star, 'tooltip': strings.navFavorites},
-      {'id': 'trending', 'icon': LucideIcons.trendingUp, 'tooltip': strings.navTrending},
-      {'id': 'dms', 'icon': LucideIcons.users, 'tooltip': strings.navDMs},
-      {'id': 'voice', 'icon': LucideIcons.headphones, 'tooltip': strings.navVoice},
-      {'id': 'explore', 'icon': LucideIcons.compass, 'tooltip': strings.navExplore},
     ];
 
     return Container(
@@ -84,60 +84,135 @@ class HubLeftRail extends ConsumerWidget {
           ),
         ),
       ),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
         children: [
-          // 1. Navigation Shortcut Icons
-          ...navItems.map((item) {
-            final id = item['id'] as String;
-            final icon = item['icon'] as IconData;
-            final tooltip = item['tooltip'] as String;
-            final isSelected = activeTab == id;
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              children: [
+                // 0. ProjectNBX Brand Logo Icon (non-clickable with theme color)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 8),
+                  child: Center(
+                    child: Icon(
+                      LucideIcons.zap,
+                      size: 24,
+                      color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+                    ),
+                  ),
+                ),
 
-            return _buildRailButton(
-              context: context,
-              isDark: isDark,
-              isSelected: isSelected,
-              tooltip: tooltip,
-              icon: icon,
-              onTap: () => _handleTabTap(context, ref, id),
-            );
-          }),
+                const SizedBox(height: 4),
 
-          const SizedBox(height: 6),
+                // 1. Navigation Shortcut Icons
+                ...navItems.map((item) {
+                  final id = item['id'] as String;
+                  final icon = item['icon'] as IconData;
+                  final tooltip = item['tooltip'] as String;
+                  final isSelected = activeTab == id;
 
-          // Divider between Navigation and Real Servers
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              thickness: 1.5,
+                  return _buildRailButton(
+                    context: context,
+                    isDark: isDark,
+                    isSelected: isSelected,
+                    tooltip: tooltip,
+                    icon: icon,
+                    onTap: () => _handleTabTap(context, ref, id),
+                  );
+                }),
+
+                const SizedBox(height: 6),
+
+                // 2. Real Servers List from PostgreSQL
+                ...servers.map((server) {
+                  final isSelected = activeTab == server.id;
+                  return _buildServerBadge(
+                    context: context,
+                    isDark: isDark,
+                    server: server,
+                    isSelected: isSelected,
+                    onTap: () {
+                      ref
+                          .read(serversControllerProvider.notifier)
+                          .selectServer(server.id);
+                      onTabChanged(server.id);
+                    },
+                  );
+                }),
+
+                // 3. Add Server (+) Button
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: _buildAddServerButton(context, isDark, strings.createServer),
+                ),
+              ],
             ),
           ),
 
-          const SizedBox(height: 6),
-
-          // 2. Real Servers List from PostgreSQL
-          ...servers.map((server) {
-            final isSelected = activeTab == server.id;
-            return _buildServerBadge(
-              context: context,
-              isDark: isDark,
-              server: server,
-              isSelected: isSelected,
-              onTap: () {
-                ref
-                    .read(serversControllerProvider.notifier)
-                    .selectServer(server.id);
-                onTabChanged(server.id);
-              },
-            );
-          }),
-
-          // 3. Add Server (+) Button
+          // User Profile Avatar at Bottom of Left Rail
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: _buildAddServerButton(context, isDark, strings.createServer),
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Tooltip(
+              message: '$displayName (${user?.username ?? ''})\nConfigurações de Perfil',
+              preferBelow: false,
+              textStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E2030),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Center(
+                child: InkWell(
+                  onTap: () => SettingsScreen.show(context),
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(9999),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.darkLavender
+                          : AppColors.lightLavender,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Text(
+                            initial,
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.black : Colors.white,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 1,
+                          bottom: 1,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF43B581),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -175,8 +250,8 @@ class HubLeftRail extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isSelected
                     ? (isDark
-                        ? AppColors.darkSurfaceElevated
-                        : AppColors.lightSurfaceElevated)
+                          ? AppColors.darkSurfaceElevated
+                          : AppColors.lightSurfaceElevated)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
                 border: isSelected
@@ -193,11 +268,11 @@ class HubLeftRail extends ConsumerWidget {
                   size: 20,
                   color: isSelected
                       ? (isDark
-                          ? AppColors.darkPrimary
-                          : AppColors.lightPrimary)
+                            ? AppColors.darkPrimary
+                            : AppColors.lightPrimary)
                       : (isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary),
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
                 ),
               ),
             ),
@@ -215,10 +290,13 @@ class HubLeftRail extends ConsumerWidget {
     required VoidCallback onTap,
   }) {
     final initials = server.name.isNotEmpty
-        ? server.name.substring(0, server.name.length >= 2 ? 2 : 1).toUpperCase()
+        ? server.name
+              .substring(0, server.name.length >= 2 ? 2 : 1)
+              .toUpperCase()
         : 'S';
     final accentColor = Color(server.accentColor);
-    final hasCustomIcon = server.iconUrl != null && server.iconUrl!.trim().isNotEmpty;
+    final hasCustomIcon =
+        server.iconUrl != null && server.iconUrl!.trim().isNotEmpty;
     final isLightAccent = accentColor.computeLuminance() > 0.5;
 
     return Padding(
@@ -244,9 +322,7 @@ class HubLeftRail extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isSelected
                     ? accentColor
-                    : (isDark
-                        ? AppColors.darkSurface
-                        : AppColors.lightSurface),
+                    : (isDark ? AppColors.darkSurface : AppColors.lightSurface),
                 borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
                 border: Border.all(
                   color: isSelected
@@ -279,7 +355,9 @@ class HubLeftRail extends ConsumerWidget {
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: isSelected
-                                  ? (isLightAccent ? const Color(0xFF181926) : Colors.white)
+                                  ? (isLightAccent
+                                        ? const Color(0xFF181926)
+                                        : Colors.white)
                                   : accentColor,
                             ),
                           ),
@@ -290,7 +368,9 @@ class HubLeftRail extends ConsumerWidget {
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             color: isSelected
-                                ? (isLightAccent ? const Color(0xFF181926) : Colors.white)
+                                ? (isLightAccent
+                                      ? const Color(0xFF181926)
+                                      : Colors.white)
                                 : accentColor,
                           ),
                         ),
@@ -303,7 +383,11 @@ class HubLeftRail extends ConsumerWidget {
     );
   }
 
-  Widget _buildAddServerButton(BuildContext context, bool isDark, String tooltip) {
+  Widget _buildAddServerButton(
+    BuildContext context,
+    bool isDark,
+    String tooltip,
+  ) {
     return Tooltip(
       message: tooltip,
       preferBelow: false,
@@ -334,9 +418,7 @@ class HubLeftRail extends ConsumerWidget {
               child: Icon(
                 LucideIcons.plus,
                 size: 18,
-                color: isDark
-                    ? AppColors.darkPrimary
-                    : AppColors.lightPrimary,
+                color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
               ),
             ),
           ),

@@ -115,6 +115,8 @@ func (r *Router) SetupRoutes() http.Handler {
 
 	// Perfil
 	protected.HandleFunc("/auth/me", authHandler.GetCurrentUser).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/users/me", authHandler.UpdateProfile).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/users/me/password", authHandler.ChangePassword).Methods("PUT", "OPTIONS")
 
 	// LiveKit Token
 	protected.HandleFunc("/voice/token", liveKitHandler.GenerateToken).Methods("POST", "OPTIONS")
@@ -241,8 +243,7 @@ func (r *Router) jwtAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(req.Context(), "user_id", claims.UserID)
-		ctx = context.WithValue(ctx, "username", claims.Username)
+		ctx := auth.WithUserContext(req.Context(), claims.UserID, claims.Username)
 		next.ServeHTTP(w, req.WithContext(ctx))
 	})
 }

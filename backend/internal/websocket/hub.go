@@ -67,10 +67,7 @@ func (h *Hub) Run() {
 						Payload:  payloadBytes,
 						ServerID: client.ServerID,
 					})
-					select {
-					case client.Send <- syncMsg:
-					default:
-					}
+					client.SendEvent(syncMsg)
 				}
 			}
 
@@ -81,7 +78,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				close(client.Send)
+				client.Close()
 
 				// Remove das conexões do usuário
 				conns := h.userConns[client.UserID]
@@ -146,15 +143,16 @@ func (h *Hub) BroadcastEvent(event *models.WSEvent) {
 	h.mu.RLock()
 	clientsToBroadcast := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
+		if event.ServerID != "" && client.ServerID != "" && client.ServerID != event.ServerID {
+			continue
+		}
 		clientsToBroadcast = append(clientsToBroadcast, client)
 	}
 	h.mu.RUnlock()
 
 	for _, client := range clientsToBroadcast {
-		select {
-		case client.Send <- data:
-		default:
-			log.Printf("[Hub] Buffer cheio para cliente %s, frame ignorado", client.UserID)
+		if !client.SendEvent(data) {
+			log.Printf("[Hub] Buffer cheio ou cliente desconectado %s, frame ignorado", client.UserID)
 		}
 	}
 }
@@ -195,7 +193,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			ChannelID: event.ChannelID,
 			ServerID:  event.ServerID,
 		}
-		h.Broadcast <- outEvent
+		h.BroadcastEvent(outEvent)
 
 	case models.EventVoiceState:
 		var clientState models.VoiceParticipantState
@@ -286,10 +284,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			Payload:  syncBytes,
 			ServerID: targetServerID,
 		})
-		select {
-		case client.Send <- replyMsg:
-		default:
-		}
+		client.SendEvent(replyMsg)
 
 	case models.EventPing:
 		pongPayload, _ := json.Marshal(map[string]string{"reply": "pong"})
@@ -297,10 +292,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			Type:    models.EventPong,
 			Payload: pongPayload,
 		})
-		select {
-		case client.Send <- data:
-		default:
-		}
+		client.SendEvent(data)
 	}
 }
 

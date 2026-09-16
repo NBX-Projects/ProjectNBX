@@ -41,8 +41,8 @@ func (h *LiveKitHandler) GenerateToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Validação estrita de autenticação JWT
-	ctxUserID, ok := r.Context().Value("user_id").(string)
-	if !ok || ctxUserID == "" {
+	ctxUserID := auth.GetUserID(r.Context())
+	if ctxUserID == "" {
 		http.Error(w, `{"error":"Não autenticado"}`, http.StatusUnauthorized)
 		return
 	}

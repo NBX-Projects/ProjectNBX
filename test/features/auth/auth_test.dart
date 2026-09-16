@@ -35,18 +35,44 @@ class FakeApiClient extends ApiClient {
   Future<AuthResponse> register(
     String username,
     String email,
-    String password,
-  ) async {
+    String password, {
+    String? name,
+  }) async {
     if (shouldFail) throw Exception(failureMessage);
     return AuthResponse(
       token: 'jwt-test-token-reg',
       user: UserModel(
         id: 'u-2',
+        name: name ?? username,
         username: username,
         email: email,
         status: 'online',
       ),
     );
+  }
+
+  @override
+  Future<UserModel> updateProfile({
+    required String name,
+    required String username,
+    required String email,
+  }) async {
+    if (shouldFail) throw Exception(failureMessage);
+    return UserModel(
+      id: 'u-1',
+      name: name,
+      username: username,
+      email: email,
+      status: 'online',
+    );
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (shouldFail) throw Exception(failureMessage);
   }
 }
 
@@ -284,8 +310,8 @@ void main() {
       await tester.tap(registerTab);
       await tester.pumpAndSettle();
 
-      // Agora deve ter 3 campos (Usuário, Email, Senha)
-      expect(find.byType(TextFormField), findsNWidgets(3));
+      // Agora deve ter 4 campos (Nome Completo, Usuário, Email, Senha)
+      expect(find.byType(TextFormField), findsNWidgets(4));
       expect(find.text('CRIAR CONTA'), findsOneWidget);
 
       // Alterna de volta para Login
@@ -295,7 +321,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Clica no botão de alternar tema
-      final themeToggle = find.textContaining('Tema');
+      final themeToggle = find.byWidgetPredicate(
+        (w) => w is Tooltip && (w.message?.contains('Tema') ?? false),
+      );
       expect(themeToggle, findsOneWidget);
       await tester.tap(themeToggle);
       await tester.pumpAndSettle();
@@ -342,7 +370,12 @@ void main() {
         expect(find.byIcon(LucideIcons.server), findsNothing);
 
         // Garante que o botão de alternar tema permanece presente
-        expect(find.textContaining('Tema'), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is Tooltip && (w.message?.contains('Tema') ?? false),
+          ),
+          findsOneWidget,
+        );
       },
     );
   });

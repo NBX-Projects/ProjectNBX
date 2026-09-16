@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -24,12 +25,47 @@ type Client struct {
 	UserID   string
 	Username string
 	ServerID string
+
+	sendMu sync.Mutex
+	closed bool
+}
+
+// SendEvent envia dados de forma thread-safe sem risco de panic em canal fechado
+func (c *Client) SendEvent(data []byte) bool {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+
+	if c.closed {
+		return false
+	}
+
+	select {
+	case c.Send <- data:
+		return true
+	default:
+		return false
+	}
+}
+
+// Close fecha o canal Send e a conexão subjacente de forma atômica e segura
+func (c *Client) Close() {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+
+	if c.closed {
+		return
+	}
+	c.closed = true
+	close(c.Send)
+	if c.Conn != nil {
+		_ = c.Conn.Close()
+	}
 }
 
 func (c *Client) ReadPump() {
 	defer func() {
 		c.Hub.Unregister <- c
-		c.Conn.Close()
+		c.Close()
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
@@ -66,7 +102,7 @@ func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		c.Close()
 	}()
 
 	for {
@@ -90,3 +126,4 @@ func (c *Client) WritePump() {
 		}
 	}
 }
+

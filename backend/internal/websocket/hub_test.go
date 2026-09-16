@@ -221,3 +221,87 @@ func TestHub_LiveKitStateAndClear(t *testing.T) {
 	hub.broadcastPresence("usr_test", "idle")
 	time.Sleep(20 * time.Millisecond)
 }
+
+func TestClient_SafeSendAndCloseConcurrently(t *testing.T) {
+	client := &Client{
+		Send:   make(chan []byte, 10),
+		UserID: "usr_concurrent",
+	}
+
+	done := make(chan bool)
+
+	// Goroutine 1: envia repetidamente
+	go func() {
+		for i := 0; i < 500; i++ {
+			_ = client.SendEvent([]byte("test"))
+		}
+		done <- true
+	}()
+
+	// Goroutine 2: fecha de forma concorrente
+	go func() {
+		time.Sleep(1 * time.Millisecond)
+		client.Close()
+		client.Close() // Chamada dupla deve ser no-op seguro
+		done <- true
+	}()
+
+	<-done
+	<-done
+
+	// Envio após fechamento deve retornar false e não causar panic
+	if client.SendEvent([]byte("after close")) {
+		t.Error("Expected SendEvent to return false after close")
+	}
+}
+
+func TestHub_ServerIDFiltering(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	hub := NewHub(repo)
+	go hub.Run()
+
+	clientA := &Client{
+		Hub:      hub,
+		Send:     make(chan []byte, 16),
+		UserID:   "usr_a",
+		ServerID: "srv_a",
+	}
+	clientB := &Client{
+		Hub:      hub,
+		Send:     make(chan []byte, 16),
+		UserID:   "usr_b",
+		ServerID: "srv_b",
+	}
+
+	hub.Register <- clientA
+	hub.Register <- clientB
+	time.Sleep(30 * time.Millisecond)
+
+	// Drena eventos iniciais de registro
+	for len(clientA.Send) > 0 {
+		<-clientA.Send
+	}
+	for len(clientB.Send) > 0 {
+		<-clientB.Send
+	}
+
+	// Broadcast para srv_a
+	hub.BroadcastEvent(&models.WSEvent{
+		Type:     models.EventChatMessage,
+		ServerID: "srv_a",
+		Payload:  []byte(`{"msg":"for server A only"}`),
+	})
+
+	time.Sleep(30 * time.Millisecond)
+
+	// clientA deve receber
+	if len(clientA.Send) != 1 {
+		t.Errorf("Expected clientA to receive 1 event, got %d", len(clientA.Send))
+	}
+
+	// clientB NÃO deve receber
+	if len(clientB.Send) != 0 {
+		t.Errorf("Expected clientB to receive 0 events, got %d", len(clientB.Send))
+	}
+}
+

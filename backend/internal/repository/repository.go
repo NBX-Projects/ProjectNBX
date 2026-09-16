@@ -24,6 +24,9 @@ type Repository interface {
 	CreateUser(user *models.User) error
 	GetUserByID(id string) (*models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
+	GetUserByEmailOrUsername(identifier string) (*models.User, error)
+	UpdateUser(user *models.User) error
+	UpdateUserPassword(id, hashedPassword string) error
 	UpdateUserStatus(id, status string) error
 
 	// Servidores

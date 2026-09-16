@@ -35,7 +35,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	name := req.Name
+	if name == "" {
+		name = req.Username
+	}
+
 	user := &models.User{
+		Name:      name,
 		Username:  req.Username,
 		Email:     req.Email,
 		Password:  string(hashedPassword),
@@ -82,12 +88,22 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.Password == "" {
-		http.Error(w, `{"error":"Email e senha são obrigatórios"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Corpo da requisição inválido"}`, http.StatusBadRequest)
 		return
 	}
 
-	user, err := h.repo.GetUserByEmail(req.Email)
+	loginIdentifier := req.Login
+	if loginIdentifier == "" {
+		loginIdentifier = req.Email
+	}
+
+	if loginIdentifier == "" || req.Password == "" {
+		http.Error(w, `{"error":"Email/usuário e senha são obrigatórios"}`, http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetUserByEmailOrUsername(loginIdentifier)
 	if err != nil {
 		// Log de auditoria para tentativa falha
 		_ = h.repo.CreateAuditLog(&models.AuditLog{
@@ -96,7 +112,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			IPAddress: r.RemoteAddr,
 			UserAgent: r.UserAgent(),
 			Metadata: map[string]interface{}{
-				"email":  req.Email,
+				"login":  loginIdentifier,
 				"reason": "user_not_found",
 			},
 		})
@@ -114,7 +130,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			IPAddress: r.RemoteAddr,
 			UserAgent: r.UserAgent(),
 			Metadata: map[string]interface{}{
-				"email":  req.Email,
+				"login":  loginIdentifier,
 				"reason": "invalid_password",
 			},
 		})
@@ -138,7 +154,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		IPAddress:  r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
 		Metadata: map[string]interface{}{
-			"email": user.Email,
+			"login": loginIdentifier,
 		},
 	})
 
@@ -150,8 +166,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := auth.GetUserID(r.Context())
+	if userID == "" {
 		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
 		return
 	}
@@ -164,6 +180,115 @@ func (h *AuthHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID := auth.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req models.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Dados inválidos"}`, http.StatusBadRequest)
+		return
+	}
+
+	existingUser, err := h.repo.GetUserByID(userID)
+	if err != nil {
+		http.Error(w, `{"error":"Usuário não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if req.Name != "" {
+		existingUser.Name = req.Name
+	}
+	if req.Username != "" {
+		existingUser.Username = req.Username
+	}
+	if req.Email != "" {
+		existingUser.Email = req.Email
+	}
+
+	if err := h.repo.UpdateUser(existingUser); err != nil {
+		if err == repository.ErrAlreadyExists {
+			http.Error(w, `{"error":"Nome de usuário ou e-mail já está em uso"}`, http.StatusConflict)
+			return
+		}
+		http.Error(w, `{"error":"Erro ao atualizar perfil"}`, http.StatusInternalServerError)
+		return
+	}
+
+	_ = h.repo.CreateAuditLog(&models.AuditLog{
+		Source:     models.AuditSourceUser,
+		Action:     "USER_PROFILE_UPDATED",
+		UserID:     &userID,
+		ResourceID: &userID,
+		IPAddress:  r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		Metadata: map[string]interface{}{
+			"name":     existingUser.Name,
+			"username": existingUser.Username,
+			"email":    existingUser.Email,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(existingUser)
+}
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID := auth.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req models.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CurrentPassword == "" || req.NewPassword == "" {
+		http.Error(w, `{"error":"Senha atual e nova senha são obrigatórias"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		http.Error(w, `{"error":"A nova senha deve ter no mínimo 6 caracteres"}`, http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetUserByID(userID)
+	if err != nil {
+		http.Error(w, `{"error":"Usuário não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)); err != nil {
+		http.Error(w, `{"error":"Senha atual incorreta"}`, http.StatusUnauthorized)
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao processar nova senha"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.repo.UpdateUserPassword(userID, string(hashedPassword)); err != nil {
+		http.Error(w, `{"error":"Erro ao atualizar senha"}`, http.StatusInternalServerError)
+		return
+	}
+
+	_ = h.repo.CreateAuditLog(&models.AuditLog{
+		Source:     models.AuditSourceAuth,
+		Action:     "USER_PASSWORD_CHANGED",
+		UserID:     &userID,
+		ResourceID: &userID,
+		IPAddress:  r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Senha alterada com sucesso"})
 }
 
 func (h *AuthHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {

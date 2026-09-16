@@ -25,14 +25,18 @@ func (r *PostgresRepository) CreateUser(user *models.User) error {
 	if user.ID == "" {
 		user.ID = "usr_" + uuid.New().String()
 	}
+	if user.Name == "" {
+		user.Name = user.Username
+	}
 	user.CreatedAt = time.Now()
 
 	query := `
-	INSERT INTO users (id, username, email, password, avatar_url, status, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	INSERT INTO users (id, name, username, email, password, avatar_url, status, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 	_, err := r.db.Exec(query,
 		user.ID,
+		user.Name,
 		user.Username,
 		user.Email,
 		user.Password,
@@ -54,12 +58,13 @@ func (r *PostgresRepository) CreateUser(user *models.User) error {
 
 func (r *PostgresRepository) GetUserByID(id string) (*models.User, error) {
 	query := `
-	SELECT id, username, email, password, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), status, created_at
 	FROM users WHERE id = $1`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, id).Scan(
 		&user.ID,
+		&user.Name,
 		&user.Username,
 		&user.Email,
 		&user.Password,
@@ -78,12 +83,13 @@ func (r *PostgresRepository) GetUserByID(id string) (*models.User, error) {
 
 func (r *PostgresRepository) GetUserByEmail(email string) (*models.User, error) {
 	query := `
-	SELECT id, username, email, password, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), status, created_at
 	FROM users WHERE LOWER(email) = LOWER($1)`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, email).Scan(
 		&user.ID,
+		&user.Name,
 		&user.Username,
 		&user.Email,
 		&user.Password,
@@ -98,6 +104,71 @@ func (r *PostgresRepository) GetUserByEmail(email string) (*models.User, error) 
 		return nil, err
 	}
 	return user, nil
+}
+
+func (r *PostgresRepository) GetUserByEmailOrUsername(identifier string) (*models.User, error) {
+	query := `
+	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), status, created_at
+	FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)
+	LIMIT 1`
+
+	user := &models.User{}
+	err := r.db.QueryRow(query, identifier).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.AvatarURL,
+		&user.Status,
+		&user.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
+func (r *PostgresRepository) UpdateUser(user *models.User) error {
+	query := `
+	UPDATE users SET name = $1, username = $2, email = $3, updated_at = $4
+	WHERE id = $5`
+
+	res, err := r.db.Exec(query, user.Name, user.Username, user.Email, time.Now(), user.ID)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return ErrAlreadyExists
+		}
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) UpdateUserPassword(id, hashedPassword string) error {
+	query := `UPDATE users SET password = $1, updated_at = $2 WHERE id = $3`
+	res, err := r.db.Exec(query, hashedPassword, time.Now(), id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *PostgresRepository) UpdateUserStatus(id, status string) error {
@@ -603,7 +674,7 @@ func (r *PostgresRepository) IsServerMember(serverID, userID string) (bool, erro
 
 func (r *PostgresRepository) FindUser(query string) (*models.User, error) {
 	q := `
-	SELECT id, username, email, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, COALESCE(avatar_url, ''), status, created_at
 	FROM users
 	WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1) OR id = $1
 	LIMIT 1`
@@ -611,6 +682,7 @@ func (r *PostgresRepository) FindUser(query string) (*models.User, error) {
 	u := &models.User{}
 	err := r.db.QueryRow(q, query).Scan(
 		&u.ID,
+		&u.Name,
 		&u.Username,
 		&u.Email,
 		&u.AvatarURL,
@@ -632,9 +704,9 @@ func (r *PostgresRepository) SearchUsers(query string, limit int) ([]*models.Use
 	}
 
 	q := `
-	SELECT id, username, email, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, COALESCE(avatar_url, ''), status, created_at
 	FROM users
-	WHERE LOWER(username) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1)
+	WHERE LOWER(username) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1) OR LOWER(name) LIKE LOWER($1)
 	LIMIT $2`
 
 	rows, err := r.db.Query(q, "%"+query+"%", limit)
@@ -648,6 +720,7 @@ func (r *PostgresRepository) SearchUsers(query string, limit int) ([]*models.Use
 		u := &models.User{}
 		if err := rows.Scan(
 			&u.ID,
+			&u.Name,
 			&u.Username,
 			&u.Email,
 			&u.AvatarURL,

@@ -96,10 +96,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> register(String username, String email, String password) async {
+  Future<bool> register(
+    String username,
+    String email,
+    String password, {
+    String? name,
+  }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final res = await _apiClient.register(username, email, password);
+      final res = await _apiClient.register(
+        username,
+        email,
+        password,
+        name: name,
+      );
       _apiClient.setAuthToken(res.token);
 
       final prefs = await SharedPreferences.getInstance();
@@ -111,6 +121,53 @@ class AuthNotifier extends StateNotifier<AuthState> {
         user: res.user,
         token: res.token,
       );
+      return true;
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(isLoading: false, errorMessage: msg);
+      return false;
+    }
+  }
+
+  Future<bool> updateProfile({
+    required String name,
+    required String username,
+    required String email,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final updatedUser = await _apiClient.updateProfile(
+        name: name,
+        username: username,
+        email: email,
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyUser, jsonEncode(updatedUser.toJson()));
+
+      state = state.copyWith(
+        isLoading: false,
+        user: updatedUser,
+      );
+      return true;
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(isLoading: false, errorMessage: msg);
+      return false;
+    }
+  }
+
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _apiClient.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');

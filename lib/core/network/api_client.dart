@@ -58,13 +58,17 @@ class ApiClient {
     if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
-  Future<AuthResponse> login(String email, String password) async {
+  Future<AuthResponse> login(String login, String password) async {
     final url = Uri.parse('$baseUrl/auth/login');
     try {
       final response = await _client.post(
         url,
         headers: _headers,
-        body: jsonEncode({'email': email.trim(), 'password': password}),
+        body: jsonEncode({
+          'login': login.trim(),
+          'email': login.trim(),
+          'password': password,
+        }),
       );
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -91,14 +95,16 @@ class ApiClient {
   Future<AuthResponse> register(
     String username,
     String email,
-    String password,
-  ) async {
+    String password, {
+    String? name,
+  }) async {
     final url = Uri.parse('$baseUrl/auth/register');
     try {
       final response = await _client.post(
         url,
         headers: _headers,
         body: jsonEncode({
+          'name': (name != null && name.trim().isNotEmpty) ? name.trim() : username.trim(),
           'username': username.trim(),
           'email': email.trim(),
           'password': password,
@@ -113,6 +119,76 @@ class ApiClient {
         return authRes;
       } else {
         throw Exception(data['error'] ?? 'Falha ao criar conta');
+      }
+    } catch (e) {
+      if (e is SocketException ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused')) {
+        throw Exception(
+          'Servidor backend offline (localhost:8080). Verifique se o backend Go está em execução.',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<UserModel> updateProfile({
+    required String name,
+    required String username,
+    required String email,
+  }) async {
+    final url = Uri.parse('$baseUrl/users/me');
+    try {
+      final response = await _client.put(
+        url,
+        headers: _headers,
+        body: jsonEncode({
+          'name': name.trim(),
+          'username': username.trim(),
+          'email': email.trim(),
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return UserModel.fromJson(data);
+      } else {
+        throw Exception(data['error'] ?? 'Falha ao atualizar perfil');
+      }
+    } catch (e) {
+      if (e is SocketException ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused')) {
+        throw Exception(
+          'Servidor backend offline (localhost:8080). Verifique se o backend Go está em execução.',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final url = Uri.parse('$baseUrl/users/me/password');
+    try {
+      final response = await _client.put(
+        url,
+        headers: _headers,
+        body: jsonEncode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return;
+      } else {
+        throw Exception(data['error'] ?? 'Falha ao alterar senha');
       }
     } catch (e) {
       if (e is SocketException ||

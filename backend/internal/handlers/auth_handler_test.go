@@ -154,3 +154,93 @@ func TestAuthHandler_SearchUsers(t *testing.T) {
 		t.Errorf("Expected 200 OK, got %d", rr.Code)
 	}
 }
+
+func TestAuthHandler_LoginWithUsername(t *testing.T) {
+	handler, _, _ := setupAuthTest()
+
+	// Login using username instead of email
+	body, _ := json.Marshal(map[string]string{
+		"login":    "DarkLord_X",
+		"password": "admin123",
+	})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handler.Login(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for username login, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp models.AuthResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil || resp.User.Username != "DarkLord_X" {
+		t.Errorf("Expected user DarkLord_X in response, got %+v", resp.User)
+	}
+}
+
+func TestAuthHandler_UpdateProfile(t *testing.T) {
+	handler, _, _ := setupAuthTest()
+
+	updateBody, _ := json.Marshal(map[string]string{
+		"name":     "Taui Silva Lima",
+		"username": "tauilima",
+		"email":    "tauisilva@gmail.com",
+	})
+	req := newAuthRequest("PUT", "/api/users/me", updateBody, "usr_dev_1", nil)
+	rr := httptest.NewRecorder()
+	handler.UpdateProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for update profile, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var updatedUser models.User
+	if err := json.NewDecoder(rr.Body).Decode(&updatedUser); err != nil {
+		t.Fatalf("Failed to decode updated user: %v", err)
+	}
+	if updatedUser.Name != "Taui Silva Lima" || updatedUser.Username != "tauilima" || updatedUser.Email != "tauisilva@gmail.com" {
+		t.Errorf("User fields not updated properly: %+v", updatedUser)
+	}
+}
+
+func TestAuthHandler_ChangePassword(t *testing.T) {
+	handler, _, _ := setupAuthTest()
+
+	// 1. Wrong current password
+	badBody, _ := json.Marshal(map[string]string{
+		"current_password": "wrong_password",
+		"new_password":     "novasenha123",
+	})
+	reqBad := newAuthRequest("PUT", "/api/users/me/password", badBody, "usr_dev_1", nil)
+	rrBad := httptest.NewRecorder()
+	handler.ChangePassword(rrBad, reqBad)
+
+	if rrBad.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 for wrong current password, got %d", rrBad.Code)
+	}
+
+	// 2. Correct current password
+	goodBody, _ := json.Marshal(map[string]string{
+		"current_password": "admin123",
+		"new_password":     "novasenha123",
+	})
+	reqGood := newAuthRequest("PUT", "/api/users/me/password", goodBody, "usr_dev_1", nil)
+	rrGood := httptest.NewRecorder()
+	handler.ChangePassword(rrGood, reqGood)
+
+	if rrGood.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for password change, got %d: %s", rrGood.Code, rrGood.Body.String())
+	}
+
+	// 3. Verify login works with new password
+	loginBody, _ := json.Marshal(map[string]string{
+		"login":    "DarkLord_X",
+		"password": "novasenha123",
+	})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	rrLogin := httptest.NewRecorder()
+	handler.Login(rrLogin, reqLogin)
+
+	if rrLogin.Code != http.StatusOK {
+		t.Errorf("Expected 200 OK logging in with new password, got %d", rrLogin.Code)
+	}
+}

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ func (r *MemoryRepository) seedInitialData() {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 	adminUser := &models.User{
 		ID:        "usr_dev_1",
+		Name:      "DarkLord X",
 		Username:  "DarkLord_X",
 		Email:     "dev@projectnbx.com",
 		Password:  string(hash),
@@ -54,6 +56,7 @@ func (r *MemoryRepository) seedInitialData() {
 	devHash, _ := bcrypt.GenerateFromPassword([]byte("senha_segura_123"), bcrypt.DefaultCost)
 	devUser := &models.User{
 		ID:        "usr_dev_2",
+		Name:      "Dev NBX",
 		Username:  "DevNBX",
 		Email:     "dev@nbx.com",
 		Password:  string(devHash),
@@ -205,6 +208,9 @@ func (r *MemoryRepository) CreateUser(user *models.User) error {
 	if user.ID == "" {
 		user.ID = "usr_" + uuid.New().String()
 	}
+	if user.Name == "" {
+		user.Name = user.Username
+	}
 	user.CreatedAt = time.Now()
 	r.users[user.ID] = user
 	return nil
@@ -231,6 +237,60 @@ func (r *MemoryRepository) GetUserByEmail(email string) (*models.User, error) {
 		}
 	}
 	return nil, ErrNotFound
+}
+
+func (r *MemoryRepository) GetUserByEmailOrUsername(login string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	clean := strings.ToLower(strings.TrimSpace(login))
+	for _, u := range r.users {
+		if strings.ToLower(u.Email) == clean || strings.ToLower(u.Username) == clean {
+			return u, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (r *MemoryRepository) UpdateUser(user *models.User) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	cleanEmail := strings.ToLower(strings.TrimSpace(user.Email))
+	cleanUsername := strings.ToLower(strings.TrimSpace(user.Username))
+
+	for _, u := range r.users {
+		if u.ID != user.ID {
+			if strings.ToLower(u.Email) == cleanEmail || strings.ToLower(u.Username) == cleanUsername {
+				return ErrAlreadyExists
+			}
+		}
+	}
+
+	u, ok := r.users[user.ID]
+	if !ok {
+		return ErrNotFound
+	}
+
+	u.Name = user.Name
+	u.Username = user.Username
+	u.Email = user.Email
+	if user.AvatarURL != "" {
+		u.AvatarURL = user.AvatarURL
+	}
+	return nil
+}
+
+func (r *MemoryRepository) UpdateUserPassword(id, hashedPassword string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	u, ok := r.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.Password = hashedPassword
+	return nil
 }
 
 func (r *MemoryRepository) UpdateUserStatus(id, status string) error {
