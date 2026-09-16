@@ -6,12 +6,9 @@ WORKDIR /app
 # Instala certificados SSL e git se necessário
 RUN apk add --no-cache git ca-certificates
 
-# Cache de dependências
-COPY go.mod go.sum* ./
-RUN go mod download
-
-# Copia código fonte e compila
+# Copia código fonte e sincroniza dependências
 COPY . .
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server cmd/api/main.go
 
 # Etapa de Execução Final Leve
