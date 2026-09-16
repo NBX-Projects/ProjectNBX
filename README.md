@@ -4,7 +4,20 @@
   <img src="assets/logo.png" alt="ProjectNBX Logo" width="128" height="128" />
   <h3>Plataforma de Comunicação e Voz Cross-Platform para Desenvolvedores e Gamers</h3>
   <p>Uma alternativa moderna, self-hosted e ultra leve ao Discord, construída em <b>Flutter</b> com <b>LiveKit (WebRTC SFU)</b> e backend em <b>Go</b>.</p>
+
+  <p>
+    <a href="https://nbx-projects.github.io/ProjectNBX/"><img src="https://img.shields.io/badge/Acessar-Web%20App%20(GitHub%20Pages)-2D6A4F?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Web App" /></a>
+    <a href="https://github.com/NBX-Projects/ProjectNBX/releases/latest"><img src="https://img.shields.io/badge/Baixar-Releases%20(.exe%20%7C%20.apk)-181926?style=for-the-badge&logo=github&logoColor=white" alt="Releases" /></a>
+  </p>
 </div>
+
+---
+
+## 🌐 Acesso Rápido & Downloads
+
+- 🌍 **Versão de Navegador (GitHub Pages):** [https://nbx-projects.github.io/ProjectNBX/](https://nbx-projects.github.io/ProjectNBX/)
+- 🪟 **Instalador Windows (`.exe`):** Baixe em [Releases](https://github.com/NBX-Projects/ProjectNBX/releases/latest) (com auto-atualizador integrado)
+- 📱 **Instalador Android (`.apk`):** Baixe em [Releases](https://github.com/NBX-Projects/ProjectNBX/releases/latest)
 
 ---
 
@@ -100,17 +113,27 @@ flutter run
 
 ## 📦 Build e Empacotamento de Produção
 
+O projeto suporta **Flavors** e arquivos de configuração de ambiente (`.env`):
+
 ```bash
-# Executável para Windows (.exe)
-flutter build windows --release
+# Executável para Windows Desktop
+flutter build windows --release --dart-define-from-file=.env.prod
 
-# APK e App Bundle para Android
-flutter build apk --release
-flutter build appbundle --release
+# APK Android com Flavor de Produção
+flutter build apk --flavor prod --dart-define-from-file=.env.prod --release
 
-# Build Web estático
-flutter build web --release
+# APK Android com Flavor de Desenvolvimento
+flutter build apk --flavor dev --dart-define-from-file=.env.dev --release
+
+# Build Web (GitHub Pages com base-href)
+flutter build web --release --base-href "/ProjectNBX/" --dart-define-from-file=.env.prod
 ```
+
+### 🏷️ Distribuição Automatizada (GitHub Actions)
+Ao criar e enviar uma tag Git (ex: `v1.0.1`), três workflows independentes no GitHub Actions geram e publicam automaticamente os artefatos:
+- **Windows (`build-windows.yml`)**: Gera o instalador unificado `ProjectNBX-Setup-<tag>-windows.exe` (via Inno Setup) e zip portátil.
+- **Android (`build-android.yml`)**: Gera o APK `ProjectNBX-<tag>-android.apk`.
+- **Web (`deploy-web.yml`)**: Compila e faz deploy automático no **GitHub Pages**.
 
 ---
 
