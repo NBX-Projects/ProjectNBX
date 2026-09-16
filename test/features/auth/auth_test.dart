@@ -307,53 +307,43 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('Opens and interacts with Server Config Dialog', (
-      WidgetTester tester,
-    ) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
+    testWidgets(
+      'Renders theme toggle and does not display backend host config button',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
 
-      SharedPreferences.setMockInitialValues({});
-      final fakeApi = FakeApiClient();
+        SharedPreferences.setMockInitialValues({});
+        final fakeApi = FakeApiClient();
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            apiClientProvider.overrideWithValue(fakeApi),
-            authControllerProvider.overrideWith(
-              (ref) => AuthNotifier(fakeApi, restore: false),
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              apiClientProvider.overrideWithValue(fakeApi),
+              authControllerProvider.overrideWith(
+                (ref) => AuthNotifier(fakeApi, restore: false),
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.darkTheme,
+              home: const LoginScreen(),
             ),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.darkTheme,
-            home: const LoginScreen(),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      // Clica no botão de IP do Servidor
-      final hostChip = find.text('localhost:8080');
-      expect(hostChip, findsOneWidget);
-      await tester.tap(hostChip);
-      await tester.pumpAndSettle();
+        // Garante que o chip do backend não está presente na tela de login
+        expect(find.text('localhost:8080'), findsNothing);
+        expect(find.byIcon(LucideIcons.server), findsNothing);
 
-      // Verifica se o diálogo abriu
-      expect(find.text('Endereço do Backend (Host)'), findsOneWidget);
-
-      // Clica no botão de fechar diálogo
-      final closeBtn = find.byIcon(LucideIcons.x).last;
-      expect(closeBtn, findsOneWidget);
-      await tester.tap(closeBtn);
-      await tester.pumpAndSettle();
-
-      // Diálogo fechou
-      expect(find.text('Endereço do Backend (Host)'), findsNothing);
-    });
+        // Garante que o botão de alternar tema permanece presente
+        expect(find.textContaining('Tema'), findsOneWidget);
+      },
+    );
   });
 }
