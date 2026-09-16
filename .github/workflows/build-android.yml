@@ -1,0 +1,100 @@
+name: Build Android (.apk)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag da versão (ex: v1.0.0). Se vazio, usa o nome do branch/tag.'
+        required: false
+        default: ''
+      flavor:
+        description: 'Flavor a ser compilado (prod ou dev)'
+        required: false
+        default: 'prod'
+        type: choice
+        options:
+          - prod
+          - dev
+      publish_release:
+        description: 'Publicar/atualizar no GitHub Releases'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: 'build-android-${{ github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Compilar Android Release (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Definir Versão e Flavor
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            VERSION="${{ inputs.release_tag }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
+
+          FLAVOR="${{ inputs.flavor || 'prod' }}"
+          echo "BUILD_FLAVOR=$FLAVOR" >> $GITHUB_ENV
+
+          ENV_FILE=".env.$FLAVOR"
+          if [ ! -f "$ENV_FILE" ]; then
+            cp .env.example "$ENV_FILE"
+          fi
+          sed -i "s/APP_VERSION=.*/APP_VERSION=$VERSION/g" "$ENV_FILE"
+
+      - name: Instalar Dependências
+        run: flutter pub get
+
+      - name: Compilar APK Android
+        run: |
+          flutter build apk --flavor ${{ env.BUILD_FLAVOR }} --dart-define-from-file=.env.${{ env.BUILD_FLAVOR }} --release
+
+      - name: Preparar Arquivos de Distribuição
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-${{ env.BUILD_FLAVOR }}-release.apk dist/ProjectNBX-${{ env.RELEASE_VERSION }}-android.apk
+
+      - name: Upload Artifact (Ações do GitHub)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/ProjectNBX-*-android.apk
+          retention-days: 7
+
+      - name: Publicar / Atualizar no GitHub Releases
+        if: ${{ github.event_name == 'push' || inputs.publish_release == true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          files: |
+            dist/ProjectNBX-*-android.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false

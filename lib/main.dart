@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_theme.dart';
@@ -15,6 +16,7 @@ import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.initialize();
 
   // Desktop Window Configuration
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {

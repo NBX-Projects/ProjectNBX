@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/localization/app_language.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
+import 'package:projectnbx/core/updater/update_controller.dart';
+import 'package:projectnbx/core/updater/update_models.dart';
+import 'package:projectnbx/core/updater/widgets/update_dialog.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
@@ -1519,6 +1523,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // 5. STATUS DOS SERVIÇOS & REDE
   Widget _buildSystemSection(bool isDark, AppStrings strings) {
+    final updateState = ref.watch(updateControllerProvider);
+    final isChecking = updateState.status == UpdateStatus.checking;
+    final hasUpdate = updateState.isUpdateAvailable;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1528,6 +1536,223 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           strings.systemStatusDesc,
         ),
         const SizedBox(height: 24),
+
+        // Cartão de Versão e Atualizações do Aplicativo
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: hasUpdate
+                  ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+              width: hasUpdate ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: (isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          LucideIcons.sparkles,
+                          size: 18,
+                          color: isDark
+                              ? AppColors.darkPrimary
+                              : AppColors.lightPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ProjectNBX Desktop',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Versão v${AppConfig.version}',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 11,
+                                  color: isDark
+                                      ? AppColors.darkTextMuted
+                                      : AppColors.lightTextMuted,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: (AppConfig.isDev
+                                          ? (isDark
+                                              ? AppColors.darkLavender
+                                              : AppColors.lightLavender)
+                                          : (isDark
+                                              ? AppColors.darkSage
+                                              : AppColors.lightSage))
+                                      .withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  AppConfig.isDev ? 'DEV' : 'PROD',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppConfig.isDev
+                                        ? (isDark
+                                            ? AppColors.darkLavender
+                                            : AppColors.lightLavender)
+                                        : (isDark
+                                            ? AppColors.darkSage
+                                            : AppColors.lightSage),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Botão de ação (Verificar ou Atualizar)
+                  if (hasUpdate)
+                    ElevatedButton.icon(
+                      onPressed: () => UpdateDialog.show(context),
+                      icon: const Icon(LucideIcons.download, size: 14),
+                      label: Text(
+                        'Nova Versão (v${updateState.latestRelease?.version ?? ""})',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark
+                            ? AppColors.darkPrimary
+                            : AppColors.lightPrimary,
+                        foregroundColor: isDark ? Colors.black : Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: isChecking
+                          ? null
+                          : () {
+                              ref
+                                  .read(updateControllerProvider.notifier)
+                                  .checkForUpdates(silent: false);
+                            },
+                      icon: isChecking
+                          ? SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: isDark
+                                    ? AppColors.darkTextPrimary
+                                    : AppColors.lightTextPrimary,
+                              ),
+                            )
+                          : const Icon(LucideIcons.refreshCw, size: 13),
+                      label: Text(
+                        isChecking
+                            ? 'Verificando...'
+                            : 'Verificar Atualizações',
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                        side: BorderSide(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (updateState.status == UpdateStatus.upToDate) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      LucideIcons.checkCircle2,
+                      size: 14,
+                      color: isDark ? AppColors.darkSage : AppColors.lightSage,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Você já está utilizando a versão mais recente.',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? AppColors.darkSage
+                            : AppColors.lightSage,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        Text(
+          'INFRAESTRUTURA DE SERVIÇOS',
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          ),
+        ),
+        const SizedBox(height: 12),
 
         _buildServiceStatusCard(
           isDark: isDark,

@@ -10,6 +10,8 @@ import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
+import 'package:projectnbx/core/updater/update_controller.dart';
+import 'package:projectnbx/core/updater/widgets/update_banner.dart';
 import 'package:projectnbx/core/widgets/window_controls.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
@@ -34,6 +36,20 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'home';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!kIsWeb &&
+          !Platform.environment.containsKey('FLUTTER_TEST') &&
+          (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+        ref
+            .read(updateControllerProvider.notifier)
+            .checkForUpdates(silent: true);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +115,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           voiceState,
                           voiceNotifier,
                         ),
+
+                        // Notification banner se houver atualização disponível
+                        const UpdateBanner(),
 
                         // Workspace / Main Area
                         Expanded(

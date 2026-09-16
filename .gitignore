@@ -55,4 +55,6 @@ app.*.map.json
 
 # Environment secrets
 .env
-*.env
+.env.*
+*.env
+!.env.example

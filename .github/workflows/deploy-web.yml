@@ -1,0 +1,68 @@
+name: Deploy Web (GitHub Pages)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag da versão (ex: v1.0.0). Se vazio, usa o nome do branch/tag.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'deploy-web-${{ github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  deploy-web:
+    name: Compilar e Publicar no GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Definir Versão e Preparar .env.prod
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            VERSION="${{ inputs.release_tag }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
+
+          if [ ! -f .env.prod ]; then
+            cp .env.example .env.prod
+          fi
+          sed -i "s/APP_VERSION=.*/APP_VERSION=$VERSION/g" .env.prod
+
+      - name: Instalar Dependências
+        run: flutter pub get
+
+      - name: Compilar Flutter Web
+        run: |
+          flutter build web --release --base-href "/ProjectNBX/" --dart-define-from-file=.env.prod
+
+      - name: Configurar Artefato do GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

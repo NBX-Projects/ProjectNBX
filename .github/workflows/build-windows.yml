@@ -1,0 +1,98 @@
+name: Build Windows (.exe)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag da versão (ex: v1.0.0). Se vazio, usa o nome do branch/tag.'
+        required: false
+        default: ''
+      publish_release:
+        description: 'Publicar/atualizar no GitHub Releases'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: 'build-windows-${{ github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Compilar Windows Release (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Definir Versão e Preparar .env.prod
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.release_tag }}"
+          if ([string]::IsNullOrWhiteSpace($ver)) {
+            $ver = "${{ github.ref_name }}"
+          }
+          "RELEASE_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          
+          if (!(Test-Path .env.prod)) {
+            Copy-Item .env.example .env.prod
+          }
+          (Get-Content .env.prod) -replace 'APP_VERSION=.*', "APP_VERSION=$ver" | Set-Content .env.prod
+
+      - name: Instalar Dependências
+        run: flutter pub get
+
+      - name: Compilar Flutter Windows Release
+        run: |
+          flutter build windows --release --dart-define-from-file=.env.prod
+
+      - name: Compilar Instalador Inno Setup (.exe)
+        shell: pwsh
+        run: |
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $isccPath)) {
+            choco install innosetup --no-progress -y
+            $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          & $isccPath /DAppVersion=$env:RELEASE_VERSION windows/installer/projectnbx_setup.iss
+
+      - name: Preparar Arquivos de Distribuição
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          $installer = Get-ChildItem -Path build/windows/installer -Filter "*.exe" | Select-Object -First 1
+          if ($installer) {
+            Copy-Item $installer.FullName "dist/ProjectNBX-Setup-$env:RELEASE_VERSION-windows.exe"
+          }
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/ProjectNBX-$env:RELEASE_VERSION-windows-portable.zip" -Force
+
+      - name: Upload Artifact (Ações do GitHub)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist/*
+          retention-days: 7
+
+      - name: Publicar / Atualizar no GitHub Releases
+        if: ${{ github.event_name == 'push' || inputs.publish_release == true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          files: |
+            dist/ProjectNBX-Setup-*-windows.exe
+            dist/ProjectNBX-*-windows-portable.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

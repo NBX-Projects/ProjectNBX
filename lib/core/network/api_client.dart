@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 
 class ApiClient {
@@ -31,9 +32,13 @@ class ApiClient {
     if (_customBaseUrl != null && _customBaseUrl!.isNotEmpty) {
       return _customBaseUrl!;
     }
-    if (kIsWeb) return 'http://localhost:8080/api';
-    if (Platform.isAndroid) return 'http://192.168.3.10:8080/api';
-    return 'http://localhost:8080/api';
+    if (!kIsWeb &&
+        Platform.isAndroid &&
+        AppConfig.isDev &&
+        AppConfig.apiBaseUrl.contains('localhost')) {
+      return AppConfig.apiBaseUrl.replaceAll('localhost', '10.0.2.2');
+    }
+    return AppConfig.apiBaseUrl;
   }
 
   final http.Client _client;
