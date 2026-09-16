@@ -30,13 +30,58 @@ func TestRouter_SetupRoutes(t *testing.T) {
 		t.Fatal("Expected non-nil HTTP handler from SetupRoutes")
 	}
 
-	// Test Health Endpoint
+	// Test Health Endpoint (/api/health)
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("Expected status 200 OK for /api/health, got %d", rr.Code)
+	}
+
+	// Test Public Alias Health Endpoint (/health)
+	healthReq := httptest.NewRequest("GET", "/health", nil)
+	healthRR := httptest.NewRecorder()
+	handler.ServeHTTP(healthRR, healthReq)
+
+	if healthRR.Code != http.StatusOK {
+		t.Errorf("Expected status 200 OK for /health, got %d", healthRR.Code)
+	}
+
+	// Test Public Root Endpoint (/)
+	rootReq := httptest.NewRequest("GET", "/", nil)
+	rootRR := httptest.NewRecorder()
+	handler.ServeHTTP(rootRR, rootReq)
+
+	if rootRR.Code != http.StatusOK {
+		t.Errorf("Expected status 200 OK for /, got %d", rootRR.Code)
+	}
+
+	// Test Swagger UI Endpoint (/swagger/)
+	swaggerReq := httptest.NewRequest("GET", "/swagger/", nil)
+	swaggerRR := httptest.NewRecorder()
+	handler.ServeHTTP(swaggerRR, swaggerReq)
+
+	if swaggerRR.Code != http.StatusOK {
+		t.Errorf("Expected status 200 OK for /swagger/, got %d", swaggerRR.Code)
+	}
+
+	// Test Swagger JSON Spec (/swagger/doc.json)
+	jsonReq := httptest.NewRequest("GET", "/swagger/doc.json", nil)
+	jsonRR := httptest.NewRecorder()
+	handler.ServeHTTP(jsonRR, jsonReq)
+
+	if jsonRR.Code != http.StatusOK {
+		t.Errorf("Expected status 200 OK for /swagger/doc.json, got %d", jsonRR.Code)
+	}
+
+	// Test Docs Redirect (/docs)
+	docsReq := httptest.NewRequest("GET", "/docs", nil)
+	docsRR := httptest.NewRecorder()
+	handler.ServeHTTP(docsRR, docsReq)
+
+	if docsRR.Code != http.StatusMovedPermanently {
+		t.Errorf("Expected status 301 Moved Permanently for /docs, got %d", docsRR.Code)
 	}
 
 	// Test CORS Preflight

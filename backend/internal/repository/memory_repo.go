@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -622,3 +623,9 @@ func (r *MemoryRepository) DeleteInvite(code string) error {
 	delete(r.invites, code)
 	return nil
 }
+
+// Ping simula teste de integridade da memória
+func (r *MemoryRepository) Ping(_ context.Context) error {
+	return nil
+}
+

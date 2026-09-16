@@ -9,6 +9,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:livekit_client/livekit_client.dart' hide ChatMessage;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
@@ -115,19 +116,27 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
         return;
       }
-      const defaultLiveKitUrl = String.fromEnvironment('LIVEKIT_URL', defaultValue: 'ws://localhost:7880');
+      const defaultLiveKitUrl = AppConfig.livekitUrl;
       var serverUrl = (res['server_url'] as String?) ?? defaultLiveKitUrl;
       if (serverUrl.isEmpty) {
         serverUrl = defaultLiveKitUrl;
       }
 
-      // Garante o uso da porta 7880 do docker-compose alinhada ao host da API
+      // Garante o alinhamento de host e portas do LiveKit com o ambiente configurado
       try {
         final apiUri = Uri.parse(ApiClient.baseUrl);
         final liveKitUri = Uri.parse(serverUrl);
-        if (liveKitUri.host == 'localhost' || liveKitUri.host == '127.0.0.1') {
-          final effectivePort = liveKitUri.hasPort ? liveKitUri.port : 7880;
-          serverUrl = liveKitUri.replace(host: apiUri.host, port: effectivePort).toString();
+        if (liveKitUri.host == 'localhost' ||
+            liveKitUri.host == '127.0.0.1' ||
+            liveKitUri.host == 'livekit') {
+          if (AppConfig.isProd) {
+            serverUrl = AppConfig.livekitUrl;
+          } else {
+            final effectivePort = liveKitUri.hasPort ? liveKitUri.port : 7880;
+            serverUrl = liveKitUri
+                .replace(host: apiUri.host, port: effectivePort)
+                .toString();
+          }
         }
       } catch (_) {}
 

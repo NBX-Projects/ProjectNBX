@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -811,4 +812,10 @@ func (r *PostgresRepository) DeleteInvite(code string) error {
 	_, err := r.db.Exec(query, code)
 	return err
 }
+
+// Ping verifica se a conexão com o banco de dados PostgreSQL está ativa
+func (r *PostgresRepository) Ping(ctx context.Context) error {
+	return r.db.PingContext(ctx)
+}
+
 

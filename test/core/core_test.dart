@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/localization/app_language.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
@@ -223,7 +224,7 @@ void main() {
       expect(ApiClient.baseUrl, 'https://api.myproject.com/api');
 
       ApiClient.setCustomBaseUrl(null);
-      expect(ApiClient.baseUrl.contains(':8080'), isTrue);
+      expect(ApiClient.baseUrl, AppConfig.apiBaseUrl);
     });
 
     test('AuthToken setter and getter', () {

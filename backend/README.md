@@ -78,8 +78,12 @@ go run cmd/api/main.go
 
 ## 📡 Documentação de Endpoints (REST API)
 
-### 🩺 Health Check
-* `GET /api/health` — Verifica o status do backend e configuração do LiveKit.
+### 📖 Documentação Interativa & Diagnóstico
+
+* `GET /swagger/` (ou `/docs`) — **Interface Interativa Swagger UI** para testar todas as rotas diretamente pelo navegador.
+* `GET /swagger/doc.json` — Especificação OpenAPI 3.0 completa em formato JSON.
+* `GET /api/health` (ou `/health`) — **Health Check do Ambiente**: Diagnóstico em tempo real com status do PostgreSQL (`db.Ping`), LiveKit SFU, WebSocket Hub e Uptime.
+* `GET /` — Endpoint de boas-vindas com status básico e links diretos da API.
 
 ---
 

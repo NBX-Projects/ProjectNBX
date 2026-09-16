@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 
 	"github.com/projectnbx/backend/internal/models"
@@ -16,6 +17,9 @@ var (
 
 // Repository interface para operações de banco de dados
 type Repository interface {
+	// Diagnóstico & Conectividade
+	Ping(ctx context.Context) error
+
 	// Usuários
 	CreateUser(user *models.User) error
 	GetUserByID(id string) (*models.User, error)
@@ -58,3 +62,4 @@ type Repository interface {
 	ListServerInvites(serverID string) ([]*models.ServerInvite, error)
 	DeleteInvite(code string) error
 }
+

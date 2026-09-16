@@ -14,6 +14,7 @@ import (
 	"github.com/projectnbx/backend/internal/handlers"
 	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
+	"github.com/projectnbx/backend/internal/swagger"
 	"github.com/projectnbx/backend/internal/websocket"
 )
 
@@ -22,6 +23,7 @@ type Router struct {
 	repo       repository.Repository
 	jwtService *auth.JWTService
 	hub        *websocket.Hub
+	startTime  time.Time
 }
 
 func NewRouter(
@@ -35,6 +37,7 @@ func NewRouter(
 		repo:       repo,
 		jwtService: jwtService,
 		hub:        hub,
+		startTime:  time.Now(),
 	}
 }
 
@@ -54,16 +57,37 @@ func (r *Router) SetupRoutes() http.Handler {
 	serverHandler := handlers.NewServerHandler(r.repo, r.hub)
 	wsHandler := handlers.NewWSHandler(r.hub, r.jwtService, r.repo)
 
-	// Health Check
-	router.HandleFunc("/api/health", func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":    "healthy",
-			"app":       "ProjectNBX Backend",
-			"timestamp": time.Now().Format(time.RFC3339),
-			"livekit":   r.cfg.LiveKitURL,
+	// Endpoint Raiz Público
+	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/" {
+			http.NotFound(w, req)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"app":         "ProjectNBX Backend API",
+			"status":      "online",
+			"version":     "1.0.0",
+			"environment": "active",
+			"docs":        "/swagger/",
+			"health":      "/api/health",
+			"time":        time.Now().Format(time.RFC3339),
 		})
 	}).Methods("GET", "OPTIONS")
+
+	// Documentação Interativa Swagger UI & OpenAPI JSON
+	router.HandleFunc("/swagger", func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, "/swagger/", http.StatusMovedPermanently)
+	})
+	router.HandleFunc("/docs", func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, "/swagger/", http.StatusMovedPermanently)
+	})
+	router.HandleFunc("/swagger/doc.json", swagger.HandlerJSON).Methods("GET", "OPTIONS")
+	router.PathPrefix("/swagger/").HandlerFunc(swagger.HandlerUI).Methods("GET", "OPTIONS")
+
+	// Health Checks Públicos
+	router.HandleFunc("/health", r.handleHealthCheck).Methods("GET", "OPTIONS")
+	router.HandleFunc("/api/health", r.handleHealthCheck).Methods("GET", "OPTIONS")
 
 	// Endpoint WebSocket
 	router.HandleFunc("/ws", wsHandler.ServeWS)
@@ -203,3 +227,51 @@ func (r *Router) jwtAuthMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, req.WithContext(ctx))
 	})
 }
+
+// handleHealthCheck executa diagnóstico de conectividade com banco e serviços
+func (r *Router) handleHealthCheck(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
+	defer cancel()
+
+	dbStatus := "up"
+	var dbLatencyMs float64
+	startPing := time.Now()
+	if err := r.repo.Ping(ctx); err != nil {
+		dbStatus = "down"
+		log.Printf("⚠️ Health check DB ping error: %v", err)
+	} else {
+		dbLatencyMs = float64(time.Since(startPing).Microseconds()) / 1000.0
+	}
+
+	overallStatus := "healthy"
+	httpStatusCode := http.StatusOK
+	if dbStatus == "down" {
+		overallStatus = "degraded"
+		httpStatusCode = http.StatusServiceUnavailable
+	}
+
+	w.WriteHeader(httpStatusCode)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    overallStatus,
+		"app":       "ProjectNBX Backend",
+		"version":   "1.0.0",
+		"uptime":    time.Since(r.startTime).Round(time.Second).String(),
+		"timestamp": time.Now().Format(time.RFC3339),
+		"components": map[string]interface{}{
+			"database": map[string]interface{}{
+				"status":     dbStatus,
+				"latency_ms": dbLatencyMs,
+			},
+			"livekit": map[string]interface{}{
+				"status": "configured",
+				"url":    r.cfg.LiveKitURL,
+			},
+			"websocket": map[string]interface{}{
+				"status": "active",
+			},
+		},
+	})
+}
+

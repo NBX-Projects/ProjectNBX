@@ -37,19 +37,28 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Definir Versão e Preparar .env.prod
+      - name: Definir Versão e Gerar .env.prod a partir de Secrets
         shell: pwsh
+        env:
+          PROD_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          PROD_WS_BASE_URL: ${{ secrets.WS_BASE_URL }}
+          PROD_LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
         run: |
           $ver = "${{ inputs.release_tag }}"
           if ([string]::IsNullOrWhiteSpace($ver)) {
             $ver = "${{ github.ref_name }}"
           }
           "RELEASE_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          
-          if (!(Test-Path .env.prod)) {
-            Copy-Item .env.example .env.prod
-          }
-          (Get-Content .env.prod) -replace 'APP_VERSION=.*', "APP_VERSION=$ver" | Set-Content .env.prod
+
+          @"
+          APP_ENV=production
+          APP_NAME=ProjectNBX
+          API_BASE_URL=$env:PROD_API_BASE_URL
+          WS_BASE_URL=$env:PROD_WS_BASE_URL
+          LIVEKIT_URL=$env:PROD_LIVEKIT_URL
+          GITHUB_REPO=${{ github.repository }}
+          APP_VERSION=$ver
+          "@ | Set-Content -Path .env.prod -Encoding utf8
 
       - name: Instalar Dependências
         run: flutter pub get

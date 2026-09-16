@@ -51,7 +51,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Definir Versão e Flavor
+      - name: Definir Versão, Flavor e Gerar .env a partir de Secrets
+        env:
+          PROD_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          PROD_WS_BASE_URL: ${{ secrets.WS_BASE_URL }}
+          PROD_LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
         run: |
           if [ -n "${{ inputs.release_tag }}" ]; then
             VERSION="${{ inputs.release_tag }}"
@@ -63,11 +67,22 @@ jobs:
           FLAVOR="${{ inputs.flavor || 'prod' }}"
           echo "BUILD_FLAVOR=$FLAVOR" >> $GITHUB_ENV
 
-          ENV_FILE=".env.$FLAVOR"
-          if [ ! -f "$ENV_FILE" ]; then
-            cp .env.example "$ENV_FILE"
+          if [ "$FLAVOR" = "prod" ]; then
+            cat <<EOF > .env.prod
+          APP_ENV=production
+          APP_NAME=ProjectNBX
+          API_BASE_URL=$PROD_API_BASE_URL
+          WS_BASE_URL=$PROD_WS_BASE_URL
+          LIVEKIT_URL=$PROD_LIVEKIT_URL
+          GITHUB_REPO=${{ github.repository }}
+          APP_VERSION=$VERSION
+          EOF
+          else
+            if [ ! -f .env.dev ]; then
+              cp .env.example .env.dev
+            fi
+            sed -i "s/APP_VERSION=.*/APP_VERSION=$VERSION/g" .env.dev
           fi
-          sed -i "s/APP_VERSION=.*/APP_VERSION=$VERSION/g" "$ENV_FILE"
 
           # Garante que nenhuma propriedade org.gradle.java.home hardcoded quebre o CI
           sed -i '/org.gradle.java.home/d' android/gradle.properties || true

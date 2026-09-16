@@ -57,4 +57,5 @@ app.*.map.json
 .env
 .env.*
 *.env
-!.env.example
+!.env.example
+

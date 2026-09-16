@@ -48,6 +48,8 @@ func main() {
 	// 8. Subir Servidor HTTP
 	addr := ":" + cfg.Port
 	log.Printf("✨ Servidor HTTP & WebSocket escutando na porta %s", addr)
+	log.Printf("🩺 Health Check disponível em: http://localhost:%s/api/health (ou /health)", cfg.Port)
+	log.Printf("📖 Swagger UI disponível em: http://localhost:%s/swagger/ (ou /docs)", cfg.Port)
 	log.Printf("🎙️ LiveKit SFU configurado para: %s (API Key: %s)", cfg.LiveKitURL, cfg.LiveKitAPIKey)
 
 	if err := http.ListenAndServe(addr, handler); err != nil {
