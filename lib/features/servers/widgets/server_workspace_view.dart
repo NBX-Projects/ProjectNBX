@@ -130,7 +130,20 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             liveKitUri.host == '127.0.0.1' ||
             liveKitUri.host == 'livekit') {
           if (AppConfig.isProd) {
-            serverUrl = AppConfig.livekitUrl;
+            if (AppConfig.livekitUrl.isNotEmpty &&
+                !AppConfig.livekitUrl.contains('localhost') &&
+                !AppConfig.livekitUrl.contains('127.0.0.1')) {
+              serverUrl = AppConfig.livekitUrl;
+            } else {
+              // Fallback automático para o proxy reverso do backend Go (/api/livekit)
+              final wsScheme = apiUri.scheme == 'https' ? 'wss' : 'ws';
+              final portStr = apiUri.hasPort &&
+                      apiUri.port != 80 &&
+                      apiUri.port != 443
+                  ? ':${apiUri.port}'
+                  : '';
+              serverUrl = '$wsScheme://${apiUri.host}$portStr/api/livekit';
+            }
           } else {
             final effectivePort = liveKitUri.hasPort ? liveKitUri.port : 7880;
             serverUrl = liveKitUri

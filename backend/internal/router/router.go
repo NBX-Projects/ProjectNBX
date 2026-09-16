@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"time"
 
@@ -100,6 +102,13 @@ func (r *Router) SetupRoutes() http.Handler {
 	// Webhooks LiveKit SFU (Autenticado via assinatura HMAC/JWT do LiveKit)
 	api.HandleFunc("/livekit/webhook", liveKitWebhookHandler.HandleWebhook).Methods("POST", "OPTIONS")
 
+	// Proxy Reverso LiveKit SFU (HTTP & WebSocket para sinalização e validação WebRTC)
+	liveKitProxy := r.setupLiveKitProxy(r.cfg.LiveKitURL)
+	api.PathPrefix("/livekit/").Handler(liveKitProxy)
+	api.HandleFunc("/livekit", liveKitProxy.ServeHTTP)
+	router.PathPrefix("/livekit/").Handler(liveKitProxy)
+	router.HandleFunc("/livekit", liveKitProxy.ServeHTTP)
+
 	// Rotas Protegidas por Autenticação JWT
 	protected := api.PathPrefix("").Subrouter()
 	protected.Use(r.jwtAuthMiddleware)
@@ -145,6 +154,16 @@ func (r *Router) SetupRoutes() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(logs)
 	}).Methods("GET", "OPTIONS")
+
+	// Fallback para rotas não encontradas com cabeçalhos CORS garantidos
+	router.NotFoundHandler = r.corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Rota não encontrada",
+			"path":  req.URL.Path,
+		})
+	}))
 
 	return router
 }
@@ -273,5 +292,86 @@ func (r *Router) handleHealthCheck(w http.ResponseWriter, req *http.Request) {
 			},
 		},
 	})
+}
+
+// setupLiveKitProxy configura o proxy reverso para encaminhar tráfego HTTP e WebSocket (WebRTC) ao LiveKit SFU
+func (r *Router) setupLiveKitProxy(targetURLStr string) http.Handler {
+	if strings.TrimSpace(targetURLStr) == "" {
+		targetURLStr = "http://localhost:7880"
+	}
+	if strings.HasPrefix(targetURLStr, "ws://") {
+		targetURLStr = "http://" + strings.TrimPrefix(targetURLStr, "ws://")
+	} else if strings.HasPrefix(targetURLStr, "wss://") {
+		targetURLStr = "https://" + strings.TrimPrefix(targetURLStr, "wss://")
+	}
+	targetURL, err := url.Parse(targetURLStr)
+	if err != nil {
+		log.Printf("⚠️ Erro ao parsear LIVEKIT_URL para proxy (%s): %v", targetURLStr, err)
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			http.Error(w, `{"error":"Configuração inválida de LIVEKIT_URL"}`, http.StatusInternalServerError)
+		})
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		path := req.URL.Path
+		if strings.HasPrefix(path, "/api/livekit") {
+			path = strings.TrimPrefix(path, "/api/livekit")
+		} else if strings.HasPrefix(path, "/livekit") {
+			path = strings.TrimPrefix(path, "/livekit")
+		}
+		if path == "" || !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+		req.URL.Path = path
+		if req.URL.RawPath != "" {
+			rawPath := req.URL.RawPath
+			if strings.HasPrefix(rawPath, "/api/livekit") {
+				rawPath = strings.TrimPrefix(rawPath, "/api/livekit")
+			} else if strings.HasPrefix(rawPath, "/livekit") {
+				rawPath = strings.TrimPrefix(rawPath, "/livekit")
+			}
+			if rawPath == "" || !strings.HasPrefix(rawPath, "/") {
+				rawPath = "/" + rawPath
+			}
+			req.URL.RawPath = rawPath
+		}
+		req.Host = targetURL.Host
+	}
+
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		origin := resp.Request.Header.Get("Origin")
+		if origin != "" {
+			resp.Header.Set("Access-Control-Allow-Origin", origin)
+		} else if r.cfg.AllowedOrigins != "" && r.cfg.AllowedOrigins != "*" {
+			resp.Header.Set("Access-Control-Allow-Origin", r.cfg.AllowedOrigins)
+		} else {
+			resp.Header.Set("Access-Control-Allow-Origin", "*")
+		}
+		resp.Header.Set("Access-Control-Allow-Credentials", "true")
+		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+		resp.Header.Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Origin, X-Requested-With")
+		return nil
+	}
+
+	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, proxyErr error) {
+		log.Printf("[LiveKit Proxy Error] %s %s: %v", req.Method, req.URL.Path, proxyErr)
+		origin := req.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "LiveKit SFU indisponível ou inacessível no momento",
+			"details": proxyErr.Error(),
+		})
+	}
+
+	return proxy
 }
 

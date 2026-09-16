@@ -121,5 +121,89 @@ func TestRouter_SetupRoutes(t *testing.T) {
 	if authRR.Code != http.StatusOK {
 		t.Errorf("Expected status 200 OK for /api/servers with token, got %d: %s", authRR.Code, authRR.Body.String())
 	}
+
+	// Test LiveKit Preflight OPTIONS (/api/livekit/rtc/validate)
+	lkOptReq := httptest.NewRequest("OPTIONS", "/api/livekit/rtc/validate", nil)
+	lkOptReq.Header.Set("Origin", "https://nbx-projects.github.io")
+	lkOptRR := httptest.NewRecorder()
+	handler.ServeHTTP(lkOptRR, lkOptReq)
+
+	if lkOptRR.Code != http.StatusOK {
+		t.Errorf("Expected status 200 OK for LiveKit OPTIONS, got %d", lkOptRR.Code)
+	}
+	if origin := lkOptRR.Header().Get("Access-Control-Allow-Origin"); origin != "https://nbx-projects.github.io" && origin != "*" {
+		t.Errorf("Expected CORS origin header, got %s", origin)
+	}
+
+	// Test 404 NotFoundHandler with CORS
+	nfReq := httptest.NewRequest("GET", "/api/rota_inexistente", nil)
+	nfReq.Header.Set("Origin", "https://nbx-projects.github.io")
+	nfRR := httptest.NewRecorder()
+	handler.ServeHTTP(nfRR, nfReq)
+
+	if nfRR.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404 for unknown route, got %d", nfRR.Code)
+	}
+	if origin := nfRR.Header().Get("Access-Control-Allow-Origin"); origin == "" {
+		t.Errorf("Expected CORS header on 404 response, got empty")
+	}
 }
+
+func TestRouter_LiveKitProxy(t *testing.T) {
+	// Mock LiveKit backend server
+	var receivedPath string
+	var receivedQuery string
+	mockLiveKit := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		receivedPath = req.URL.Path
+		receivedQuery = req.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"validated"}`))
+	}))
+	defer mockLiveKit.Close()
+
+	cfg := &config.Config{
+		JWTSecret:      "test-secret",
+		LiveKitURL:     mockLiveKit.URL,
+		AllowedOrigins: "*",
+	}
+	repo := repository.NewMemoryRepository()
+	jwtService := auth.NewJWTService(cfg.JWTSecret)
+	hub := websocket.NewHub(nil)
+
+	r := NewRouter(cfg, repo, jwtService, hub)
+	handler := r.SetupRoutes()
+
+	// Test forwarding to /api/livekit/rtc/validate?token=123
+	req := httptest.NewRequest("GET", "/api/livekit/rtc/validate?token=123", nil)
+	req.Header.Set("Origin", "https://nbx-projects.github.io")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 OK from LiveKit proxy, got %d", rr.Code)
+	}
+	if receivedPath != "/rtc/validate" {
+		t.Errorf("Expected path /rtc/validate at LiveKit, got %s", receivedPath)
+	}
+	if receivedQuery != "token=123" {
+		t.Errorf("Expected query token=123, got %s", receivedQuery)
+	}
+	if origin := rr.Header().Get("Access-Control-Allow-Origin"); origin != "https://nbx-projects.github.io" && origin != "*" {
+		t.Errorf("Expected CORS header on proxy response, got %s", origin)
+	}
+
+	// Test direct /livekit prefix forwarding without /api
+	reqDirect := httptest.NewRequest("GET", "/livekit/rtc/validate?direct=true", nil)
+	rrDirect := httptest.NewRecorder()
+	handler.ServeHTTP(rrDirect, reqDirect)
+
+	if rrDirect.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 OK from /livekit direct proxy, got %d", rrDirect.Code)
+	}
+	if receivedPath != "/rtc/validate" {
+		t.Errorf("Expected path /rtc/validate at LiveKit for direct proxy, got %s", receivedPath)
+	}
+}
+
 
