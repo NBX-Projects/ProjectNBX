@@ -50,9 +50,15 @@ jobs:
       - name: Deploy Backend via Docker Compose
         run: |
           ssh ${{ secrets.SSH_SERVER }} "
+            mkdir -p ~/projetos &&
+            if [ ! -d ~/projetos/ProjectNBX ]; then
+              echo 'Diretório não encontrado. Clonando repositório...'
+              git clone https://github.com/${{ github.repository }}.git ~/projetos/ProjectNBX || git clone git@github.com:${{ github.repository }}.git ~/projetos/ProjectNBX
+            fi
             cd ~/projetos/ProjectNBX &&
             git pull origin main &&
             cd backend &&
             docker compose build --no-cache api &&
             docker compose up -d --force-recreate
           "
+
