@@ -64,8 +64,10 @@ jobs:
         run: flutter pub get
 
       - name: Compilar Flutter Windows Release
+        shell: pwsh
         run: |
-          flutter build windows --release --dart-define-from-file=.env.prod
+          $cleanVer = $env:RELEASE_VERSION -replace '^v',''
+          flutter build windows --release --build-name=$cleanVer --dart-define-from-file=.env.prod
 
       - name: Compilar Instalador Inno Setup (.exe)
         shell: pwsh

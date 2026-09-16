@@ -39,9 +39,23 @@ class AppConfig {
   );
 
   static String? _resolvedVersion;
+  static String? _mockVersion;
 
   /// Retorna a versão da aplicação (resolvida dinamicamente via PackageInfo quando disponível, ou definida via build/fallback)
-  static String get version => _resolvedVersion ?? _defaultVersion;
+  static String get version {
+    if (_mockVersion != null) {
+      return _mockVersion!;
+    }
+    final defaultVer = _defaultVersion.trim().replaceAll(RegExp(r'^[vV]'), '');
+    if (defaultVer.isNotEmpty && defaultVer != '1.0.0') {
+      return defaultVer;
+    }
+    final resolved = _resolvedVersion?.trim().replaceAll(RegExp(r'^[vV]'), '');
+    if (resolved != null && resolved.isNotEmpty) {
+      return resolved;
+    }
+    return defaultVer.isNotEmpty ? defaultVer : '1.0.0';
+  }
 
   static bool get isDev =>
       environment.toLowerCase().startsWith('dev') ||
@@ -63,6 +77,7 @@ class AppConfig {
 
   /// Permite sobrescrever a versão para cenários de testes unitários
   static void setMockVersion(String? mockVersion) {
+    _mockVersion = mockVersion;
     _resolvedVersion = mockVersion;
   }
 }

@@ -65,7 +65,8 @@ jobs:
 
       - name: Compilar Flutter Web
         run: |
-          flutter build web --release --base-href "/ProjectNBX/" --dart-define-from-file=.env.prod
+          CLEAN_VER=$(echo "${{ env.RELEASE_VERSION }}" | sed 's/^v//')
+          flutter build web --release --base-href "/ProjectNBX/" --build-name=$CLEAN_VER --dart-define-from-file=.env.prod
 
       - name: Configurar Artefato do GitHub Pages
         uses: actions/upload-pages-artifact@v3

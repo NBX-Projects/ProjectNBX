@@ -92,7 +92,8 @@ jobs:
 
       - name: Compilar APK Android
         run: |
-          flutter build apk --flavor ${{ env.BUILD_FLAVOR }} --dart-define-from-file=.env.${{ env.BUILD_FLAVOR }} --release
+          CLEAN_VER=$(echo "${{ env.RELEASE_VERSION }}" | sed 's/^v//')
+          flutter build apk --flavor ${{ env.BUILD_FLAVOR }} --build-name=$CLEAN_VER --dart-define-from-file=.env.${{ env.BUILD_FLAVOR }} --release
 
       - name: Preparar Arquivos de Distribuição
         run: |
