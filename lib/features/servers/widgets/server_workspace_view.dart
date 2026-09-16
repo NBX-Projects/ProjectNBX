@@ -911,22 +911,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       final apiClient = ref.read(apiClientProvider);
       final apiMsgs = await apiClient.getMessages(widget.server.id, channelId);
       if (mounted) {
-        final mapped = apiMsgs.map((m) {
-          final authorName = (m['author'] is Map)
-              ? (m['author']['username'] ?? 'Usuário')
-              : (m['author_id'] ?? 'Usuário');
-          return ChatMessage(
-            id: (m['id'] ?? 'msg_${DateTime.now().microsecondsSinceEpoch}')
-                .toString(),
-            author: authorName.toString(),
-            authorColor: _selectedAccentColor,
-            content: (m['content'] ?? '').toString(),
-            isEdited: m['is_edited'] == true,
-            timestamp: m['created_at'] != null
-                ? DateTime.tryParse(m['created_at'].toString())
-                : null,
-          );
-        }).toList();
+        final mapped = apiMsgs
+            .map((m) => ChatMessage.fromApi(m, _selectedAccentColor))
+            .toList();
 
         setState(() {
           _channelMessages[channelId] = mapped;

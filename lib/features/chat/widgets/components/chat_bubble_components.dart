@@ -21,8 +21,10 @@ class ChatTimestampText extends StatelessWidget {
   Widget build(BuildContext context) {
     if (timestamp == null && !isEdited) return const SizedBox.shrink();
 
-    final timeStr = timestamp != null
-        ? '${timestamp!.hour.toString().padLeft(2, '0')}:${timestamp!.minute.toString().padLeft(2, '0')}'
+    final localTimestamp = timestamp?.toLocal();
+
+    final timeStr = localTimestamp != null
+        ? '${localTimestamp.hour.toString().padLeft(2, '0')}:${localTimestamp.minute.toString().padLeft(2, '0')}'
         : '';
 
     return Row(
