@@ -25,6 +25,8 @@ import 'package:projectnbx/features/servers/widgets/invite_member_dialog.dart';
 import 'package:projectnbx/features/servers/widgets/server_home_view.dart';
 import 'package:projectnbx/features/servers/widgets/server_right_sidebar.dart';
 import 'package:projectnbx/features/servers/widgets/server_top_nav.dart';
+import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
+import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
@@ -73,6 +75,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   bool _isLiveKitConnected = false;
   String? _connectedVoiceChannelId;
   Room? _liveKitRoom;
+  Timer? _noiseGateReleaseTimer;
+  bool _isGateOpen = true;
 
   late final String _clientSessionId =
       'sess_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
@@ -90,6 +94,113 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
     }
     return null;
+  }
+
+  void _processNoiseGate(double audioLevel) {
+    if (!mounted || _liveKitRoom == null) return;
+    final audioSettings = ref.read(audioSettingsProvider);
+    final voiceState = ref.read(voiceStateProvider);
+
+    // If auto noise gate is on or mic is muted/deafened, keep standard transmission open
+    if (audioSettings.autoNoiseGate || voiceState.isMicMuted || voiceState.isDeafened) {
+      if (!_isGateOpen) {
+        _setLocalAudioTrackEnabled(true);
+        _isGateOpen = true;
+      }
+      return;
+    }
+
+    final threshold = audioSettings.noiseGateThreshold;
+
+    if (audioLevel >= threshold) {
+      // Sound reached voice threshold - open gate immediately
+      _noiseGateReleaseTimer?.cancel();
+      _noiseGateReleaseTimer = null;
+      if (!_isGateOpen) {
+        _setLocalAudioTrackEnabled(true);
+        _isGateOpen = true;
+      }
+    } else if (_isGateOpen && _noiseGateReleaseTimer == null) {
+      // Sound fell below threshold (typing, breathing, room noise) - start release countdown
+      _noiseGateReleaseTimer = Timer(
+        Duration(milliseconds: audioSettings.noiseGateReleaseMs),
+        () {
+          if (!mounted) return;
+          _setLocalAudioTrackEnabled(false);
+          _isGateOpen = false;
+          _noiseGateReleaseTimer = null;
+        },
+      );
+    }
+  }
+
+  void _setLocalAudioTrackEnabled(bool enabled) {
+    final pubs = _liveKitRoom?.localParticipant?.audioTrackPublications;
+    if (pubs == null) return;
+    for (final pub in pubs) {
+      final track = pub.track;
+      if (track is LocalAudioTrack) {
+        track.mediaStreamTrack.enabled = enabled;
+      }
+    }
+  }
+
+    AudioCaptureOptions _buildAudioCaptureOptions() {
+    final audioSettings = ref.read(audioSettingsProvider);
+    final selectedInputId = ref.read(audioDevicesProvider).selectedInputDeviceId;
+    final deviceId = (selectedInputId == null || selectedInputId == 'default')
+        ? null
+        : selectedInputId;
+    return audioSettings.toAudioCaptureOptions(deviceId: deviceId);
+  }
+
+  Future<void> _updateLiveKitAudioProcessing(AudioSettings settings) async {
+    if (_liveKitRoom == null) return;
+    try {
+      final pubs = _liveKitRoom?.localParticipant?.audioTrackPublications;
+      if (pubs == null) return;
+      for (final pub in pubs) {
+        final track = pub.track;
+        if (track is LocalAudioTrack) {
+          try {
+            // ignore: experimental_member_use
+            await track.setAudioProcessingOptions(settings.toAudioProcessingOptions());
+            debugPrint('[LiveKit] Opções de áudio atualizadas dinamicamente');
+          } catch (_) {
+            track.currentOptions = track.currentOptions.copyWith(
+              echoCancellation: settings.echoCancellation,
+              noiseSuppression: settings.noiseSuppression,
+              autoGainControl: settings.compressorEnabled,
+              highPassFilter: settings.highPassFilter,
+              typingNoiseDetection: settings.typingNoiseDetection,
+              voiceIsolation: settings.noiseSuppression,
+            );
+            await track.restartTrack();
+            debugPrint('[LiveKit] Track de áudio reiniciado com novo processamento');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[LiveKit] Erro ao atualizar processamento de áudio dinamicamente: $e');
+    }
+  }
+
+  Future<void> _updateLiveKitAudioDevice(String? deviceId) async {
+    if (_liveKitRoom == null || deviceId == null) return;
+    try {
+      final pubs = _liveKitRoom?.localParticipant?.audioTrackPublications;
+      if (pubs == null) return;
+      final targetId = deviceId == 'default' ? '' : deviceId;
+      for (final pub in pubs) {
+        final track = pub.track;
+        if (track is LocalAudioTrack) {
+          await track.setDeviceId(targetId);
+          debugPrint('[LiveKit] Dispositivo de microfone atualizado: $targetId');
+        }
+      }
+    } catch (e) {
+      debugPrint('[LiveKit] Erro ao trocar dispositivo de áudio: $e');
+    }
   }
 
   Future<void> _connectToLiveKitVoice(String channelId) async {
@@ -154,10 +265,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
       } catch (_) {}
 
+      final captureOptions = _buildAudioCaptureOptions();
       final room = Room(
-        roomOptions: const RoomOptions(
+        roomOptions: RoomOptions(
           adaptiveStream: true,
           dynacast: true,
+          defaultAudioCaptureOptions: captureOptions,
         ),
       );
       _liveKitRoom = room;
@@ -189,6 +302,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 _voiceParticipants[channelId]![uid]!.copyWith(isMuted: false);
           }
           setState(() {});
+        } else if (event is ActiveSpeakersChangedEvent) {
+          final localSid = room.localParticipant?.sid;
+          for (final speaker in event.speakers) {
+            if (speaker.sid == localSid) {
+              _processNoiseGate(speaker.audioLevel);
+              break;
+            }
+          }
         }
       });
 
@@ -199,7 +320,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       final currentVoiceState = ref.read(voiceStateProvider);
       final shouldMuteMic = currentVoiceState.isMicMuted || currentVoiceState.isDeafened;
       try {
-        await room.localParticipant?.setMicrophoneEnabled(!shouldMuteMic);
+        await room.localParticipant?.setMicrophoneEnabled(!shouldMuteMic, audioCaptureOptions: captureOptions);
       } catch (_) {}
 
       // Se já estiver ensurdecido ao conectar, muta o áudio remoto imediatamente
@@ -257,6 +378,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   Future<void> _disconnectFromLiveKitVoice() async {
     if (_liveKitRoom != null) {
       try {
+        _noiseGateReleaseTimer?.cancel();
+        _noiseGateReleaseTimer = null;
+        _isGateOpen = true;
         await _liveKitRoom?.disconnect();
         await _liveKitRoom?.dispose();
         final chId = _connectedVoiceChannelId ?? _activeChannel?.id;
@@ -348,7 +472,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final isDeafened = ref.read(voiceStateProvider).isDeafened;
     final shouldMute = isMuted || isDeafened;
     try {
-      await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMute);
+      final captureOptions = _buildAudioCaptureOptions();
+      await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMute, audioCaptureOptions: captureOptions);
       debugPrint('[LiveKit] Microfone alterado: isMuted=$isMuted, shouldMute=$shouldMute');
     } catch (e) {
       debugPrint('[LiveKit] Erro ao alterar microfone: $e');
@@ -388,7 +513,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
         final voiceState = ref.read(voiceStateProvider);
         final shouldMuteMic = isDeafened || voiceState.isMicMuted;
-        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMuteMic);
+        final captureOptions = _buildAudioCaptureOptions();
+        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMuteMic, audioCaptureOptions: captureOptions);
       }
       debugPrint('[LiveKit] Áudio alterado (deafen): isDeafened=$isDeafened');
     } catch (e) {
@@ -740,6 +866,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   @override
   void dispose() {
+    _noiseGateReleaseTimer?.cancel();
+    _noiseGateReleaseTimer = null;
     _streamRefreshTimer?.cancel();
     _localScreenShareTrack?.stop();
     _localScreenShareTrack?.dispose();
@@ -1421,6 +1549,18 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AudioSettings>(audioSettingsProvider, (previous, next) {
+      if (previous != next) {
+        _updateLiveKitAudioProcessing(next);
+      }
+    });
+
+    ref.listen<AudioDevicesState>(audioDevicesProvider, (previous, next) {
+      if (previous?.selectedInputDeviceId != next.selectedInputDeviceId) {
+        _updateLiveKitAudioDevice(next.selectedInputDeviceId);
+      }
+    });
+
     ref.listen<VoiceState>(voiceStateProvider, (previous, next) {
       if (previous?.isMicMuted != next.isMicMuted) {
         _applyMicState(next.isMicMuted);

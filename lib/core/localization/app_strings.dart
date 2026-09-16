@@ -110,16 +110,46 @@ class AppStrings {
   String get audioProcessing => isPt ? 'PROCESSAMENTO DE ÁUDIO' : 'AUDIO PROCESSING';
   String get noiseSuppression => isPt ? 'Supressão de Ruído de Fundo' : 'Background Noise Suppression';
   String get noiseSuppressionDesc => isPt
-      ? 'Filtra sons de digitação, ventilação e ruídos externos'
-      : 'Filters typing, fans, and ambient background noises';
+      ? 'Filtra ventilação, zumbidos elétricos e ruídos constantes da sala'
+      : 'Filters fan noise, electrical hum, and constant ambient noise';
+  String get typingNoiseSuppression => isPt ? 'Supressão de Teclado & Cliques' : 'Keyboard & Click Suppression';
+  String get typingNoiseSuppressionDesc => isPt
+      ? 'Atenua cliques de teclas mecânicas e cliques de mouse durante a fala'
+      : 'Attenuates mechanical keyboard clicks and mouse clicks while speaking';
   String get echoCancellation => isPt ? 'Cancelamento de Eco Acústico' : 'Acoustic Echo Cancellation';
   String get echoCancellationDesc => isPt
       ? 'Evita retorno de áudio durante chamadas coletivas'
       : 'Prevents audio feedback during group calls';
+  String get compressor => isPt ? 'Compressor de Áudio / Ganho Automático (AGC)' : 'Audio Compressor / Auto Gain (AGC)';
+  String get compressorDesc => isPt
+      ? 'Normaliza o volume da voz, reduz picos altos e amplifica falas baixas'
+      : 'Normalizes voice volume, prevents clipping peaks, and boosts quiet speech';
+  String get highPassFilter => isPt ? 'Filtro High-Pass' : 'High-Pass Filter';
+  String get highPassFilterDesc => isPt
+      ? 'Atenua frequências graves indesejadas, vibrações de mesa e sopros'
+      : 'Attenuates low rumble, desk vibrations, and plosives';
   String get vadOptimization => isPt ? 'Transmissão Inteligente de Voz (VAD)' : 'Smart Voice Transmission (VAD)';
   String get vadOptimizationDesc => isPt
       ? 'Transmite apenas quando a voz for detectada para máxima estabilidade'
       : 'Transmits only when voice is detected for peak stability';
+
+  // Noise Gate / Input Sensitivity
+  String get inputSensitivity => isPt ? 'SENSIBILIDADE DE ENTRADA & GATE DE RUÍDO' : 'INPUT SENSITIVITY & NOISE GATE';
+  String get inputSensitivityDesc => isPt
+      ? 'Define o limiar mínimo de som para o microfone abrir a transmissão'
+      : 'Determines the minimum sound level required for the mic to transmit';
+  String get autoSensitivity => isPt ? 'Sensibilidade de Entrada Automática' : 'Automatic Input Sensitivity';
+  String get autoSensitivityDesc => isPt
+      ? 'O sistema calibra dinamicamente o corte de ruído de acordo com a sala'
+      : 'The system dynamically calibrates the noise cut according to your room';
+  String get noiseGateThreshold => isPt ? 'Limiar de Corte (Noise Gate)' : 'Cutoff Threshold (Noise Gate)';
+  String get noiseGateThresholdDesc => isPt
+      ? 'Sons abaixo deste nível (ex: teclas e respiração) permanecem em silêncio'
+      : 'Sounds below this level (e.g. keystrokes and breathing) remain muted';
+  String get noiseGateRelease => isPt ? 'Tempo de Liberação (Hangover)' : 'Release Time (Hangover)';
+  String get noiseGateReleaseDesc => isPt
+      ? 'Mantém o microfone aberto por breves momentos para não cortar o fim das frases'
+      : 'Keeps the mic open briefly to avoid cutting off the end of words';
 
   String get hotkeysAndPTT => isPt ? 'Atalhos & Push-to-Talk' : 'Shortcuts & Push-to-Talk';
   String get hotkeysDescription => isPt
