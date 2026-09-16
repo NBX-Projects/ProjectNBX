@@ -127,8 +127,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
+          name: ${{ env.RELEASE_VERSION }}
           files: |
             dist/ProjectNBX-*-android.apk
-          generate_release_notes: true
           draft: false
           prerelease: false
