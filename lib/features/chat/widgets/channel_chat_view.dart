@@ -17,6 +17,7 @@ class ChannelChatView extends StatelessWidget {
   final TextEditingController messageController;
   final TextEditingController editMessageController;
   final ScrollController scrollController;
+  final FocusNode? messageFocusNode;
   final String? editingMessageId;
   final bool isTransmitting;
   final bool isInVoice;
@@ -47,6 +48,7 @@ class ChannelChatView extends StatelessWidget {
     required this.messageController,
     required this.editMessageController,
     required this.scrollController,
+    this.messageFocusNode,
     this.editingMessageId,
     required this.isTransmitting,
     required this.isInVoice,
@@ -570,21 +572,19 @@ class ChannelChatView extends StatelessWidget {
                       ),
                     ),
                   )
-                : Align(
-                    alignment: Alignment.bottomCenter,
-                    child: ListView.builder(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      shrinkWrap: true,
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final msg = messages[index];
-                        final isEditing = editingMessageId == msg.id;
-                        final isMine =
-                            msg.author == username || msg.author == 'Você';
+                : ListView.builder(
+                    controller: scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = messages[messages.length - 1 - index];
+                      final isEditing = editingMessageId == msg.id;
+                      final isMine =
+                          msg.author == username || msg.author == 'Você';
                         final initials = getAuthorInitials(msg.author);
                         final authorColor = resolveAuthorColor(
                           msg.author,
@@ -662,7 +662,6 @@ class ChannelChatView extends StatelessWidget {
                         }
                       },
                     ),
-                  ),
           ),
 
           // 4. Message Input Bar
@@ -719,6 +718,7 @@ class ChannelChatView extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: messageController,
+                      focusNode: messageFocusNode,
                       style: GoogleFonts.inter(
                         fontSize: 13.5,
                         color: isDark ? Colors.white : const Color(0xFF0F172A),
@@ -744,7 +744,10 @@ class ChannelChatView extends StatelessWidget {
                               : const Color(0xFF94A3B8),
                         ),
                       ),
-                      onSubmitted: (_) => onSendMessage(channelKey, username),
+                      onSubmitted: (_) {
+                        onSendMessage(channelKey, username);
+                        messageFocusNode?.requestFocus();
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -762,7 +765,10 @@ class ChannelChatView extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   InkWell(
-                    onTap: () => onSendMessage(channelKey, username),
+                    onTap: () {
+                      onSendMessage(channelKey, username);
+                      messageFocusNode?.requestFocus();
+                    },
                     mouseCursor: SystemMouseCursors.click,
                     borderRadius: BorderRadius.circular(9999),
                     child: Icon(

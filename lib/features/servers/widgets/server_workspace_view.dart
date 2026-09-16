@@ -54,6 +54,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _editMessageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _messageFocusNode = FocusNode();
   final Map<String, List<ChatMessage>> _channelMessages = {};
 
   StreamSubscription<Map<String, dynamic>>? _wsSubscription;
@@ -609,7 +610,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients) {
             _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
+              0.0,
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
             );
@@ -745,6 +746,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     _localScreenShareTrack = null;
     _wsSubscription?.cancel();
     _disconnectFromLiveKitVoice();
+    _messageFocusNode.dispose();
     _messageController.dispose();
     _editMessageController.dispose();
     _scrollController.dispose();
@@ -753,7 +755,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   Future<void> _sendMessage(String channelKey, String authorName) async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      _messageFocusNode.requestFocus();
+      return;
+    }
 
     final targetChannelId = _activeChannel?.id ?? channelKey;
     final tempId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
@@ -770,12 +775,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _messageController.clear();
     });
 
+    _messageFocusNode.requestFocus();
+
     await _saveChannelMessages(targetChannelId);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0.0,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
@@ -790,6 +797,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       channelId: targetChannelId,
       serverId: widget.server.id,
     );
+
+    _messageFocusNode.requestFocus();
   }
 
   void _startEditingMessage(ChatMessage msg) {
@@ -1259,6 +1268,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         messageController: _messageController,
         editMessageController: _editMessageController,
         scrollController: _scrollController,
+        messageFocusNode: _messageFocusNode,
         editingMessageId: _editingMessageId,
         isTransmitting: _isTransmitting,
         isInVoice: _isInVoice,
@@ -1366,6 +1376,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 activeChannel: _activeChannel,
                 messageController: _messageController,
                 scrollController: _scrollController,
+                messageFocusNode: _messageFocusNode,
                 voiceState: voiceState,
                 voiceNotifier: voiceNotifier,
                 onClose: () => setState(() => _isChatVisible = false),

@@ -87,6 +87,7 @@ class FloatingChatHud extends StatelessWidget {
   final ChannelModel? activeChannel;
   final TextEditingController messageController;
   final ScrollController scrollController;
+  final FocusNode? messageFocusNode;
   final VoiceState voiceState;
   final VoiceStateNotifier voiceNotifier;
   final VoidCallback onClose;
@@ -106,6 +107,7 @@ class FloatingChatHud extends StatelessWidget {
     this.activeChannel,
     required this.messageController,
     required this.scrollController,
+    this.messageFocusNode,
     required this.voiceState,
     required this.voiceNotifier,
     required this.onClose,
@@ -258,13 +260,14 @@ class FloatingChatHud extends StatelessWidget {
                       )
                     : ListView.builder(
                         controller: scrollController,
+                        reverse: true,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 6,
                         ),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
-                          final msg = messages[index];
+                          final msg = messages[messages.length - 1 - index];
                           final isMine =
                               msg.author == username || msg.author == 'Você';
                           return Padding(
@@ -371,6 +374,7 @@ class FloatingChatHud extends StatelessWidget {
                       Expanded(
                         child: TextField(
                           controller: messageController,
+                          focusNode: messageFocusNode,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.white,
@@ -392,13 +396,18 @@ class FloatingChatHud extends StatelessWidget {
                             filled: false,
                             contentPadding: EdgeInsets.zero,
                           ),
-                          onSubmitted: (_) =>
-                              onSendMessage(channelKey, username),
+                          onSubmitted: (_) {
+                            onSendMessage(channelKey, username);
+                            messageFocusNode?.requestFocus();
+                          },
                         ),
                       ),
                       const SizedBox(width: 8),
                       InkWell(
-                        onTap: () => onSendMessage(channelKey, username),
+                        onTap: () {
+                          onSendMessage(channelKey, username);
+                          messageFocusNode?.requestFocus();
+                        },
                         mouseCursor: SystemMouseCursors.click,
                         borderRadius: BorderRadius.circular(9999),
                         child: const Padding(
