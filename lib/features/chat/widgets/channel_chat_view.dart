@@ -26,10 +26,10 @@ class ChannelChatView extends StatelessWidget {
   final bool isRightSidebarVisible;
   final Color accentColor;
   final VoiceParticipantInfo? activeBroadcaster;
-  final VoidCallback onToggleTransmission;
-  final VoidCallback onToggleVoiceChannel;
-  final VoidCallback onToggleRightSidebar;
-  final VoidCallback onWatchLive;
+  final VoidCallback? onToggleTransmission;
+  final VoidCallback? onToggleVoiceChannel;
+  final VoidCallback? onToggleRightSidebar;
+  final VoidCallback? onWatchLive;
   final void Function(String channelKey, String author) onSendMessage;
   final void Function(String messageId) onStartEditing;
   final VoidCallback onCancelEditing;
@@ -50,17 +50,17 @@ class ChannelChatView extends StatelessWidget {
     required this.scrollController,
     this.messageFocusNode,
     this.editingMessageId,
-    required this.isTransmitting,
-    required this.isInVoice,
+    this.isTransmitting = false,
+    this.isInVoice = false,
     this.isConnectingVoice = false,
     this.isVoiceConnected = false,
-    required this.isRightSidebarVisible,
+    this.isRightSidebarVisible = false,
     this.accentColor = const Color(0xFFF5CBA7),
     this.activeBroadcaster,
-    required this.onToggleTransmission,
-    required this.onToggleVoiceChannel,
-    required this.onToggleRightSidebar,
-    required this.onWatchLive,
+    this.onToggleTransmission,
+    this.onToggleVoiceChannel,
+    this.onToggleRightSidebar,
+    this.onWatchLive,
     required this.onSendMessage,
     required this.onStartEditing,
     required this.onCancelEditing,
@@ -85,249 +85,7 @@ class ChannelChatView extends StatelessWidget {
       color: isDark ? const Color(0xFF13141F) : const Color(0xFFFAF9F6),
       child: Column(
         children: [
-          // 1. Channel Header Bar
-          Container(
-            height: 52,
-            padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141522) : const Color(0xFFFFFFFF),
-              border: Border(
-                bottom: BorderSide(
-                  color: isDark
-                      ? const Color(0xFF202234)
-                      : const Color(0xFFE2E8F0),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(LucideIcons.hash, size: 18, color: accentColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          activeChannelName,
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: isMobile ? 14.5 : 16,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? AppColors.darkTextPrimary
-                                : AppColors.lightTextPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (!isMobile) ...[
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: Text(
-                            'Canal Híbrido · Texto, Voz e Transmissão integrados',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: isDark
-                                  ? const Color(0xFF64748B)
-                                  : AppColors.lightTextMuted,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                      if (isInVoice) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: isConnectingVoice
-                                ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
-                                : const Color(0xFF10B981).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isConnectingVoice
-                                  ? const Color(0xFFF59E0B).withValues(alpha: 0.4)
-                                  : const Color(0xFF10B981).withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isConnectingVoice)
-                                const SizedBox(
-                                  width: 10,
-                                  height: 10,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFFF59E0B),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF10B981),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              const SizedBox(width: 6),
-                              Text(
-                                isConnectingVoice ? 'Conectando ao LiveKit...' : 'Conectado',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: isConnectingVoice ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Transmitir Tela Button
-                if (isMobile)
-                  IconButton(
-                    onPressed: onToggleTransmission,
-                    icon: Icon(
-                      isTransmitting
-                          ? LucideIcons.screenShareOff
-                          : LucideIcons.screenShare,
-                      size: 18,
-                      color: isTransmitting
-                          ? const Color(0xFFEF4444)
-                          : accentColor,
-                    ),
-                    tooltip: isTransmitting
-                        ? 'Parar Transmissão'
-                        : 'Transmitir Tela',
-                  )
-                else
-                  ElevatedButton.icon(
-                    onPressed: onToggleTransmission,
-                    icon: Icon(
-                      isTransmitting
-                          ? LucideIcons.screenShareOff
-                          : LucideIcons.screenShare,
-                      size: 14,
-                    ),
-                    label: Text(
-                      isTransmitting ? 'Parar Live' : 'Transmitir',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isTransmitting
-                          ? const Color(0xFFEF4444)
-                          : accentColor,
-                      foregroundColor: isTransmitting
-                          ? Colors.white
-                          : const Color(0xFF181926),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                    ),
-                  ),
-
-                const SizedBox(width: 8),
-
-                // Entrar na Chamada de Voz
-                if (isMobile)
-                  IconButton(
-                    onPressed: onToggleVoiceChannel,
-                    icon: isConnectingVoice
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFFF59E0B),
-                            ),
-                          )
-                        : Icon(
-                            isInVoice ? LucideIcons.phoneOff : LucideIcons.phoneCall,
-                            size: 18,
-                            color: isInVoice
-                                ? const Color(0xFFEF4444)
-                                : const Color(0xFF10B981),
-                          ),
-                    tooltip: isConnectingVoice
-                        ? 'Conectando ao LiveKit...'
-                        : (isInVoice ? 'Desconectar' : 'Entrar na Voz'),
-                  )
-                else
-                  ElevatedButton.icon(
-                    onPressed: onToggleVoiceChannel,
-                    icon: isConnectingVoice
-                        ? const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Icon(
-                            isInVoice ? LucideIcons.phoneOff : LucideIcons.phoneCall,
-                            size: 13,
-                          ),
-                    label: Text(
-                      isConnectingVoice
-                          ? 'Conectando...'
-                          : (isInVoice ? 'Sair da Voz' : 'Conectar Voz'),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isConnectingVoice
-                          ? const Color(0xFFD97706)
-                          : (isInVoice
-                              ? const Color(0xFFEF4444)
-                              : const Color(0xFF10B981)),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                    ),
-                  ),
-
-                if (!isMobile) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: Icon(
-                      isRightSidebarVisible
-                          ? LucideIcons.panelRightClose
-                          : LucideIcons.panelRightOpen,
-                      size: 18,
-                      color: isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B),
-                    ),
-                    tooltip: isRightSidebarVisible
-                        ? 'Ocultar Painel Lateral'
-                        : 'Mostrar Painel Lateral',
-                    onPressed: onToggleRightSidebar,
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // 1.1 Barra de Participantes em Voz no Canal
+          // 1. Barra de Participantes em Voz no Canal
           if (_channelVoiceParticipants.isNotEmpty)
             Container(
               width: double.infinity,
@@ -502,7 +260,7 @@ class ChannelChatView extends StatelessWidget {
             ActiveLiveStreamBanner(
               isDark: isDark,
               broadcaster: activeBroadcaster!,
-              onWatchLive: onWatchLive,
+              onWatchLive: onWatchLive ?? () {},
             ),
 
           // 3. Messages List Area

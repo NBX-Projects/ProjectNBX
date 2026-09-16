@@ -1475,14 +1475,31 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           activeChannel: _activeChannel,
           accentColor: _selectedAccentColor,
           isRightSidebarVisible: _isRightSidebarVisible,
+          isTransmitting: _isTransmitting,
+          isInVoice: _isInVoice,
+          isConnectingVoice: _isConnectingLiveKit,
+          onToggleTransmission: _toggleTransmission,
+          onToggleVoiceChannel: () {
+            if (_isInVoice) {
+              _leaveVoice();
+            } else if (_activeChannel != null) {
+              _connectToLiveKitVoice(_activeChannel!.id);
+            }
+          },
           totalInVoice: _voiceParticipants.values.fold<int>(
             0,
             (sum, m) => sum + m.values.where((p) => p.isInVoice).length,
           ),
-          onBackToHome: () => setState(() {
-            _viewMode = ServerViewMode.home;
-            _watchingRemoteStream = null;
-          }),
+          onBackToHome: () {
+            if (_viewMode == ServerViewMode.channel) {
+              setState(() {
+                _viewMode = ServerViewMode.home;
+                _watchingRemoteStream = null;
+              });
+            } else {
+              widget.onBackToHome();
+            }
+          },
           onGoToHub: widget.onBackToHome,
           onInviteMembers: () => InviteMemberDialog.show(
             context,

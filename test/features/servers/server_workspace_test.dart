@@ -114,6 +114,47 @@ void main() {
       }
     });
 
+    testWidgets('ServerTopNav renders minimalist transmission and voice icons in channel view', (tester) async {
+      var transmitToggled = false;
+      var voiceToggled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ServerTopNav(
+              server: testServer,
+              isDark: true,
+              viewMode: ServerViewMode.channel,
+              activeChannel: testChannels.first,
+              accentColor: Colors.blue,
+              isRightSidebarVisible: true,
+              isTransmitting: false,
+              isInVoice: false,
+              isConnectingVoice: false,
+              onToggleTransmission: () => transmitToggled = true,
+              onToggleVoiceChannel: () => voiceToggled = true,
+              onBackToHome: () {},
+              onInviteMembers: () {},
+              onToggleRightSidebar: () {},
+              onOpenMobileChannelsSheet: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final screenShareFinder = find.byIcon(LucideIcons.screenShare);
+      expect(screenShareFinder, findsOneWidget);
+      await tester.tap(screenShareFinder);
+      expect(transmitToggled, isTrue);
+
+      final phoneFinder = find.byIcon(LucideIcons.phoneCall);
+      expect(phoneFinder, findsOneWidget);
+      await tester.tap(phoneFinder);
+      expect(voiceToggled, isTrue);
+    });
+
     testWidgets('ServerHomeView renders hero banner and channels', (tester) async {
       await tester.pumpWidget(
         MaterialApp(

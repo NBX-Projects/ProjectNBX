@@ -14,11 +14,16 @@ class ServerTopNav extends StatelessWidget {
   final Color accentColor;
   final bool isRightSidebarVisible;
   final VoidCallback onBackToHome;
-  final VoidCallback onGoToHub;
+  final VoidCallback? onGoToHub;
   final VoidCallback onInviteMembers;
   final VoidCallback onToggleRightSidebar;
   final VoidCallback onOpenMobileChannelsSheet;
   final int totalInVoice;
+  final bool isTransmitting;
+  final bool isInVoice;
+  final bool isConnectingVoice;
+  final VoidCallback? onToggleTransmission;
+  final VoidCallback? onToggleVoiceChannel;
 
   const ServerTopNav({
     super.key,
@@ -29,11 +34,16 @@ class ServerTopNav extends StatelessWidget {
     required this.accentColor,
     required this.isRightSidebarVisible,
     required this.onBackToHome,
-    required this.onGoToHub,
+    this.onGoToHub,
     required this.onInviteMembers,
     required this.onToggleRightSidebar,
     required this.onOpenMobileChannelsSheet,
     this.totalInVoice = 0,
+    this.isTransmitting = false,
+    this.isInVoice = false,
+    this.isConnectingVoice = false,
+    this.onToggleTransmission,
+    this.onToggleVoiceChannel,
   });
 
   @override
@@ -54,75 +64,21 @@ class ServerTopNav extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Back to Hub Button
+          // Back Button
           IconButton(
             icon: const Icon(LucideIcons.arrowLeft, size: 18),
-            tooltip: 'Voltar ao Hub Principal',
+            tooltip: viewMode == ServerViewMode.channel
+                ? 'Voltar ao Início do Servidor'
+                : 'Voltar ao Hub Principal',
             color: isDark
                 ? AppColors.darkTextSecondary
                 : AppColors.lightTextSecondary,
             onPressed: onBackToHome,
           ),
 
-          if (!isMobile) ...[
-            const SizedBox(width: 4),
-            InkWell(
-              onTap: onGoToHub,
-              mouseCursor: SystemMouseCursors.click,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: viewMode == ServerViewMode.home
-                      ? accentColor
-                      : (isDark
-                          ? const Color(0xFF1E2030)
-                          : const Color(0xFFE2E8F0)),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: viewMode == ServerViewMode.home
-                        ? Colors.transparent
-                        : (isDark
-                            ? AppColors.darkBorder
-                            : AppColors.lightBorder),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      LucideIcons.layoutGrid,
-                      size: 13,
-                      color: viewMode == ServerViewMode.home
-                          ? Colors.black
-                          : (isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Hub',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: viewMode == ServerViewMode.home
-                            ? Colors.black
-                            : (isDark
-                                ? AppColors.darkTextSecondary
-                                : AppColors.lightTextSecondary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
+          const SizedBox(width: 4),
 
-          // Server Name
+          // Server Name & Channel Path
           Expanded(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -170,7 +126,103 @@ class ServerTopNav extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
+
+          // Minimalist Transmit & Voice Channel Controls
+          if (viewMode == ServerViewMode.channel &&
+              activeChannel != null &&
+              onToggleTransmission != null) ...[
+            Tooltip(
+              message: isTransmitting ? 'Parar Transmissão' : 'Transmitir Tela',
+              child: InkWell(
+                onTap: onToggleTransmission,
+                mouseCursor: SystemMouseCursors.click,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: isTransmitting
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                        : (isDark
+                            ? const Color(0xFF1E2030)
+                            : const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isTransmitting
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                          : (isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder),
+                    ),
+                  ),
+                  child: Icon(
+                    isTransmitting
+                        ? LucideIcons.screenShareOff
+                        : LucideIcons.screenShare,
+                    size: 16,
+                    color: isTransmitting
+                        ? const Color(0xFFEF4444)
+                        : (isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+
+          if (viewMode == ServerViewMode.channel &&
+              activeChannel != null &&
+              onToggleVoiceChannel != null) ...[
+            Tooltip(
+              message: isConnectingVoice
+                  ? 'Conectando ao LiveKit...'
+                  : (isInVoice ? 'Desconectar da Voz' : 'Conectar Voz'),
+              child: InkWell(
+                onTap: onToggleVoiceChannel,
+                mouseCursor: SystemMouseCursors.click,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: isConnectingVoice
+                        ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                        : (isInVoice
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                            : const Color(0xFF10B981).withValues(alpha: 0.15)),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isConnectingVoice
+                          ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
+                          : (isInVoice
+                              ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                              : const Color(0xFF10B981).withValues(alpha: 0.5)),
+                    ),
+                  ),
+                  child: isConnectingVoice
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFF59E0B),
+                          ),
+                        )
+                      : Icon(
+                          isInVoice
+                              ? LucideIcons.phoneOff
+                              : LucideIcons.phoneCall,
+                          size: 16,
+                          color: isInVoice
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF10B981),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
 
           // Invite / Add Members Button
           InkWell(
