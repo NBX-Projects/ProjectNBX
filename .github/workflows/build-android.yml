@@ -90,6 +90,21 @@ jobs:
       - name: Instalar Dependências
         run: flutter pub get
 
+      - name: Gerar Keystore de Assinatura Release
+        run: |
+          KEYSTORE_PATH="android/app/release.jks"
+          if [ ! -f "$KEYSTORE_PATH" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_PATH" \
+              -alias projectnbx \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "projectnbx_release_pass_2026" \
+              -keypass "projectnbx_release_pass_2026" \
+              -dname "CN=ProjectNBX, OU=Mobile, O=Massco, L=Sao Paulo, ST=SP, C=BR"
+          fi
+
       - name: Compilar APK Android
         run: |
           CLEAN_VER=$(echo "${{ env.RELEASE_VERSION }}" | sed 's/^v//')
