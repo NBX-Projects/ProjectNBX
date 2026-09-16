@@ -37,7 +37,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
     );
   }
 
-
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -185,30 +184,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      strings.noiseGateThreshold,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        strings.noiseGateThreshold,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      strings.noiseGateThresholdDesc,
-                      style: GoogleFonts.inter(
-                        fontSize: 10.5,
-                        color: isDark
-                            ? AppColors.darkTextMuted
-                            : AppColors.lightTextMuted,
+                      Text(
+                        strings.noiseGateThresholdDesc,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -246,7 +248,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Container(
                     height: 10,
                     width: double.infinity,
-                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
                   ),
                   FractionallySizedBox(
                     alignment: Alignment.centerLeft,
@@ -258,8 +262,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   FractionallySizedBox(
                     alignment: Alignment.centerRight,
-                    widthFactor:
-                        (1.0 - audioSettings.noiseGateThreshold).clamp(0.0, 1.0),
+                    widthFactor: (1.0 - audioSettings.noiseGateThreshold).clamp(
+                      0.0,
+                      1.0,
+                    ),
                     child: Container(
                       height: 10,
                       color: isDark
@@ -285,9 +291,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   'Transmissão Ativa (Voz)',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 9.5,
-                    color: isDark
-                        ? AppColors.darkSage
-                        : AppColors.lightSage,
+                    color: isDark ? AppColors.darkSage : AppColors.lightSage,
                   ),
                 ),
               ],
@@ -358,10 +362,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       thumbColor: isDark
                           ? AppColors.darkPrimary
                           : AppColors.lightPrimary,
-                      overlayColor: (isDark
-                              ? AppColors.darkPrimary
-                              : AppColors.lightPrimary)
-                          .withValues(alpha: 0.2),
+                      overlayColor:
+                          (isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
+                              .withValues(alpha: 0.2),
                       trackHeight: 3,
                     ),
                     child: Slider(
@@ -1206,18 +1211,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: _buildSectionHeaderTitle(
-                  isDark,
-                  strings.voiceAndVideo,
-                  strings.voiceDescription,
-                ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: _buildSectionHeaderTitle(
+                isDark,
+                strings.voiceAndVideo,
+                strings.voiceDescription,
               ),
-              const SizedBox(width: 12),
-              Tooltip(
+            ),
+            const SizedBox(width: 12),
+            Tooltip(
               message: 'Detectar novos microfones e fones conectados',
               child: InkWell(
                 onTap: audioState.isLoading
@@ -1886,10 +1891,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: (isDark
-                                  ? AppColors.darkPrimary
-                                  : AppColors.lightPrimary)
-                              .withValues(alpha: 0.15),
+                          color:
+                              (isDark
+                                      ? AppColors.darkPrimary
+                                      : AppColors.lightPrimary)
+                                  .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
@@ -1932,14 +1938,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: (AppConfig.isDev
-                                          ? (isDark
-                                              ? AppColors.darkLavender
-                                              : AppColors.lightLavender)
-                                          : (isDark
-                                              ? AppColors.darkSage
-                                              : AppColors.lightSage))
-                                      .withValues(alpha: 0.18),
+                                  color:
+                                      (AppConfig.isDev
+                                              ? (isDark
+                                                    ? AppColors.darkLavender
+                                                    : AppColors.lightLavender)
+                                              : (isDark
+                                                    ? AppColors.darkSage
+                                                    : AppColors.lightSage))
+                                          .withValues(alpha: 0.18),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -1949,11 +1956,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     fontWeight: FontWeight.w800,
                                     color: AppConfig.isDev
                                         ? (isDark
-                                            ? AppColors.darkLavender
-                                            : AppColors.lightLavender)
+                                              ? AppColors.darkLavender
+                                              : AppColors.lightLavender)
                                         : (isDark
-                                            ? AppColors.darkSage
-                                            : AppColors.lightSage),
+                                              ? AppColors.darkSage
+                                              : AppColors.lightSage),
                                   ),
                                 ),
                               ),
