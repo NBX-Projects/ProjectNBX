@@ -26,6 +26,7 @@ import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 import 'package:projectnbx/features/servers/widgets/server_workspace_view.dart';
 import 'package:projectnbx/features/settings/screens/settings_screen.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
+import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:window_manager/window_manager.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -37,6 +38,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'home';
+  final GlobalKey _topMicKey = GlobalKey();
+  final GlobalKey _topHeadphonesKey = GlobalKey();
 
   @override
   void initState() {
@@ -343,36 +346,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const Spacer(),
 
           if (!isMobile) ...[
-            // Audio Quick Controls
-            IconButton(
-              icon: Icon(
-                voiceState.isMicMuted ? LucideIcons.micOff : LucideIcons.mic,
-                size: 18,
-                color: voiceState.isMicMuted
-                    ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
-                    : (isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary),
+            // Minimalist Audio Controls
+            GestureDetector(
+              onSecondaryTap: () => QuickAudioDeviceMenu.show(
+                context,
+                anchorKey: _topMicKey,
+                isInput: true,
               ),
-              tooltip: voiceState.isMicMuted ? 'Desmutar' : 'Mutar',
-              onPressed: () => voiceNotifier.toggleMic(),
+              child: IconButton(
+                key: _topMicKey,
+                icon: Icon(
+                  voiceState.isMicMuted ? LucideIcons.micOff : LucideIcons.mic,
+                  size: 18,
+                  color: voiceState.isMicMuted
+                      ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
+                      : (isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
+                ),
+                tooltip: voiceState.isMicMuted ? 'Desmutar' : 'Mutar',
+                onPressed: () => voiceNotifier.toggleMic(),
+              ),
             ),
-            IconButton(
-              icon: Icon(
-                voiceState.isDeafened
-                    ? LucideIcons.headphones
-                    : LucideIcons.headphones,
-                size: 18,
-                color: voiceState.isDeafened
-                    ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
-                    : (isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary),
+            GestureDetector(
+              onSecondaryTap: () => QuickAudioDeviceMenu.show(
+                context,
+                anchorKey: _topHeadphonesKey,
+                isInput: false,
               ),
-              tooltip: voiceState.isDeafened
-                  ? 'Ativar Áudio'
-                  : 'Desativar Áudio',
-              onPressed: () => voiceNotifier.toggleDeafened(),
+              child: IconButton(
+                key: _topHeadphonesKey,
+                icon: Icon(
+                  voiceState.isDeafened
+                      ? LucideIcons.headphones
+                      : LucideIcons.headphones,
+                  size: 18,
+                  color: voiceState.isDeafened
+                      ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
+                      : (isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
+                ),
+                tooltip: voiceState.isDeafened
+                    ? 'Ativar Áudio'
+                    : 'Desativar Áudio',
+                onPressed: () => voiceNotifier.toggleDeafened(),
+              ),
             ),
           ],
 

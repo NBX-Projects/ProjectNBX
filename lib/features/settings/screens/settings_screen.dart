@@ -24,13 +24,14 @@ import 'package:projectnbx/features/voice/controllers/audio_settings_controller.
 import 'package:window_manager/window_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  final String initialSection;
+  const SettingsScreen({super.key, this.initialSection = 'account'});
 
-  static Future<void> show(BuildContext context) {
+  static Future<void> show(BuildContext context, {String initialSection = 'account'}) {
     return Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const SettingsScreen(),
+            SettingsScreen(initialSection: initialSection),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: CurvedAnimation(
@@ -49,7 +50,13 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  String _selectedSection = 'account';
+  late String _selectedSection;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSection = widget.initialSection;
+  }
 
   bool get _isDesktop =>
       !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);

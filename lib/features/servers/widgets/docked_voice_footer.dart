@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
+import 'package:projectnbx/features/settings/screens/settings_screen.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
+import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
 
-/// Rodapé fixo indicando conexão ativa de áudio no canal
-class DockedVoiceFooter extends StatelessWidget {
+/// Rodapé fixo indicando conexão ativa de áudio no canal com menu rápido de dispositivos
+class DockedVoiceFooter extends StatefulWidget {
   final bool isDark;
   final String channelName;
   final String serverName;
@@ -28,12 +29,23 @@ class DockedVoiceFooter extends StatelessWidget {
   });
 
   @override
+  State<DockedVoiceFooter> createState() => _DockedVoiceFooterState();
+}
+
+class _DockedVoiceFooterState extends State<DockedVoiceFooter> {
+  final GlobalKey _micKey = GlobalKey();
+  final GlobalKey _headphoneKey = GlobalKey();
+
+  @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final effectiveBottom = bottomInset > 0 ? bottomInset + 10.0 : 12.0;
+    final isDark = widget.isDark;
+    final voiceState = widget.voiceState;
+    final voiceNotifier = widget.voiceNotifier;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(14, 12, 14, effectiveBottom),
+      padding: EdgeInsets.fromLTRB(10, 8, 10, effectiveBottom > 8 ? effectiveBottom : 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141522) : const Color(0xFFFFFFFF),
         border: Border(
@@ -57,13 +69,13 @@ class DockedVoiceFooter extends StatelessWidget {
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF22C55E).withValues(alpha: 0.65),
-                      blurRadius: 7,
-                      spreadRadius: 2,
+                      blurRadius: 6,
+                      spreadRadius: 1,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
                 'Conectado',
                 style: GoogleFonts.inter(
@@ -73,166 +85,272 @@ class DockedVoiceFooter extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Flexible(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
                 child: Text(
-                  'Conexão estável',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF10B981).withValues(alpha: 0.9),
+                  'RTC Seguro',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF22C55E),
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
-            '$channelName · $serverName',
+            '${widget.channelName} · ${widget.serverName}',
             style: GoogleFonts.inter(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w500,
-              color:
-                  isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Tooltip(
-                message: voiceState.isMicMuted
-                    ? 'Desmutar Microfone'
-                    : 'Mutar Microfone',
-                child: InkWell(
-                  onTap: () {
-                    voiceNotifier.toggleMic();
-                    onToggleMic?.call();
-                  },
-                  mouseCursor: SystemMouseCursors.click,
-                  borderRadius: AppRadius.borderSm,
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: voiceState.isMicMuted
-                          ? const Color(0xFFEF4444).withValues(alpha: 0.2)
-                          : (isDark
-                              ? const Color(0xFF1E2030)
-                              : const Color(0xFFF1F5F9)),
-                      borderRadius: AppRadius.borderSm,
-                      border: isDark
-                          ? (voiceState.isMicMuted
-                              ? Border.all(
-                                  color: const Color(0xFFEF4444).withValues(alpha: 0.4),
-                                  width: 1,
-                                )
-                              : null)
-                          : Border.all(
-                              color: voiceState.isMicMuted
-                                  ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                                  : const Color(0xFFE2E8F0),
-                            ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        voiceState.isMicMuted
-                            ? LucideIcons.micOff
-                            : LucideIcons.mic,
-                        size: 16,
-                        color: voiceState.isMicMuted
-                            ? const Color(0xFFEF4444)
-                            : (isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF475569)),
-                      ),
-                    ),
+              // 1. SPLIT BUTTON DO MICROFONE [ 🎙️ | ⌃ ]
+              Container(
+                key: _micKey,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: voiceState.isMicMuted
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.18)
+                      : (isDark
+                          ? const Color(0xFF1E2030)
+                          : const Color(0xFFF1F5F9)),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: voiceState.isMicMuted
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.45)
+                        : (isDark
+                            ? const Color(0xFF313244)
+                            : const Color(0xFFE2E8F0)),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: voiceState.isDeafened
-                    ? 'Ativar Áudio'
-                    : 'Desativar Áudio',
-                child: InkWell(
-                  onTap: () {
-                    voiceNotifier.toggleDeafened();
-                    onToggleDeafened?.call();
-                  },
-                  mouseCursor: SystemMouseCursors.click,
-                  borderRadius: AppRadius.borderSm,
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: voiceState.isDeafened
-                          ? const Color(0xFFEF4444).withValues(alpha: 0.2)
-                          : (isDark
-                              ? const Color(0xFF1E2030)
-                              : const Color(0xFFF1F5F9)),
-                      borderRadius: AppRadius.borderSm,
-                      border: isDark
-                          ? (voiceState.isDeafened
-                              ? Border.all(
-                                  color: const Color(0xFFEF4444).withValues(alpha: 0.4),
-                                  width: 1,
-                                )
-                              : null)
-                          : Border.all(
-                              color: voiceState.isDeafened
-                                  ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                                  : const Color(0xFFE2E8F0),
-                            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Tooltip(
+                      message: voiceState.isMicMuted
+                          ? 'Desmutar Microfone'
+                          : 'Mutar Microfone',
+                      child: InkWell(
+                        onTap: () {
+                          voiceNotifier.toggleMic();
+                          widget.onToggleMic?.call();
+                        },
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 6,
+                          ),
+                          child: Icon(
+                            voiceState.isMicMuted
+                                ? LucideIcons.micOff
+                                : LucideIcons.mic,
+                            size: 15,
+                            color: voiceState.isMicMuted
+                                ? const Color(0xFFEF4444)
+                                : (isDark
+                                    ? const Color(0xFFCAD3F5)
+                                    : const Color(0xFF334155)),
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Center(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Icon(
+                    Container(
+                      width: 1,
+                      height: 16,
+                      color: isDark
+                          ? const Color(0xFF313244)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    Tooltip(
+                      message: 'Dispositivo de Entrada',
+                      child: InkWell(
+                        onTap: () => QuickAudioDeviceMenu.show(
+                          context,
+                          anchorKey: _micKey,
+                          isInput: true,
+                        ),
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 6,
+                          ),
+                          child: Icon(
+                            LucideIcons.chevronUp,
+                            size: 11,
+                            color: isDark
+                                ? const Color(0xFFA5ADCB)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. SPLIT BUTTON DO FONE [ 🎧 | ⌄ ]
+              Container(
+                key: _headphoneKey,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: voiceState.isDeafened
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.18)
+                      : (isDark
+                          ? const Color(0xFF1E2030)
+                          : const Color(0xFFF1F5F9)),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: voiceState.isDeafened
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.45)
+                        : (isDark
+                            ? const Color(0xFF313244)
+                            : const Color(0xFFE2E8F0)),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Tooltip(
+                      message: voiceState.isDeafened
+                          ? 'Ativar Áudio'
+                          : 'Desativar Áudio',
+                      child: InkWell(
+                        onTap: () {
+                          voiceNotifier.toggleDeafened();
+                          widget.onToggleDeafened?.call();
+                        },
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 6,
+                          ),
+                          child: Icon(
                             LucideIcons.headphones,
-                            size: 16,
+                            size: 15,
                             color: voiceState.isDeafened
                                 ? const Color(0xFFEF4444)
                                 : (isDark
-                                    ? const Color(0xFF94A3B8)
-                                    : const Color(0xFF475569)),
+                                    ? const Color(0xFFCAD3F5)
+                                    : const Color(0xFF334155)),
                           ),
-                          if (voiceState.isDeafened)
-                            Transform.rotate(
-                              angle: -0.785398,
-                              child: Container(
-                                width: 18,
-                                height: 1.6,
-                                color: const Color(0xFFEF4444),
-                              ),
-                            ),
-                        ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 16,
+                      color: isDark
+                          ? const Color(0xFF313244)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    Tooltip(
+                      message: 'Dispositivo de Saída',
+                      child: InkWell(
+                        onTap: () => QuickAudioDeviceMenu.show(
+                          context,
+                          anchorKey: _headphoneKey,
+                          isInput: false,
+                        ),
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 6,
+                          ),
+                          child: Icon(
+                            LucideIcons.chevronUp,
+                            size: 11,
+                            color: isDark
+                                ? const Color(0xFFA5ADCB)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 3. BOTÃO DE CONFIGURAÇÕES RÁPIDAS DE VOZ [ ⚙️ ]
+              Tooltip(
+                message: 'Configurações de Voz',
+                child: InkWell(
+                  onTap: () =>
+                      SettingsScreen.show(context, initialSection: 'voice'),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1E2030)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF313244)
+                            : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        LucideIcons.settings,
+                        size: 15,
+                        color: isDark
+                            ? const Color(0xFFA5ADCB)
+                            : const Color(0xFF64748B),
                       ),
                     ),
                   ),
                 ),
               ),
-              const Spacer(),
-              InkWell(
-                onTap: onLeaveVoice,
-                mouseCursor: SystemMouseCursors.click,
-                borderRadius: AppRadius.borderPill,
-                child: Container(
-                  height: 38,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEF4444),
-                    borderRadius: AppRadius.borderPill,
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Sair',
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+
+              // 4. BOTÃO DESCONECTAR [ 📞 ]
+              Tooltip(
+                message: 'Desconectar da Voz',
+                child: InkWell(
+                  onTap: widget.onLeaveVoice,
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        LucideIcons.phoneOff,
+                        size: 15,
+                        color: Color(0xFFEF4444),
                       ),
                     ),
                   ),

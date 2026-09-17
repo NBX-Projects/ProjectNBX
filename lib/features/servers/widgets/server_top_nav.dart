@@ -175,7 +175,8 @@ class ServerTopNav extends StatelessWidget {
 
           if (viewMode == ServerViewMode.channel &&
               activeChannel != null &&
-              onToggleVoiceChannel != null) ...[
+              onToggleVoiceChannel != null &&
+              (!isInVoice || isConnectingVoice)) ...[
             Tooltip(
               message: isConnectingVoice
                   ? 'Conectando ao LiveKit...'

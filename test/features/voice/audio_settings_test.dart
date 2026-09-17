@@ -162,5 +162,56 @@ void main() {
       await notifier.setNoiseGateReleaseMs(2000);
       expect(notifier.state.noiseGateReleaseMs, 1000);
     });
+
+    test('Input volume and profile presets work properly', () async {
+      SharedPreferences.setMockInitialValues({});
+      final notifier = AudioSettingsNotifier();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(notifier.state.inputVolume, 0.85);
+      expect(notifier.state.inputProfile, 'padrao');
+
+      // Change input volume
+      await notifier.setInputVolume(0.60);
+      expect(notifier.state.inputVolume, 0.60);
+
+      // Clamping input volume
+      await notifier.setInputVolume(-0.2);
+      expect(notifier.state.inputVolume, 0.0);
+      await notifier.setInputVolume(1.5);
+      expect(notifier.state.inputVolume, 1.0);
+
+      // Apply estudio profile
+      await notifier.applyProfile('estudio');
+      expect(notifier.state.inputProfile, 'estudio');
+      expect(notifier.state.echoCancellation, isFalse);
+      expect(notifier.state.noiseSuppression, isFalse);
+      expect(notifier.state.compressorEnabled, isFalse);
+
+      // Apply isolamento profile
+      await notifier.applyProfile('isolamento');
+      expect(notifier.state.inputProfile, 'isolamento');
+      expect(notifier.state.echoCancellation, isTrue);
+      expect(notifier.state.noiseSuppression, isTrue);
+      expect(notifier.state.highPassFilter, isTrue);
+      expect(notifier.state.autoNoiseGate, isTrue);
+
+      // Apply padrao profile
+      await notifier.applyProfile('padrao');
+      expect(notifier.state.inputProfile, 'padrao');
+      expect(notifier.state.echoCancellation, isTrue);
+      expect(notifier.state.noiseSuppression, isTrue);
+      expect(notifier.state.highPassFilter, isFalse);
+      expect(notifier.state.autoNoiseGate, isTrue);
+    });
+
+    test('toAudioCaptureOptions strips Windows SWD prefix', () {
+      const settings = AudioSettings();
+      final capture = settings.toAudioCaptureOptions(
+        deviceId: r'SWD\MMDEVAPI\{0.0.1.00000000}.{GUID-1234}',
+      );
+      expect(capture.deviceId, '{0.0.1.00000000}.{GUID-1234}');
+    });
   });
 }
+

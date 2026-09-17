@@ -191,16 +191,60 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     try {
       final pubs = _liveKitRoom?.localParticipant?.audioTrackPublications;
       if (pubs == null) return;
-      final targetId = deviceId == 'default' ? '' : deviceId;
+      var targetId = deviceId == 'default' ? '' : deviceId;
+      if (targetId.startsWith(r'SWD\MMDEVAPI\')) {
+        targetId = targetId.replaceFirst(r'SWD\MMDEVAPI\', '');
+      }
+
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.linux)) {
+        try {
+          await rtc.Helper.selectAudioInput(targetId);
+          debugPrint('[LiveKit] selectAudioInput configurado para: $targetId');
+        } catch (e) {
+          debugPrint('[LiveKit] selectAudioInput falhou ou não suportado: $e');
+        }
+      }
+
       for (final pub in pubs) {
         final track = pub.track;
         if (track is LocalAudioTrack) {
           await track.setDeviceId(targetId);
+          try {
+            await track.restartTrack();
+          } catch (e) {
+            debugPrint('[LiveKit] Erro ao reiniciar track após troca de microfone: $e');
+          }
           debugPrint('[LiveKit] Dispositivo de microfone atualizado: $targetId');
         }
       }
     } catch (e) {
       debugPrint('[LiveKit] Erro ao trocar dispositivo de áudio: $e');
+    }
+  }
+
+  Future<void> _updateLiveKitAudioOutputDevice(String? deviceId) async {
+    if (deviceId == null) return;
+    try {
+      var targetId = deviceId == 'default' ? '' : deviceId;
+      if (targetId.startsWith(r'SWD\MMDEVAPI\')) {
+        targetId = targetId.replaceFirst(r'SWD\MMDEVAPI\', '');
+      }
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.linux)) {
+        try {
+          await rtc.Helper.selectAudioOutput(targetId);
+          debugPrint('[LiveKit] selectAudioOutput configurado para: $targetId');
+        } catch (e) {
+          debugPrint('[LiveKit] selectAudioOutput falhou ou não suportado: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('[LiveKit] Erro ao trocar dispositivo de saída de áudio: $e');
     }
   }
 
@@ -272,6 +316,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           adaptiveStream: true,
           dynacast: true,
           defaultAudioCaptureOptions: captureOptions,
+          defaultAudioPublishOptions: const AudioPublishOptions(dtx: true),
         ),
       );
       _liveKitRoom = room;
@@ -321,7 +366,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       final currentVoiceState = ref.read(voiceStateProvider);
       final shouldMuteMic = currentVoiceState.isMicMuted || currentVoiceState.isDeafened;
       try {
-        await room.localParticipant?.setMicrophoneEnabled(!shouldMuteMic, audioCaptureOptions: captureOptions);
+        await room.localParticipant?.setMicrophoneEnabled(
+          !shouldMuteMic,
+          audioCaptureOptions: captureOptions,
+        );
       } catch (_) {}
 
       // Se já estiver ensurdecido ao conectar, muta o áudio remoto imediatamente
@@ -474,7 +522,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final shouldMute = isMuted || isDeafened;
     try {
       final captureOptions = _buildAudioCaptureOptions();
-      await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMute, audioCaptureOptions: captureOptions);
+      await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(
+        !shouldMute,
+        audioCaptureOptions: captureOptions,
+      );
       debugPrint('[LiveKit] Microfone alterado: isMuted=$isMuted, shouldMute=$shouldMute');
     } catch (e) {
       debugPrint('[LiveKit] Erro ao alterar microfone: $e');
@@ -515,7 +566,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         final voiceState = ref.read(voiceStateProvider);
         final shouldMuteMic = isDeafened || voiceState.isMicMuted;
         final captureOptions = _buildAudioCaptureOptions();
-        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMuteMic, audioCaptureOptions: captureOptions);
+        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(
+          !shouldMuteMic,
+          audioCaptureOptions: captureOptions,
+        );
       }
       debugPrint('[LiveKit] Áudio alterado (deafen): isDeafened=$isDeafened');
     } catch (e) {
@@ -1560,6 +1614,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       if (previous?.selectedInputDeviceId != next.selectedInputDeviceId) {
         _updateLiveKitAudioDevice(next.selectedInputDeviceId);
       }
+      if (previous?.selectedOutputDeviceId != next.selectedOutputDeviceId) {
+        _updateLiveKitAudioOutputDevice(next.selectedOutputDeviceId);
+      }
     });
 
     ref.listen<VoiceState>(voiceStateProvider, (previous, next) {
@@ -1593,173 +1650,142 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             ),
           ];
 
-    return Column(
-      children: [
-        // 1. Sub-Header Navigation Bar
-        ServerTopNav(
-          server: widget.server,
-          isDark: isDark,
-          viewMode: _viewMode,
-          activeChannel: _activeChannel,
-          accentColor: _selectedAccentColor,
-          isRightSidebarVisible: _isRightSidebarVisible,
-          isTransmitting: _isTransmitting,
-          isInVoice: _isInVoice,
-          isConnectingVoice: _isConnectingLiveKit,
-          onToggleTransmission: _toggleTransmission,
-          onToggleVoiceChannel: () {
-            if (_isInVoice) {
-              _leaveVoice();
-            } else if (_activeChannel != null) {
-              _connectToLiveKitVoice(_activeChannel!.id);
-            }
-          },
-          totalInVoice: _voiceParticipants.values.fold<int>(
-            0,
-            (sum, m) => sum + m.values.where((p) => p.isInVoice).length,
-          ),
-          onBackToHome: () {
-            if (_viewMode == ServerViewMode.channel) {
-              setState(() {
-                _viewMode = ServerViewMode.home;
-                _watchingRemoteStream = null;
-              });
-            } else {
-              widget.onBackToHome();
-            }
-          },
-          onGoToHub: widget.onBackToHome,
-          onInviteMembers: () => InviteMemberDialog.show(
-            context,
-            widget.server,
-            onMembersUpdated: _loadServerMembers,
-          ),
-          onToggleRightSidebar: () => setState(
-            () => _isRightSidebarVisible = !_isRightSidebarVisible,
-          ),
-          onOpenMobileChannelsSheet: () => _showMobileChannelsBottomSheet(
+    final stageWidget = _viewMode == ServerViewMode.home
+        ? ServerHomeView(
+            server: widget.server,
+            isDark: isDark,
+            username: username,
+            channels: effectiveChannels,
+            isTransmitting: _isTransmitting,
+            selectedBannerPreset: _selectedBannerPreset,
+            onSelectBannerPreset: (idx) =>
+                setState(() => _selectedBannerPreset = idx),
+            selectedAccentColor: _selectedAccentColor,
+            onSelectAccentColor: (col) =>
+                setState(() => _selectedAccentColor = col),
+            isCustomizingBanner: _isCustomizingBanner,
+            onToggleCustomizeBanner: () => setState(
+              () => _isCustomizingBanner = !_isCustomizingBanner,
+            ),
+            onSaveCustomization: _saveCustomization,
+            onOpenChannel: (c) => _openHybridChannel(c),
+            voiceParticipants: _voiceParticipants,
+            clientSessionId: _clientSessionId,
+            connectedVoiceChannelId: _connectedVoiceChannelId,
+            onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
+            onWatchStream: (p) => setState(() {
+              _watchingRemoteStream = p;
+              _isChatVisible = false;
+              _isRightSidebarVisible = false;
+            }),
+          )
+        : _buildHybridChannelStage(
             context,
             isDark,
-            effectiveChannels,
             username,
+            effectiveChannels,
+            voiceState,
+            voiceNotifier,
+          );
+
+    final topNavWidget = ServerTopNav(
+      server: widget.server,
+      isDark: isDark,
+      viewMode: _viewMode,
+      activeChannel: _activeChannel,
+      accentColor: _selectedAccentColor,
+      isRightSidebarVisible: _isRightSidebarVisible,
+      isTransmitting: _isTransmitting,
+      isInVoice: _isInVoice,
+      isConnectingVoice: _isConnectingLiveKit,
+      onToggleTransmission: _toggleTransmission,
+      onToggleVoiceChannel: () {
+        if (_isInVoice) {
+          _leaveVoice();
+        } else if (_activeChannel != null) {
+          _connectToLiveKitVoice(_activeChannel!.id);
+        }
+      },
+      totalInVoice: _voiceParticipants.values.fold<int>(
+        0,
+        (sum, m) => sum + m.values.where((p) => p.isInVoice).length,
+      ),
+      onBackToHome: () {
+        if (_viewMode == ServerViewMode.channel) {
+          setState(() {
+            _viewMode = ServerViewMode.home;
+            _watchingRemoteStream = null;
+          });
+        } else {
+          widget.onBackToHome();
+        }
+      },
+      onGoToHub: widget.onBackToHome,
+      onInviteMembers: () => InviteMemberDialog.show(
+        context,
+        widget.server,
+        onMembersUpdated: _loadServerMembers,
+      ),
+      onToggleRightSidebar: () => setState(
+        () => _isRightSidebarVisible = !_isRightSidebarVisible,
+      ),
+      onOpenMobileChannelsSheet: () => _showMobileChannelsBottomSheet(
+        context,
+        isDark,
+        effectiveChannels,
+        username,
+      ),
+    );
+
+    if (isMobile) {
+      return Column(
+        children: [
+          topNavWidget,
+          Expanded(child: stageWidget),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. Palco Principal: TopNav no topo + Conteúdo/Chat abaixo
+        Expanded(
+          child: Column(
+            children: [
+              topNavWidget,
+              Expanded(child: stageWidget),
+            ],
           ),
         ),
 
-        // 2. Main Body: Stage (Home OR Hybrid Channel Stage) + Right Sidebar
-        Expanded(
-          child: isMobile
-              ? (_viewMode == ServerViewMode.home
-                    ? ServerHomeView(
-                        server: widget.server,
-                        isDark: isDark,
-                        username: username,
-                        channels: effectiveChannels,
-                        isTransmitting: _isTransmitting,
-                        selectedBannerPreset: _selectedBannerPreset,
-                        onSelectBannerPreset: (idx) =>
-                            setState(() => _selectedBannerPreset = idx),
-                        selectedAccentColor: _selectedAccentColor,
-                        onSelectAccentColor: (col) =>
-                            setState(() => _selectedAccentColor = col),
-                        isCustomizingBanner: _isCustomizingBanner,
-                        onToggleCustomizeBanner: () => setState(
-                          () => _isCustomizingBanner = !_isCustomizingBanner,
-                        ),
-                        onSaveCustomization: _saveCustomization,
-                        onOpenChannel: (c) => _openHybridChannel(c),
-                        voiceParticipants: _voiceParticipants,
-                        clientSessionId: _clientSessionId,
-                        connectedVoiceChannelId: _connectedVoiceChannelId,
-                        onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
-                        onWatchStream: (p) => setState(() {
-                          _watchingRemoteStream = p;
-                          _isChatVisible = false;
-                          _isRightSidebarVisible = false;
-                        }),
-                      )
-                    : _buildHybridChannelStage(
-                        context,
-                        isDark,
-                        username,
-                        effectiveChannels,
-                        voiceState,
-                        voiceNotifier,
-                      ))
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Main Stage (Home, Direct Chat, or Immersive Stream + HUD)
-                    Expanded(
-                      child: _viewMode == ServerViewMode.home
-                          ? ServerHomeView(
-                              server: widget.server,
-                              isDark: isDark,
-                              username: username,
-                              channels: effectiveChannels,
-                              isTransmitting: _isTransmitting,
-                              selectedBannerPreset: _selectedBannerPreset,
-                              onSelectBannerPreset: (idx) =>
-                                  setState(() => _selectedBannerPreset = idx),
-                              selectedAccentColor: _selectedAccentColor,
-                              onSelectAccentColor: (col) =>
-                                  setState(() => _selectedAccentColor = col),
-                              isCustomizingBanner: _isCustomizingBanner,
-                              onToggleCustomizeBanner: () => setState(
-                                () =>
-                                    _isCustomizingBanner = !_isCustomizingBanner,
-                              ),
-                              onSaveCustomization: _saveCustomization,
-                              onOpenChannel: (c) => _openHybridChannel(c),
-                              voiceParticipants: _voiceParticipants,
-                              clientSessionId: _clientSessionId,
-                              connectedVoiceChannelId: _connectedVoiceChannelId,
-                              onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
-                              onWatchStream: (p) => setState(() {
-                                _watchingRemoteStream = p;
-                                _isChatVisible = false;
-                                _isRightSidebarVisible = false;
-                              }),
-                            )
-                          : _buildHybridChannelStage(
-                              context,
-                              isDark,
-                              username,
-                              effectiveChannels,
-                              voiceState,
-                              voiceNotifier,
-                            ),
-                    ),
-
-                    // Right Sidebar (Canais | Membros | Resumo)
-                    if (_isRightSidebarVisible)
-                      ServerRightSidebar(
-                        isDark: isDark,
-                        server: widget.server,
-                        channels: effectiveChannels,
-                        activeChannel: _activeChannel,
-                        username: username,
-                        accentColor: _selectedAccentColor,
-                        clientSessionId: _clientSessionId,
-                        voiceParticipants: _voiceParticipants,
-                        serverMembers: _serverMembers,
-                        voiceState: voiceState,
-                        voiceNotifier: voiceNotifier,
-                        isInVoice: _isInVoice,
-                        onChannelSelected: (c) => _openHybridChannel(c),
-                        onWatchStream: (p) => setState(() {
-                          _watchingRemoteStream = p;
-                          _isChatVisible = false;
-                          _isRightSidebarVisible = false;
-                        }),
-                        onLeaveVoice: _leaveVoice,
-                        onMembersUpdated: _loadServerMembers,
-                        onToggleMic: _handleMicToggle,
-                        onToggleDeafened: _handleDeafenToggle,
-                        connectedVoiceChannelId: _connectedVoiceChannelId,
-                      ),
-                  ],
-                ),
-        ),
+        // 2. Barra Lateral Direita: Estende-se até o topo junto à TopBar
+        if (_isRightSidebarVisible)
+          ServerRightSidebar(
+            isDark: isDark,
+            server: widget.server,
+            channels: effectiveChannels,
+            activeChannel: _activeChannel,
+            username: username,
+            accentColor: _selectedAccentColor,
+            clientSessionId: _clientSessionId,
+            voiceParticipants: _voiceParticipants,
+            serverMembers: _serverMembers,
+            voiceState: voiceState,
+            voiceNotifier: voiceNotifier,
+            isInVoice: _isInVoice,
+            onChannelSelected: (c) => _openHybridChannel(c),
+            onWatchStream: (p) => setState(() {
+              _watchingRemoteStream = p;
+              _isChatVisible = false;
+              _isRightSidebarVisible = false;
+            }),
+            onLeaveVoice: _leaveVoice,
+            onMembersUpdated: _loadServerMembers,
+            onToggleMic: _handleMicToggle,
+            onToggleDeafened: _handleDeafenToggle,
+            connectedVoiceChannelId: _connectedVoiceChannelId,
+          ),
       ],
     );
   }

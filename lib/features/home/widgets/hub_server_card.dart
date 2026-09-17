@@ -48,7 +48,89 @@ class _HubServerCardState extends State<HubServerCard> {
     if (lower.contains('cs2') || lower.contains('fps') || lower.contains('valorant')) {
       return 'FPS';
     }
-    return 'COMUNIDADE';
+    return 'COMUNIDADE GERAL';
+  }
+
+  IconData _getCategoryWatermarkIcon(ServerModel server) {
+    final lower = '${server.category} ${server.name}'.toLowerCase();
+    if (lower.contains('apex') || lower.contains('game') || lower.contains('jogos')) {
+      return LucideIcons.gamepad2;
+    }
+    if (lower.contains('dev') || lower.contains('code') || lower.contains('tech') || lower.contains('prog')) {
+      return LucideIcons.code;
+    }
+    if (lower.contains('race') || lower.contains('sim') || lower.contains('mans') || lower.contains('car')) {
+      return LucideIcons.gauge;
+    }
+    if (lower.contains('fps') || lower.contains('cs2') || lower.contains('valorant')) {
+      return LucideIcons.crosshair;
+    }
+    if (lower.contains('study') || lower.contains('estudo')) {
+      return LucideIcons.bookOpen;
+    }
+    return LucideIcons.gamepad2;
+  }
+
+  Widget _buildAvatarFallback(ServerModel server, Color accentColor) {
+    final isLightAccent = accentColor.computeLuminance() > 0.5;
+    return Container(
+      width: 44,
+      height: 44,
+      color: accentColor.withValues(alpha: 0.28),
+      child: Center(
+        child: Icon(
+          LucideIcons.zap,
+          size: 20,
+          color: isLightAccent ? const Color(0xFF181926) : Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerAvatar(ServerModel server, Color accentColor, bool isDark) {
+    final iconUrl = server.iconUrl?.trim();
+    final hasCustomIcon = iconUrl != null && iconUrl.isNotEmpty;
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isDark ? const Color(0xFF141520) : Colors.white,
+        border: Border.all(
+          color: accentColor.withValues(alpha: 0.55),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.22),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: hasCustomIcon
+            ? (iconUrl.startsWith('assets/')
+                ? Image.asset(
+                    iconUrl,
+                    fit: BoxFit.cover,
+                    width: 44,
+                    height: 44,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _buildAvatarFallback(server, accentColor),
+                  )
+                : Image.network(
+                    iconUrl,
+                    fit: BoxFit.cover,
+                    width: 44,
+                    height: 44,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _buildAvatarFallback(server, accentColor),
+                  ))
+            : _buildAvatarFallback(server, accentColor),
+      ),
+    );
   }
 
   @override
@@ -81,18 +163,24 @@ class _HubServerCardState extends State<HubServerCard> {
             border: Border.all(
               color: _isHovered
                   ? accentColor
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                  : accentColor.withValues(alpha: isDark ? 0.22 : 0.18),
               width: _isHovered ? 1.5 : 1,
             ),
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: accentColor.withValues(alpha: 0.2),
-                      blurRadius: 12,
+                      color: accentColor.withValues(alpha: 0.25),
+                      blurRadius: 14,
                       offset: const Offset(0, 4),
                     ),
                   ]
-                : null,
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,7 +188,7 @@ class _HubServerCardState extends State<HubServerCard> {
             children: [
               // 1. Top Thumbnail / Banner
               Container(
-                height: 100,
+                height: 96,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.topLg,
@@ -113,11 +201,11 @@ class _HubServerCardState extends State<HubServerCard> {
                 child: Stack(
                   children: [
                     Positioned(
-                      right: -10,
-                      bottom: -10,
+                      right: -8,
+                      bottom: -8,
                       child: Icon(
-                        LucideIcons.gamepad2,
-                        size: 80,
+                        _getCategoryWatermarkIcon(server),
+                        size: 78,
                         color: Colors.white.withValues(alpha: 0.08),
                       ),
                     ),
@@ -129,13 +217,13 @@ class _HubServerCardState extends State<HubServerCard> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 3,
+                          vertical: 3.5,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
+                          color: Colors.black.withValues(alpha: 0.55),
                           borderRadius: AppRadius.borderSm,
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: accentColor.withValues(alpha: 0.35),
                           ),
                         ),
                         child: Text(
@@ -158,13 +246,13 @@ class _HubServerCardState extends State<HubServerCard> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
-                            vertical: 3,
+                            vertical: 3.5,
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.65),
                             borderRadius: AppRadius.borderPill,
                             border: Border.all(
-                              color: AppColors.darkSage.withValues(alpha: 0.4),
+                              color: const Color(0xFF4ADE80).withValues(alpha: 0.4),
                             ),
                           ),
                           child: Row(
@@ -173,9 +261,15 @@ class _HubServerCardState extends State<HubServerCard> {
                               Container(
                                 width: 6,
                                 height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF4ADE80),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4ADE80),
                                   shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF4ADE80).withValues(alpha: 0.5),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(width: 5),
@@ -203,27 +297,45 @@ class _HubServerCardState extends State<HubServerCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      server.name,
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${server.memberCount} membros · ${server.channels.length} canais',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: isDark
-                            ? AppColors.darkTextMuted
-                            : AppColors.lightTextMuted,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _buildServerAvatar(server, accentColor, isDark),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                server.name,
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark
+                                      ? AppColors.darkTextPrimary
+                                      : AppColors.lightTextPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${server.memberCount} ${server.memberCount == 1 ? "membro" : "membros"} · ${server.channels.length} ${server.channels.length == 1 ? "canal" : "canais"}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark
+                                      ? AppColors.darkTextMuted
+                                      : AppColors.lightTextMuted,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
 
@@ -231,45 +343,56 @@ class _HubServerCardState extends State<HubServerCard> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
+                        horizontal: 10,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: (isDark
-                                ? AppColors.darkSage
-                                : AppColors.lightSage)
-                            .withValues(alpha: 0.08),
+                        color: (hasVoice
+                                ? const Color(0xFF4ADE80)
+                                : accentColor)
+                            .withValues(alpha: isDark ? 0.08 : 0.06),
                         borderRadius: AppRadius.borderSm,
                         border: Border.all(
-                          color: (isDark
-                                  ? AppColors.darkSage
-                                  : AppColors.lightSage)
-                              .withValues(alpha: 0.2),
+                          color: (hasVoice
+                                  ? const Color(0xFF4ADE80)
+                                  : accentColor)
+                              .withValues(alpha: 0.22),
                         ),
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            LucideIcons.radio,
+                            hasVoice ? LucideIcons.volume2 : LucideIcons.messageSquare,
                             size: 13,
-                            color: isDark
-                                ? AppColors.darkSage
-                                : AppColors.lightSage,
+                            color: hasVoice
+                                ? (isDark
+                                    ? const Color(0xFF4ADE80)
+                                    : AppColors.lightSage)
+                                : accentColor,
                           ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              'Voz em Alta Definição',
+                              hasVoice
+                                  ? 'Voz em Alta Definição'
+                                  : 'Canais de Texto Ativos',
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: isDark
-                                    ? AppColors.darkSage
-                                    : AppColors.lightSage,
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          Icon(
+                            LucideIcons.chevronRight,
+                            size: 13,
+                            color: isDark
+                                ? AppColors.darkTextMuted.withValues(alpha: 0.6)
+                                : AppColors.lightTextMuted.withValues(alpha: 0.6),
                           ),
                         ],
                       ),

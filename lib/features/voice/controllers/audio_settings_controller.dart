@@ -14,7 +14,10 @@ class AudioSettings {
   // Noise Gate & Input Sensitivity
   final bool autoNoiseGate;
   final double noiseGateThreshold; // 0.0 (very sensitive) to 1.0 (least sensitive)
-  final int noiseGateReleaseMs; // Hangover time in ms before cutting transmission
+  final int noiseGateReleaseMs;
+  // Volume & Profiles
+  final double inputVolume; // 0.0 to 1.0
+  final String inputProfile; // 'padrao', 'estudio', 'isolamento'
 
   const AudioSettings({
     this.echoCancellation = true,
@@ -26,6 +29,8 @@ class AudioSettings {
     this.autoNoiseGate = true,
     this.noiseGateThreshold = 0.15,
     this.noiseGateReleaseMs = 300,
+    this.inputVolume = 0.85,
+    this.inputProfile = 'padrao',
   });
 
   AudioSettings copyWith({
@@ -38,6 +43,8 @@ class AudioSettings {
     bool? autoNoiseGate,
     double? noiseGateThreshold,
     int? noiseGateReleaseMs,
+    double? inputVolume,
+    String? inputProfile,
   }) {
     return AudioSettings(
       echoCancellation: echoCancellation ?? this.echoCancellation,
@@ -49,13 +56,19 @@ class AudioSettings {
       autoNoiseGate: autoNoiseGate ?? this.autoNoiseGate,
       noiseGateThreshold: noiseGateThreshold ?? this.noiseGateThreshold,
       noiseGateReleaseMs: noiseGateReleaseMs ?? this.noiseGateReleaseMs,
+      inputVolume: inputVolume ?? this.inputVolume,
+      inputProfile: inputProfile ?? this.inputProfile,
     );
   }
 
   AudioCaptureOptions toAudioCaptureOptions({String? deviceId}) {
-    final effectiveDeviceId = (deviceId != null && deviceId != 'default' && deviceId.isNotEmpty)
+    var effectiveDeviceId = (deviceId != null && deviceId != 'default' && deviceId.isNotEmpty)
         ? deviceId
         : null;
+
+    if (effectiveDeviceId != null && effectiveDeviceId.startsWith(r'SWD\MMDEVAPI\')) {
+      effectiveDeviceId = effectiveDeviceId.substring(r'SWD\MMDEVAPI\'.length);
+    }
 
     return AudioCaptureOptions(
       deviceId: effectiveDeviceId,
@@ -155,6 +168,55 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
     final clamped = releaseMs.clamp(50, 1000);
     state = state.copyWith(noiseGateReleaseMs: clamped);
     await _persistInt(_keyNoiseGateReleaseMs, clamped);
+  }
+
+  Future<void> setInputVolume(double volume) async {
+    final clamped = volume.clamp(0.0, 1.0);
+    state = state.copyWith(inputVolume: clamped);
+    await _persistDouble('audio_input_volume', clamped);
+  }
+
+  Future<void> applyProfile(String profileKey) async {
+    if (profileKey == 'estudio') {
+      // Perfil Estúdio: Som puro sem filtros agressivos (resolve distorções e chiados de IA em microfones USB)
+      state = state.copyWith(
+        inputProfile: 'estudio',
+        echoCancellation: false,
+        noiseSuppression: false,
+        compressorEnabled: false,
+        highPassFilter: false,
+        autoNoiseGate: false,
+      );
+    } else if (profileKey == 'isolamento') {
+      // Perfil Isolamento Máximo: Supressão pesada + High Pass + Gate
+      state = state.copyWith(
+        inputProfile: 'isolamento',
+        echoCancellation: true,
+        noiseSuppression: true,
+        compressorEnabled: true,
+        highPassFilter: true,
+        autoNoiseGate: true,
+      );
+    } else {
+      // Perfil Padrão: Equilibrado
+      state = state.copyWith(
+        inputProfile: 'padrao',
+        echoCancellation: true,
+        noiseSuppression: true,
+        compressorEnabled: true,
+        highPassFilter: false,
+        autoNoiseGate: true,
+      );
+    }
+    await _persistBool(_keyEchoCancellation, state.echoCancellation);
+    await _persistBool(_keyNoiseSuppression, state.noiseSuppression);
+    await _persistBool(_keyCompressor, state.compressorEnabled);
+    await _persistBool(_keyHighPassFilter, state.highPassFilter);
+    await _persistBool(_keyAutoNoiseGate, state.autoNoiseGate);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('audio_input_profile', profileKey);
+    } catch (_) {}
   }
 
   Future<void> _persistBool(String key, bool value) async {

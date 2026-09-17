@@ -161,9 +161,12 @@ class AudioHardwareService {
       for (final item in items) {
         if (item is Map) {
           final friendlyName = (item['FriendlyName'] ?? '').toString();
-          final instanceId = (item['InstanceId'] ?? '').toString();
+          var instanceId = (item['InstanceId'] ?? '').toString();
 
           if (instanceId.contains(filterMatch) && friendlyName.isNotEmpty) {
+            if (instanceId.startsWith(r'SWD\MMDEVAPI\')) {
+              instanceId = instanceId.substring(r'SWD\MMDEVAPI\'.length);
+            }
             devices.add(AudioDeviceInfo(
               deviceId: instanceId,
               label: friendlyName,

@@ -115,7 +115,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
         children: [
           // Header Tabs: Canais | Membros | Resumo
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
