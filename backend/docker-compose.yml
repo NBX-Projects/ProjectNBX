@@ -8,10 +8,12 @@ services:
     restart: unless-stopped
     ports:
       - '8081:8080'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       PORT: '8080'
       DATABASE_URL: 'postgres://admin:nbx_pass@nbx_db:5432/nbx_stream?sslmode=disable'
-      LIVEKIT_URL: '${LIVEKIT_URL:-ws://livekit:7880}'
+      LIVEKIT_URL: '${LIVEKIT_URL:-ws://host.docker.internal:7880}'
       LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:-devkey}'
       LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:-secret}'
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-*}'
@@ -41,16 +43,13 @@ services:
     image: livekit/livekit-server:latest
     container_name: projectnbx-livekit
     restart: unless-stopped
+    network_mode: host
     command: --config /etc/livekit.yaml
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secret}"
       NODE_IP: ""
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
-    ports:
-      - "7880:7880" # Porta HTTP/WebSocket de sinalização
-      - "7881:7881" # Porta TCP WebRTC
-      - "50000-50020:50000-50020/udp" # Portas UDP WebRTC
     depends_on:
       - redis
 
