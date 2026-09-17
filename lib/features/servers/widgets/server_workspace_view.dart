@@ -328,11 +328,45 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           _syncLiveKitParticipant(event.participant, channelId, true);
         } else if (event is ParticipantDisconnectedEvent) {
           _syncLiveKitParticipant(event.participant, channelId, false);
+        } else if (event is TrackPublishedEvent) {
+          final uid = event.participant.identity;
+          if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+            if (event.publication.kind == TrackType.VIDEO) {
+              _voiceParticipants[channelId]![uid] =
+                  _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: true);
+            }
+          }
+          setState(() {});
+        } else if (event is TrackUnpublishedEvent) {
+          final uid = event.participant.identity;
+          if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+            if (event.publication.kind == TrackType.VIDEO) {
+              _voiceParticipants[channelId]![uid] =
+                  _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: false);
+            }
+          }
+          setState(() {});
         } else if (event is TrackSubscribedEvent) {
+          if (event.track is RemoteVideoTrack) {
+            final uid = event.participant.identity;
+            if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+              _voiceParticipants[channelId]![uid] =
+                  _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: true);
+            }
+          }
           final isDeafened = ref.read(voiceStateProvider).isDeafened;
           if (isDeafened && event.track is RemoteAudioTrack) {
             event.track.disable();
             event.track.mediaStreamTrack.enabled = false;
+          }
+          setState(() {});
+        } else if (event is TrackUnsubscribedEvent) {
+          if (event.track is RemoteVideoTrack) {
+            final uid = event.participant.identity;
+            if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+              _voiceParticipants[channelId]![uid] =
+                  _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: false);
+            }
           }
           setState(() {});
         } else if (event is TrackMutedEvent) {
@@ -1209,6 +1243,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     if (_isTransmitting || screenShareState.isSharing) {
       _streamRefreshTimer?.cancel();
       await screenShareCtrl.stopScreenShare();
+      if (_liveKitRoom != null) {
+        try {
+          await _liveKitRoom!.localParticipant?.setScreenShareEnabled(false);
+        } catch (_) {}
+      }
       await _localScreenShareTrack?.stop();
       await _localScreenShareTrack?.dispose();
       _localScreenShareTrack = null;
@@ -1228,11 +1267,27 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     // No modo Web (navegador), aciona diretamente o seletor nativo do navegador (getDisplayMedia)
     if (kIsWeb) {
       try {
-        final screenTrack = await LocalVideoTrack.createScreenShareTrack(
-          const ScreenShareCaptureOptions(
-            params: VideoParametersPresets.screenShareH1080FPS30,
-          ),
-        );
+        LocalVideoTrack? screenTrack;
+        if (_liveKitRoom != null && _liveKitRoom!.localParticipant != null) {
+          await _liveKitRoom!.localParticipant!.setScreenShareEnabled(
+            true,
+            captureScreenAudio: true,
+          );
+          for (final pub in _liveKitRoom!.localParticipant!.videoTrackPublications) {
+            if (pub.track is LocalVideoTrack) {
+              screenTrack = pub.track as LocalVideoTrack;
+              break;
+            }
+          }
+        } else {
+          screenTrack = await LocalVideoTrack.createScreenShareTrack(
+            const ScreenShareCaptureOptions(
+              params: VideoParametersPresets.screenShareH1080FPS30,
+            ),
+          );
+        }
+
+        if (screenTrack == null) return;
 
         if (!mounted) {
           await screenTrack.stop();
@@ -1341,8 +1396,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         debugPrint('[ScreenShare] Erro ao criar track WebRTC: $e');
       }
 
-      // Always start broadcaster loop to sync continuous live frames to remote watchers
-      _startLiveStreamBroadcaster(config);
+        if (_liveKitRoom != null && _liveKitRoom!.localParticipant != null && screenTrack != null) {
+          try {
+            await _liveKitRoom!.localParticipant!.publishVideoTrack(screenTrack);
+          } catch (e) {
+            debugPrint('[LiveKit] Erro ao publicar screenTrack no Desktop: $e');
+          }
+        }
+
+        // Always start broadcaster loop to sync continuous live frames to remote watchers
+        _startLiveStreamBroadcaster(config);
 
       setState(() {
         _isTransmitting = true;
@@ -1548,6 +1611,22 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     }
 
     // CASO 2: COM TRANSMISSÃO ATIVA OU ASSISTINDO -> Mostra Palco de Vídeo/Tela + Chat Flutuante HUD
+    VideoTrack? remoteVideoTrack;
+    if (_watchingRemoteStream != null && _liveKitRoom != null) {
+      final remoteUid = _watchingRemoteStream!.userId;
+      final remoteSid = _watchingRemoteStream!.sessionId;
+      for (final rp in _liveKitRoom!.remoteParticipants.values) {
+        if (rp.identity == remoteUid || rp.sid == remoteSid) {
+          for (final pub in rp.videoTrackPublications) {
+            if (pub.track != null) {
+              remoteVideoTrack = pub.track;
+              break;
+            }
+          }
+        }
+      }
+    }
+
     return Container(
       color: const Color(0xFF0C0D14),
       child: Stack(
@@ -1560,6 +1639,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               remoteParticipant: _watchingRemoteStream,
               activeScreenShareConfig: _activeScreenShareConfig,
               localScreenShareTrack: _localScreenShareTrack,
+              remoteVideoTrack: remoteVideoTrack,
               webRTCStream: ref.watch(screenShareControllerProvider).remoteShare?.stream,
               accentColor: _selectedAccentColor,
               streamVolume: _streamVolume,
