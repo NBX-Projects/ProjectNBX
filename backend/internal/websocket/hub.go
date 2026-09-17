@@ -221,10 +221,16 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			if targetServerID == "" {
 				targetServerID = client.ServerID
 			}
+			userID := clientState.UserID
+			if userID == "" {
+				userID = client.UserID
+			}
 			sessionID := clientState.SessionID
 			if sessionID == "" {
-				sessionID = client.UserID
+				sessionID = userID
 			}
+
+			var oldLeaveEvent *models.WSEvent
 
 			h.mu.Lock()
 			sMap, serverExists := h.voiceStates[targetServerID]
@@ -232,42 +238,125 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 				sMap = make(map[string]*models.VoiceParticipantState)
 				h.voiceStates[targetServerID] = sMap
 			}
-			st, userExists := sMap[sessionID]
-			if !userExists && sessionID != client.UserID {
-				st, userExists = sMap[client.UserID]
+
+			// Localiza qualquer estado pré-existente deste usuário no servidor
+			var existingKey string
+			var st *models.VoiceParticipantState
+			for k, v := range sMap {
+				if v.UserID == userID || k == userID || k == sessionID {
+					existingKey = k
+					st = v
+					break
+				}
 			}
 
-			if !userExists {
-				if clientState.IsInVoice {
-					clientState.UserID = client.UserID
-					clientState.ServerID = targetServerID
-					sMap[sessionID] = &clientState
-					st = &clientState
-				} else {
-					h.mu.Unlock()
-					return
+			var oldChannelID string
+			if st != nil {
+				oldChannelID = st.ChannelID
+			}
+
+			if !clientState.IsInVoice {
+				// Usuário desconectou do canal de voz
+				if existingKey != "" {
+					delete(sMap, existingKey)
 				}
+				delete(sMap, userID)
+				delete(sMap, sessionID)
+
+				targetChannelID := clientState.ChannelID
+				if targetChannelID == "" {
+					targetChannelID = oldChannelID
+				}
+				h.mu.Unlock()
+
+				clientState.UserID = userID
+				clientState.ServerID = targetServerID
+				clientState.ChannelID = targetChannelID
+				clientState.IsInVoice = false
+				clientState.IsTransmitting = false
+
+				leaveBytes, _ := json.Marshal(clientState)
+				event.Payload = leaveBytes
+				event.ServerID = targetServerID
+				event.ChannelID = targetChannelID
+				h.BroadcastEvent(event)
+				return
+			}
+
+			// Usuário está conectado/conectando na voz
+			// Se estava em outro canal de voz, prepara saída do canal anterior para emitir fora do lock
+			if oldChannelID != "" && clientState.ChannelID != "" && oldChannelID != clientState.ChannelID {
+				oldLeave := models.VoiceParticipantState{
+					SessionID:      sessionID,
+					UserID:         userID,
+					Username:       clientState.Username,
+					ServerID:       targetServerID,
+					ChannelID:      oldChannelID,
+					IsInVoice:      false,
+					IsTransmitting: false,
+				}
+				if oldBytes, err := json.Marshal(oldLeave); err == nil {
+					oldLeaveEvent = &models.WSEvent{
+						Type:      models.EventVoiceState,
+						Payload:   oldBytes,
+						ChannelID: oldChannelID,
+						ServerID:  targetServerID,
+					}
+				}
+			}
+
+			if st == nil {
+				clientState.UserID = userID
+				clientState.ServerID = targetServerID
+				if clientState.SessionID == "" {
+					clientState.SessionID = sessionID
+				}
+				st = &clientState
 			} else {
-				if !clientState.IsInVoice {
-					delete(sMap, sessionID)
-					delete(sMap, client.UserID)
+				st.UserID = userID
+				st.ServerID = targetServerID
+				if clientState.ChannelID != "" {
+					st.ChannelID = clientState.ChannelID
+				}
+				st.IsInVoice = true
+				st.IsConnecting = clientState.IsConnecting
+				st.IsTransmitting = clientState.IsTransmitting
+				st.IsMuted = clientState.IsMuted
+				st.IsDeafened = clientState.IsDeafened
+				st.IsSpeaking = clientState.IsSpeaking
+				if clientState.Username != "" {
+					st.Username = clientState.Username
+				}
+				if clientState.StreamTitle != "" {
+					st.StreamTitle = clientState.StreamTitle
+				}
+				if clientState.PreviewType != "" {
+					st.PreviewType = clientState.PreviewType
+				}
+				if clientState.Thumbnail != "" {
+					st.Thumbnail = clientState.Thumbnail
+				}
+				if clientState.Device != "" {
+					st.Device = clientState.Device
+				}
+				if clientState.SessionID != "" {
+					st.SessionID = clientState.SessionID
 				}
 			}
 
-			st.IsInVoice = clientState.IsInVoice
-			st.IsConnecting = clientState.IsConnecting
-			st.IsTransmitting = clientState.IsTransmitting
-			st.IsMuted = clientState.IsMuted
-			st.IsDeafened = clientState.IsDeafened
-			st.IsSpeaking = clientState.IsSpeaking
-			st.StreamTitle = clientState.StreamTitle
-			st.PreviewType = clientState.PreviewType
-			st.Thumbnail = clientState.Thumbnail
-			if clientState.Device != "" {
-				st.Device = clientState.Device
+			// Padroniza a chave sempre por userID para evitar duplicatas por sessionID
+			if existingKey != "" && existingKey != userID {
+				delete(sMap, existingKey)
 			}
+			delete(sMap, sessionID)
+			sMap[userID] = st
 			copyState := *st
 			h.mu.Unlock()
+
+			// Emite eventos FORA do lock para evitar qualquer deadlock
+			if oldLeaveEvent != nil {
+				h.BroadcastEvent(oldLeaveEvent)
+			}
 
 			updatedBytes, _ := json.Marshal(copyState)
 			event.Payload = updatedBytes
@@ -443,6 +532,13 @@ func (h *Hub) SetLiveKitParticipantState(serverID, channelID, userID, username s
 	h.mu.Lock()
 	if _, ok := h.voiceStates[serverID]; !ok {
 		h.voiceStates[serverID] = make(map[string]*models.VoiceParticipantState)
+	}
+
+	// Limpa qualquer chave residual/duplicada do mesmo usuário
+	for k, v := range h.voiceStates[serverID] {
+		if v.UserID == userID && k != userID {
+			delete(h.voiceStates[serverID], k)
+		}
 	}
 
 	sessionID := userID

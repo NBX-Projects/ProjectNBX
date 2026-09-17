@@ -305,3 +305,114 @@ func TestHub_ServerIDFiltering(t *testing.T) {
 	}
 }
 
+func TestHub_VoiceStateChannelSwitchAndDeduplication(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	hub := NewHub(repo)
+	go hub.Run()
+
+	client := &Client{
+		Hub:      hub,
+		Send:     make(chan []byte, 32),
+		UserID:   "usr_switch",
+		Username: "SwitchUser",
+		ServerID: "srv_switch",
+	}
+	hub.Register <- client
+	time.Sleep(30 * time.Millisecond)
+
+	// Drena mensagens iniciais
+	for len(client.Send) > 0 {
+		<-client.Send
+	}
+
+	// 1. Entra no canal A com session_1
+	joinPayloadA, _ := json.Marshal(models.VoiceParticipantState{
+		SessionID: "sess_1",
+		UserID:    "usr_switch",
+		ServerID:  "srv_switch",
+		ChannelID: "chn_A",
+		IsInVoice: true,
+	})
+	hub.HandleClientEvent(client, &models.WSEvent{
+		Type:     models.EventVoiceState,
+		ServerID: "srv_switch",
+		Payload:  joinPayloadA,
+	})
+	expectEvent(t, client.Send, models.EventVoiceState, 200*time.Millisecond)
+
+	// 2. Muda para o canal B com nova session_2 (sem leave explícito antes)
+	joinPayloadB, _ := json.Marshal(models.VoiceParticipantState{
+		SessionID: "sess_2",
+		UserID:    "usr_switch",
+		ServerID:  "srv_switch",
+		ChannelID: "chn_B",
+		IsInVoice: true,
+	})
+	hub.HandleClientEvent(client, &models.WSEvent{
+		Type:     models.EventVoiceState,
+		ServerID: "srv_switch",
+		Payload:  joinPayloadB,
+	})
+
+	// Deve emitir leave de chn_A e join de chn_B
+	ev1 := expectEvent(t, client.Send, models.EventVoiceState, 200*time.Millisecond)
+	ev2 := expectEvent(t, client.Send, models.EventVoiceState, 200*time.Millisecond)
+
+	var st1, st2 models.VoiceParticipantState
+	_ = json.Unmarshal(ev1.Payload, &st1)
+	_ = json.Unmarshal(ev2.Payload, &st2)
+
+	hasLeaveA := (st1.ChannelID == "chn_A" && !st1.IsInVoice) || (st2.ChannelID == "chn_A" && !st2.IsInVoice)
+	hasJoinB := (st1.ChannelID == "chn_B" && st1.IsInVoice) || (st2.ChannelID == "chn_B" && st2.IsInVoice)
+
+	if !hasLeaveA {
+		t.Errorf("Esperado evento de saída do canal A, recebido st1: %+v, st2: %+v", st1, st2)
+	}
+	if !hasJoinB {
+		t.Errorf("Esperado evento de entrada no canal B, recebido st1: %+v, st2: %+v", st1, st2)
+	}
+
+	// 3. Solicita VOICE_SYNC: deve conter EXATAMENTE 1 participante no canal B (sem duplicatas)
+	hub.HandleClientEvent(client, &models.WSEvent{
+		Type:     models.EventVoiceSync,
+		ServerID: "srv_switch",
+	})
+	syncEv := expectEvent(t, client.Send, models.EventVoiceSync, 200*time.Millisecond)
+	var syncList []*models.VoiceParticipantState
+	if err := json.Unmarshal(syncEv.Payload, &syncList); err != nil {
+		t.Fatalf("Erro ao deserializar sync: %v", err)
+	}
+	if len(syncList) != 1 {
+		t.Fatalf("Esperado exatamente 1 participante no sync, obtido %d", len(syncList))
+	}
+	if syncList[0].ChannelID != "chn_B" || syncList[0].UserID != "usr_switch" {
+		t.Errorf("Participante no sync incorreto: %+v", syncList[0])
+	}
+
+	// 4. Sai do canal B
+	leavePayload, _ := json.Marshal(models.VoiceParticipantState{
+		SessionID: "sess_2",
+		UserID:    "usr_switch",
+		ServerID:  "srv_switch",
+		ChannelID: "chn_B",
+		IsInVoice: false,
+	})
+	hub.HandleClientEvent(client, &models.WSEvent{
+		Type:     models.EventVoiceState,
+		ServerID: "srv_switch",
+		Payload:  leavePayload,
+	})
+	expectEvent(t, client.Send, models.EventVoiceState, 200*time.Millisecond)
+
+	// 5. Novo VOICE_SYNC deve estar vazio
+	hub.HandleClientEvent(client, &models.WSEvent{
+		Type:     models.EventVoiceSync,
+		ServerID: "srv_switch",
+	})
+	syncEmptyEv := expectEvent(t, client.Send, models.EventVoiceSync, 200*time.Millisecond)
+	var emptyList []*models.VoiceParticipantState
+	_ = json.Unmarshal(syncEmptyEv.Payload, &emptyList)
+	if len(emptyList) != 0 {
+		t.Fatalf("Esperado 0 participantes após saída, obtido %d", len(emptyList))
+	}
+}
