@@ -57,14 +57,15 @@ backend/
 
 ## ⚡ Como Executar
 
-### Opção 1: Via Docker Compose (Recomendado - Sobe Backend + LiveKit + Redis)
+### Opção 1: Via Docker Compose (Recomendado - Sobe Backend + LiveKit + Redis + PostgreSQL + Adminer)
 
 ```bash
 cd backend
 docker-compose up -d --build
 ```
 
-O backend estará acessível em `http://localhost:8080` e o LiveKit SFU em `ws://localhost:7880`.
+O backend estará acessível em `http://localhost:8081` (ou `8080` interno), o LiveKit SFU em `ws://localhost:7880`, o PostgreSQL na porta `8190` e o **Adminer** (gerenciador Web do banco de dados) em `http://localhost:8082`.
+
 
 ### Opção 2: Execução Nativa em Go
 
