@@ -13,7 +13,7 @@ services:
     environment:
       PORT: '8080'
       DATABASE_URL: 'postgres://admin:nbx_pass@nbx_db:5432/nbx_stream?sslmode=disable'
-      LIVEKIT_URL: '${LIVEKIT_URL:-ws://nbxproject.massco.com.br}'
+      LIVEKIT_URL: '${LIVEKIT_URL:-wss://nbxproject.massco.com.br}'
       LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:-devkey}'
       LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:-secret}'
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-*}'
