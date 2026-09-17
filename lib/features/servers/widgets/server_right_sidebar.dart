@@ -33,6 +33,8 @@ class ServerRightSidebar extends StatefulWidget {
   final VoidCallback? onToggleDeafened;
   final String? connectedVoiceChannelId;
   final bool isInVoice;
+  final bool isTransmitting;
+  final VoidCallback? onToggleTransmission;
   final double? width;
   final ServerSidebarTab initialTab;
 
@@ -57,6 +59,8 @@ class ServerRightSidebar extends StatefulWidget {
     this.onToggleDeafened,
     this.connectedVoiceChannelId,
     this.isInVoice = false,
+    this.isTransmitting = false,
+    this.onToggleTransmission,
     this.width,
     this.initialTab = ServerSidebarTab.canais,
   });
@@ -83,40 +87,37 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
-    final activeCh = widget.activeChannel ??
-        (widget.channels.isNotEmpty ? widget.channels.first : null);
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final activeCh = widget.activeChannel;
 
-    final isInVoice = widget.isInVoice || widget.voiceState.isConnected;
-    final voiceChannelId = widget.connectedVoiceChannelId ?? widget.voiceState.connectedChannelId;
-    final hasActiveVoice = isInVoice && voiceChannelId != null;
+    // Conexão de voz ativa caso o estado do Provider ou o canal conectado estejam setados
+    final hasActiveVoice = widget.isInVoice ||
+        widget.voiceState.isConnected ||
+        widget.connectedVoiceChannelId != null;
 
-    final channelName = voiceChannelId != null && activeCh != null
-        ? activeCh.name
-        : 'geral';
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 768;
-    final effectiveWidth = widget.width ?? (isMobile ? double.infinity : 250.0);
+    final channelName = widget.channels
+        .firstWhere(
+          (c) => c.id == (widget.connectedVoiceChannelId ?? widget.voiceState.connectedChannelId),
+          orElse: () => activeCh ?? widget.channels.first,
+        )
+        .name;
 
     return Container(
-      width: effectiveWidth,
+      width: widget.width ?? (isMobile ? double.infinity : 260),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141522) : const Color(0xFFFAF9F6),
-        border: isMobile
-            ? null
-            : Border(
-                left: BorderSide(
-                  color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
-                ),
-              ),
+        color: isDark ? const Color(0xFF141520) : const Color(0xFFFAF9F6),
+        border: Border(
+          left: BorderSide(
+            color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
+          ),
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header Tabs: Canais | Membros | Resumo
+          // Top Tab Bar
           Container(
             height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
@@ -161,6 +162,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
               onLeaveVoice: widget.onLeaveVoice,
               onToggleMic: widget.onToggleMic,
               onToggleDeafened: widget.onToggleDeafened,
+              isTransmitting: widget.isTransmitting,
+              onToggleTransmission: widget.onToggleTransmission,
             )
           else if (isMobile)
             SizedBox(

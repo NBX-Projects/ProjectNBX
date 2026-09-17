@@ -1,12 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
+import 'package:projectnbx/features/voice/widgets/screen_share_view.dart';
 import 'package:projectnbx/features/voice/widgets/viewports/stream_preview_viewports.dart';
 
 /// Banner compacto informando que um participante está transmitindo ao vivo
@@ -131,6 +133,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
   final VoiceParticipantInfo? remoteParticipant;
   final ScreenShareConfig? activeScreenShareConfig;
   final LocalVideoTrack? localScreenShareTrack;
+  final rtc.MediaStream? webRTCStream;
   final Color accentColor;
   final double streamVolume;
   final VoidCallback? onBackToChat;
@@ -142,6 +145,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
     this.remoteParticipant,
     this.activeScreenShareConfig,
     this.localScreenShareTrack,
+    this.webRTCStream,
     this.accentColor = const Color(0xFFF5CBA7),
     this.streamVolume = 0.75,
     this.onBackToChat,
@@ -421,6 +425,23 @@ class ImmersiveStreamPlayer extends StatelessWidget {
     required String title,
     String? remoteThumbnail,
   }) {
+    if (webRTCStream != null) {
+      return Container(
+        color: const Color(0xFF090A10),
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: ScreenShareView(
+              stream: webRTCStream!,
+              isLocal: localScreenShareTrack != null,
+              broadcasterName: title,
+              onClose: onBackToChat,
+            ),
+          ),
+        ),
+      );
+    }
+
     if (localScreenShareTrack != null && remoteThumbnail == null) {
       return Container(
         color: const Color(0xFF090A10),

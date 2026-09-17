@@ -28,6 +28,7 @@ import 'package:projectnbx/features/servers/widgets/server_right_sidebar.dart';
 import 'package:projectnbx/features/servers/widgets/server_top_nav.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
 import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
+import 'package:projectnbx/features/voice/controllers/screen_share_controller.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
@@ -1202,8 +1203,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   Future<void> _toggleTransmission() async {
-    if (_isTransmitting) {
+    final screenShareState = ref.read(screenShareControllerProvider);
+    final screenShareCtrl = ref.read(screenShareControllerProvider.notifier);
+
+    if (_isTransmitting || screenShareState.isSharing) {
       _streamRefreshTimer?.cancel();
+      await screenShareCtrl.stopScreenShare();
       await _localScreenShareTrack?.stop();
       await _localScreenShareTrack?.dispose();
       _localScreenShareTrack = null;
@@ -1220,6 +1225,66 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       return;
     }
 
+    // No modo Web (navegador), aciona diretamente o seletor nativo do navegador (getDisplayMedia)
+    if (kIsWeb) {
+      try {
+        final screenTrack = await LocalVideoTrack.createScreenShareTrack(
+          const ScreenShareCaptureOptions(
+            params: VideoParametersPresets.screenShareH1080FPS30,
+          ),
+        );
+
+        if (!mounted) {
+          await screenTrack.stop();
+          await screenTrack.dispose();
+          return;
+        }
+
+        const config = ScreenShareConfig(
+          sourceId: 'web_screen',
+          title: 'Tela do Navegador',
+          resolution: '1080p',
+          fps: 30,
+          type: 'screen',
+          previewType: 'web',
+          shareAudio: true,
+        );
+
+        // Se o usuário clicar em "Parar compartilhamento" na barra nativa do navegador
+        screenTrack.mediaStreamTrack.onEnded = () {
+          if (mounted && _isTransmitting) {
+            _toggleTransmission();
+          }
+        };
+
+        _startLiveStreamBroadcaster(config);
+
+        setState(() {
+          _isTransmitting = true;
+          _activeScreenShareConfig = config;
+          _localScreenShareTrack = screenTrack;
+          _isInVoice = true;
+          _isChatVisible = false;
+          _isRightSidebarVisible = false;
+          if (_activeChannel != null) {
+            _connectedVoiceChannelId = _activeChannel!.id;
+          }
+        });
+        _broadcastVoiceState(
+          isInVoice: true,
+          isTransmitting: true,
+          streamTitle: config.title,
+          previewType: config.previewType,
+          thumbnail: config.thumbnail,
+          channelId: _activeChannel?.id,
+        );
+      } catch (e) {
+        debugPrint('[ScreenShare Web] Usuário cancelou ou erro no displayMedia: $e');
+      }
+      return;
+    }
+
+    if (!mounted) return;
     final activeChannelName = _activeChannel?.name ?? 'geral';
     final config = await ScreenShareDialog.show(
       context,
@@ -1399,6 +1464,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         onMembersUpdated: _loadServerMembers,
                         onToggleMic: _handleMicToggle,
                         onToggleDeafened: _handleDeafenToggle,
+                        isTransmitting: _isTransmitting,
+                        onToggleTransmission: _toggleTransmission,
                         connectedVoiceChannelId: _connectedVoiceChannelId ?? liveVoiceState.connectedChannelId,
                       ),
                     ),
@@ -1493,6 +1560,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               remoteParticipant: _watchingRemoteStream,
               activeScreenShareConfig: _activeScreenShareConfig,
               localScreenShareTrack: _localScreenShareTrack,
+              webRTCStream: ref.watch(screenShareControllerProvider).remoteShare?.stream,
               accentColor: _selectedAccentColor,
               streamVolume: _streamVolume,
               onBackToChat: () => setState(() {
@@ -1784,6 +1852,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             onMembersUpdated: _loadServerMembers,
             onToggleMic: _handleMicToggle,
             onToggleDeafened: _handleDeafenToggle,
+            isTransmitting: _isTransmitting,
+            onToggleTransmission: _toggleTransmission,
             connectedVoiceChannelId: _connectedVoiceChannelId,
           ),
       ],

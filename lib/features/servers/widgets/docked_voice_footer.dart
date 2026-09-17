@@ -15,6 +15,8 @@ class DockedVoiceFooter extends StatefulWidget {
   final VoidCallback onLeaveVoice;
   final VoidCallback? onToggleMic;
   final VoidCallback? onToggleDeafened;
+  final bool isTransmitting;
+  final VoidCallback? onToggleTransmission;
 
   const DockedVoiceFooter({
     super.key,
@@ -26,6 +28,8 @@ class DockedVoiceFooter extends StatefulWidget {
     required this.onLeaveVoice,
     this.onToggleMic,
     this.onToggleDeafened,
+    this.isTransmitting = false,
+    this.onToggleTransmission,
   });
 
   @override
@@ -43,6 +47,7 @@ class _DockedVoiceFooterState extends State<DockedVoiceFooter> {
     final isDark = widget.isDark;
     final voiceState = widget.voiceState;
     final voiceNotifier = widget.voiceNotifier;
+    final isTransmitting = widget.isTransmitting;
 
     return Container(
       padding: EdgeInsets.fromLTRB(10, 8, 10, effectiveBottom > 8 ? effectiveBottom : 8),
@@ -113,6 +118,88 @@ class _DockedVoiceFooterState extends State<DockedVoiceFooter> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          if (widget.onToggleTransmission != null) ...[
+            const SizedBox(height: 8),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onToggleTransmission,
+                borderRadius: BorderRadius.circular(6),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: double.infinity,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isTransmitting
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                        : (isDark
+                            ? const Color(0xFF1E2030)
+                            : const Color(0xFFF1F5F9)),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isTransmitting
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.45)
+                          : (isDark
+                              ? const Color(0xFF313244)
+                              : const Color(0xFFE2E8F0)),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isTransmitting
+                            ? LucideIcons.screenShareOff
+                            : LucideIcons.screenShare,
+                        size: 15,
+                        color: isTransmitting
+                            ? const Color(0xFFEF4444)
+                            : (isDark
+                                ? const Color(0xFFCAD3F5)
+                                : const Color(0xFF334155)),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isTransmitting
+                            ? 'Parar Transmissão'
+                            : 'Compartilhar Tela',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isTransmitting
+                              ? const Color(0xFFEF4444)
+                              : (isDark
+                                  ? const Color(0xFFCAD3F5)
+                                  : const Color(0xFF334155)),
+                        ),
+                      ),
+                      if (isTransmitting) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            'AO VIVO',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
