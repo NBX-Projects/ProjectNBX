@@ -58,6 +58,7 @@ func (r *Router) SetupRoutes() http.Handler {
 	liveKitWebhookHandler := handlers.NewLiveKitWebhookHandler(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret, r.repo, r.hub)
 	serverHandler := handlers.NewServerHandler(r.repo, r.hub)
 	wsHandler := handlers.NewWSHandler(r.hub, r.jwtService, r.repo)
+	webrtcHandler := handlers.NewWebRTCHandler(r.hub.ScreenShareService.GetTURNService())
 
 	// Endpoint Raiz Público
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
@@ -120,6 +121,10 @@ func (r *Router) SetupRoutes() http.Handler {
 
 	// LiveKit Token
 	protected.HandleFunc("/voice/token", liveKitHandler.GenerateToken).Methods("POST", "OPTIONS")
+
+	// WebRTC P2P TURN Credentials (RFC 5766)
+	protected.HandleFunc("/webrtc/turn-credentials", webrtcHandler.GetTURNCredentials).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/v1/webrtc/turn-credentials", webrtcHandler.GetTURNCredentials).Methods("GET", "OPTIONS")
 
 	// Servidores & Canais
 	protected.HandleFunc("/servers", serverHandler.ListServers).Methods("GET", "OPTIONS")

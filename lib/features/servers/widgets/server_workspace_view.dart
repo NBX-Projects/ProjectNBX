@@ -28,10 +28,12 @@ import 'package:projectnbx/features/servers/widgets/server_right_sidebar.dart';
 import 'package:projectnbx/features/servers/widgets/server_top_nav.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
 import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
+import 'package:projectnbx/features/voice/controllers/screen_share_controller.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
 import 'package:projectnbx/features/voice/widgets/immersive_stream_player.dart';
+import 'package:projectnbx/features/voice/widgets/screen_picker_dialog.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
 import 'package:projectnbx/features/voice/widgets/stream_bottom_control_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1202,8 +1204,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   Future<void> _toggleTransmission() async {
-    if (_isTransmitting) {
+    final screenShareState = ref.read(screenShareControllerProvider);
+    final screenShareCtrl = ref.read(screenShareControllerProvider.notifier);
+
+    if (_isTransmitting || screenShareState.isSharing) {
       _streamRefreshTimer?.cancel();
+      await screenShareCtrl.stopScreenShare();
       await _localScreenShareTrack?.stop();
       await _localScreenShareTrack?.dispose();
       _localScreenShareTrack = null;
@@ -1215,6 +1221,27 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _broadcastVoiceState(
         isInVoice: true,
         isTransmitting: false,
+        channelId: _activeChannel?.id,
+      );
+      return;
+    }
+
+    final channelId = _activeChannel?.id ?? 'geral';
+    final started = await ScreenPickerDialog.show(context, channelId);
+
+    if (started == true && mounted) {
+      setState(() {
+        _isTransmitting = true;
+        _isInVoice = true;
+        _isChatVisible = false;
+        _isRightSidebarVisible = false;
+        if (_activeChannel != null) {
+          _connectedVoiceChannelId = _activeChannel!.id;
+        }
+      });
+      _broadcastVoiceState(
+        isInVoice: true,
+        isTransmitting: true,
         channelId: _activeChannel?.id,
       );
       return;
@@ -1493,6 +1520,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               remoteParticipant: _watchingRemoteStream,
               activeScreenShareConfig: _activeScreenShareConfig,
               localScreenShareTrack: _localScreenShareTrack,
+              webRTCStream: ref.watch(screenShareControllerProvider).remoteShare?.stream,
               accentColor: _selectedAccentColor,
               streamVolume: _streamVolume,
               onBackToChat: () => setState(() {

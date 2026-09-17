@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -9,22 +10,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
+	"github.com/projectnbx/backend/internal/screenshare"
 )
 
 // Hub mantém o conjunto de clientes ativos e faz o roteamento das mensagens
 type Hub struct {
-	mu          sync.RWMutex
-	clients     map[*Client]bool
-	userConns   map[string][]*Client                               // userID -> lista de conexões ativas
-	voiceStates map[string]map[string]*models.VoiceParticipantState // serverID -> (sessionID -> state)
-	Register    chan *Client
-	Unregister  chan *Client
-	Broadcast   chan *models.WSEvent
-	Repo        repository.Repository
+	mu                 sync.RWMutex
+	clients            map[*Client]bool
+	userConns          map[string][]*Client                               // userID -> lista de conexões ativas
+	voiceStates        map[string]map[string]*models.VoiceParticipantState // serverID -> (sessionID -> state)
+	Register           chan *Client
+	Unregister         chan *Client
+	Broadcast          chan *models.WSEvent
+	Repo               repository.Repository
+	ScreenShareService *screenshare.Service
 }
 
 func NewHub(repo repository.Repository) *Hub {
-	return &Hub{
+	hub := &Hub{
 		clients:     make(map[*Client]bool),
 		userConns:   make(map[string][]*Client),
 		voiceStates: make(map[string]map[string]*models.VoiceParticipantState),
@@ -33,6 +36,19 @@ func NewHub(repo repository.Repository) *Hub {
 		Broadcast:   make(chan *models.WSEvent, 256),
 		Repo:        repo,
 	}
+
+	repoSS := screenshare.NewInMemoryScreenShareRepository()
+	turnService := screenshare.NewTURNService(screenshare.DefaultTURNConfig())
+	configSS := screenshare.DefaultScreenShareConfig()
+	hub.ScreenShareService = screenshare.NewService(
+		repoSS,
+		turnService,
+		configSS,
+		hub,
+		hub.isUserInChannel,
+	)
+
+	return hub
 }
 
 func (h *Hub) Run() {
@@ -125,6 +141,9 @@ func (h *Hub) Run() {
 					h.BroadcastEvent(ev)
 				}
 			}
+
+			// Notifica o serviço de screen share para tratar grace period do broadcaster ou saída de viewers
+			h.ScreenShareService.OnUserDisconnected(context.Background(), client.UserID, client.ServerID, h.isUserOnline)
 
 		case event := <-h.Broadcast:
 			h.BroadcastEvent(event)
@@ -293,7 +312,122 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			Payload: pongPayload,
 		})
 		client.SendEvent(data)
+
+	// Eventos de Screen Sharing e WebRTC P2P
+	case models.EventScreenShareStart:
+		var req screenshare.WebRTCSignalingRequest
+		if err := json.Unmarshal(event.Payload, &req); err == nil {
+			req.Type = models.EventScreenShareStart
+			if req.ChannelID == "" {
+				req.ChannelID = event.ChannelID
+			}
+			h.ScreenShareService.HandleStart(context.Background(), client.UserID, client.ServerID, &req)
+		}
+
+	case models.EventScreenShareJoin:
+		var req screenshare.WebRTCSignalingRequest
+		if err := json.Unmarshal(event.Payload, &req); err == nil {
+			req.Type = models.EventScreenShareJoin
+			if req.ChannelID == "" {
+				req.ChannelID = event.ChannelID
+			}
+			h.ScreenShareService.HandleJoin(context.Background(), client.UserID, client.ServerID, &req)
+		}
+
+	case models.EventScreenShareStop:
+		var req screenshare.WebRTCSignalingRequest
+		if err := json.Unmarshal(event.Payload, &req); err == nil {
+			req.Type = models.EventScreenShareStop
+			if req.ChannelID == "" {
+				req.ChannelID = event.ChannelID
+			}
+			h.ScreenShareService.HandleStop(context.Background(), client.UserID, client.ServerID, &req)
+		}
+
+	case models.EventWebRTCOffer, models.EventWebRTCAnswer, models.EventWebRTCICECandidate:
+		var req screenshare.WebRTCSignalingRequest
+		if err := json.Unmarshal(event.Payload, &req); err == nil {
+			req.Type = event.Type
+			if req.ChannelID == "" {
+				req.ChannelID = event.ChannelID
+			}
+			h.ScreenShareService.HandleSignaling(context.Background(), client.UserID, client.ServerID, &req)
+		}
 	}
+}
+
+// RouteToUser encaminha mensagens de sinalização diretamente para todas as conexões ativas de um usuário
+func (h *Hub) RouteToUser(userID string, event *screenshare.WebRTCSignalingEvent) error {
+	payloadBytes, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	wsEvent := &models.WSEvent{
+		Type:      event.Type,
+		Payload:   payloadBytes,
+		ChannelID: event.ChannelID,
+	}
+	data, err := json.Marshal(wsEvent)
+	if err != nil {
+		return err
+	}
+
+	h.mu.RLock()
+	conns, exists := h.userConns[userID]
+	connsCopy := make([]*Client, len(conns))
+	copy(connsCopy, conns)
+	h.mu.RUnlock()
+
+	if !exists || len(connsCopy) == 0 {
+		return nil
+	}
+
+	for _, client := range connsCopy {
+		client.SendEvent(data)
+	}
+	return nil
+}
+
+// BroadcastToChannel faz broadcast de um evento para o canal especificado
+func (h *Hub) BroadcastToChannel(channelID, serverID string, event *models.WSEvent) error {
+	event.ChannelID = channelID
+	event.ServerID = serverID
+	h.BroadcastEvent(event)
+	return nil
+}
+
+func (h *Hub) isUserInChannel(serverID, channelID, userID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// 1. Verifica nos estados de voz do servidor informado
+	if sMap, ok := h.voiceStates[serverID]; ok {
+		for _, st := range sMap {
+			if st.UserID == userID && st.ChannelID == channelID && st.IsInVoice {
+				return true
+			}
+		}
+	}
+
+	// 2. Busca em todos os servidores registrados no hub
+	for _, sMap := range h.voiceStates {
+		for _, st := range sMap {
+			if st.UserID == userID && st.ChannelID == channelID && st.IsInVoice {
+				return true
+			}
+		}
+	}
+
+	// 3. Fallback: se o usuário possui conexão ativa no WebSocket
+	conns, exists := h.userConns[userID]
+	return exists && len(conns) > 0
+}
+
+func (h *Hub) isUserOnline(userID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	conns, exists := h.userConns[userID]
+	return exists && len(conns) > 0
 }
 
 func (h *Hub) broadcastPresence(userID, status string) {

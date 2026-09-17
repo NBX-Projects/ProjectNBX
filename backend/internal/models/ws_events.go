@@ -17,6 +17,21 @@ const (
 	EventPing           EventType = "PING"
 	EventPong           EventType = "PONG"
 	EventError          EventType = "ERROR"
+
+	// Eventos de Screen Sharing (P2P WebRTC)
+	EventScreenShareStart        EventType = "SCREEN_SHARE_START"
+	EventScreenShareStarted      EventType = "SCREEN_SHARE_STARTED"
+	EventScreenShareJoin         EventType = "SCREEN_SHARE_JOIN"
+	EventScreenShareJoined       EventType = "SCREEN_SHARE_JOINED"
+	EventScreenShareViewerJoined EventType = "SCREEN_SHARE_VIEWER_JOINED"
+	EventScreenShareViewerLeft   EventType = "SCREEN_SHARE_VIEWER_LEFT"
+	EventScreenShareStop         EventType = "SCREEN_SHARE_STOP"
+	EventScreenShareStopped      EventType = "SCREEN_SHARE_STOPPED"
+	EventScreenShareAvailable    EventType = "SCREEN_SHARE_AVAILABLE"
+	EventScreenShareError        EventType = "SCREEN_SHARE_ERROR"
+	EventWebRTCOffer             EventType = "WEBRTC_OFFER"
+	EventWebRTCAnswer            EventType = "WEBRTC_ANSWER"
+	EventWebRTCICECandidate      EventType = "WEBRTC_ICE_CANDIDATE"
 )
 
 // WSEvent envelope padrão para mensagens WebSocket
