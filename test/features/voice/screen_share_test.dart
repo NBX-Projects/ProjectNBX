@@ -7,6 +7,8 @@ import 'package:projectnbx/features/voice/controllers/screen_share_controller.da
 import 'package:projectnbx/features/voice/services/screen_capture_source.dart';
 import 'package:projectnbx/features/voice/services/screen_share_transport.dart';
 
+class MockMediaStream extends Fake implements MediaStream {}
+
 class MockScreenCaptureSource implements ScreenCaptureSource {
   bool getSourcesCalled = false;
   bool captureCalled = false;
@@ -24,8 +26,7 @@ class MockScreenCaptureSource implements ScreenCaptureSource {
   @override
   Future<MediaStream> capture(ScreenSource source, ScreenQualityProfile profile) async {
     captureCalled = true;
-    // Retorna um stream vazio/mock
-    return MediaStream('mock-stream-id', 'mock-owner');
+    return MockMediaStream();
   }
 
   @override

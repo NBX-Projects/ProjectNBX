@@ -33,7 +33,6 @@ import 'package:projectnbx/features/voice/controllers/voice_state_controller.dar
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
 import 'package:projectnbx/features/voice/widgets/immersive_stream_player.dart';
-import 'package:projectnbx/features/voice/widgets/screen_picker_dialog.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
 import 'package:projectnbx/features/voice/widgets/stream_bottom_control_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1226,27 +1225,66 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       return;
     }
 
-    final channelId = _activeChannel?.id ?? 'geral';
-    final started = await ScreenPickerDialog.show(context, channelId);
+    // No modo Web (navegador), aciona diretamente o seletor nativo do navegador (getDisplayMedia)
+    if (kIsWeb) {
+      try {
+        final screenTrack = await LocalVideoTrack.createScreenShareTrack(
+          const ScreenShareCaptureOptions(
+            params: VideoParametersPresets.screenShareH1080FPS30,
+          ),
+        );
 
-    if (started == true && mounted) {
-      setState(() {
-        _isTransmitting = true;
-        _isInVoice = true;
-        _isChatVisible = false;
-        _isRightSidebarVisible = false;
-        if (_activeChannel != null) {
-          _connectedVoiceChannelId = _activeChannel!.id;
+        if (!mounted) {
+          await screenTrack.stop();
+          await screenTrack.dispose();
+          return;
         }
-      });
-      _broadcastVoiceState(
-        isInVoice: true,
-        isTransmitting: true,
-        channelId: _activeChannel?.id,
-      );
+
+        const config = ScreenShareConfig(
+          sourceId: 'web_screen',
+          title: 'Tela do Navegador',
+          resolution: '1080p',
+          fps: 30,
+          type: 'screen',
+          previewType: 'web',
+          shareAudio: true,
+        );
+
+        // Se o usuário clicar em "Parar compartilhamento" na barra nativa do navegador
+        screenTrack.mediaStreamTrack.onEnded = () {
+          if (mounted && _isTransmitting) {
+            _toggleTransmission();
+          }
+        };
+
+        _startLiveStreamBroadcaster(config);
+
+        setState(() {
+          _isTransmitting = true;
+          _activeScreenShareConfig = config;
+          _localScreenShareTrack = screenTrack;
+          _isInVoice = true;
+          _isChatVisible = false;
+          _isRightSidebarVisible = false;
+          if (_activeChannel != null) {
+            _connectedVoiceChannelId = _activeChannel!.id;
+          }
+        });
+        _broadcastVoiceState(
+          isInVoice: true,
+          isTransmitting: true,
+          streamTitle: config.title,
+          previewType: config.previewType,
+          thumbnail: config.thumbnail,
+          channelId: _activeChannel?.id,
+        );
+      } catch (e) {
+        debugPrint('[ScreenShare Web] Usuário cancelou ou erro no displayMedia: $e');
+      }
       return;
     }
 
+    if (!mounted) return;
     final activeChannelName = _activeChannel?.name ?? 'geral';
     final config = await ScreenShareDialog.show(
       context,
@@ -1426,6 +1464,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         onMembersUpdated: _loadServerMembers,
                         onToggleMic: _handleMicToggle,
                         onToggleDeafened: _handleDeafenToggle,
+                        isTransmitting: _isTransmitting,
+                        onToggleTransmission: _toggleTransmission,
                         connectedVoiceChannelId: _connectedVoiceChannelId ?? liveVoiceState.connectedChannelId,
                       ),
                     ),
@@ -1812,6 +1852,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             onMembersUpdated: _loadServerMembers,
             onToggleMic: _handleMicToggle,
             onToggleDeafened: _handleDeafenToggle,
+            isTransmitting: _isTransmitting,
+            onToggleTransmission: _toggleTransmission,
             connectedVoiceChannelId: _connectedVoiceChannelId,
           ),
       ],

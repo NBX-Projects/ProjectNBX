@@ -279,12 +279,13 @@ class _ScreenPickerDialogState extends ConsumerState<ScreenPickerDialog>
                     onPressed: _isStarting || state.selectedSource == null
                         ? null
                         : () async {
+                            final nav = Navigator.of(context);
                             setState(() => _isStarting = true);
                             final success = await controller.startScreenShare(widget.channelId);
                             if (mounted) {
                               setState(() => _isStarting = false);
                               if (success) {
-                                Navigator.of(context).pop(true);
+                                nav.pop(true);
                               }
                             }
                           },
@@ -395,7 +396,7 @@ class _ScreenPickerDialogState extends ConsumerState<ScreenPickerDialog>
                         ? Image.memory(
                             source.thumbnail!,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => _buildFallbackIcon(source),
+                            errorBuilder: (context, error, stackTrace) => _buildFallbackIcon(source),
                           )
                         : _buildFallbackIcon(source),
                   ),

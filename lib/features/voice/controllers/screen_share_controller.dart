@@ -1,9 +1,10 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
-import 'package:projectnbx/features/voice/services/screen_capture_source.dart';
+import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/voice/services/p2p_webrtc_screen_transport.dart';
+import 'package:projectnbx/features/voice/services/screen_capture_source.dart';
 import 'package:projectnbx/features/voice/services/screen_share_transport.dart';
 
 final screenCaptureSourceProvider = Provider<ScreenCaptureSource>((ref) {
@@ -144,7 +145,6 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
         if (payload is Map) {
           final sessId = payload['session_id'] as String?;
           final bId = payload['broadcaster_id'] as String?;
-          final chId = event['channel_id'] as String? ?? payload['channel_id'] as String?;
           if (sessId != null && bId != null && !state.isSharing && !state.isViewing) {
             // Auto-join ou disponibilidade
           }

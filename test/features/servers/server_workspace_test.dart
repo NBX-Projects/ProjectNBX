@@ -228,6 +228,7 @@ void main() {
     testWidgets('DockedVoiceFooter renders active connection and actions', (tester) async {
       final voiceNotifier = VoiceStateNotifier();
       var leftVoice = false;
+      var toggledScreenShare = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -241,6 +242,10 @@ void main() {
               onLeaveVoice: () {
                 leftVoice = true;
               },
+              isTransmitting: false,
+              onToggleTransmission: () {
+                toggledScreenShare = true;
+              },
             ),
           ),
         ),
@@ -250,6 +255,12 @@ void main() {
 
       expect(find.text('Conectado'), findsOneWidget);
       expect(find.textContaining('Lounge SFU'), findsOneWidget);
+      expect(find.text('Compartilhar Tela'), findsOneWidget);
+
+      // Tap screen share button
+      final screenShareBtn = find.text('Compartilhar Tela');
+      await tester.tap(screenShareBtn);
+      expect(toggledScreenShare, isTrue);
 
       // Disconnect button
       final dcFinder = find.byIcon(LucideIcons.phoneOff);

@@ -338,9 +338,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
 
     // Viewer é polite (isPolite = true)
     var pc = _peerConnections[fromUserId];
-    if (pc == null) {
-      pc = await _createPeerConnectionFor(fromUserId, isPolite: true);
-    }
+    pc ??= await _createPeerConnectionFor(fromUserId, isPolite: true);
 
     final isPolite = _currentSession?.role == ScreenShareRole.viewer;
     final offerCollision = (_makingOffer[fromUserId] ?? false) ||
