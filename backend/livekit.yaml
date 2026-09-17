@@ -11,8 +11,8 @@ rtc:
     - "stun.l.google.com:19302"
     - "stun1.l.google.com:19302"
   ips:
-    includes:
-      - "192.168.15.0/24"
+    excludes:
+      - "172.16.0.0/12"
 
 keys:
   devkey: secret
