@@ -114,7 +114,92 @@ O projeto adota uma identidade visual única e moderna inspirada em estética de
 
 ---
 
-## 📦 6. Convenções de Código, Linter e Formatação
+## 🖥️ 6. Compartilhamento de Tela (WebRTC P2P Mesh & Go Signaling)
+
+O ProjectNBX implementa uma arquitetura híbrida e modular para transmissão de vídeo e tela:
+
+```text
+                         ProjectNBX
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+            VOICE                      SCREEN SHARE
+              │                             │
+           LiveKit                  ScreenShareTransport
+              │                             │
+         Áudio / Voz                   WebRTC P2P Mesh
+                                            │
+                                  ┌─────────┴─────────┐
+                                  │                   │
+                              Signaling             Media
+                                  │                   │
+                              Go Backend              P2P
+                                  │
+                    ┌─────────────┼─────────────┐
+                    │             │             │
+                Auth/Authz     State         Routing
+                    │             │             │
+                              In-memory       Local WS
+                              (agora)         (agora)
+                                  │               │
+                               Redis         Redis Pub/Sub
+                              (futuro)        (futuro)
+```
+
+### 🎯 6.1 Princípios Arquiteturais e Regras de Coexistência
+1. **Preservação Absoluta da Voz (LiveKit Intocado):**
+   - A comunicação de áudio/voz permanece **100% no LiveKit SFU**.
+   - O compartilhamento de tela opera em um pipeline **completamente independente** via `ScreenShareTransport`.
+   - Iniciar, pausar, reconectar ou encerrar o screen share **jamais interfere na conexão de voz ativa**.
+2. **Backend Go como Signaling / Control Plane Puro (Zero Tráfego de Mídia):**
+   - O servidor Go **NÃO transporta, processa, codifica ou retransmite vídeo**.
+   - O Go é responsável exclusivamente por: Autenticação JWT, Autorização Anti-BOLA, Sinalização WebSocket (`WEBRTC_OFFER`, `WEBRTC_ANSWER`, `WEBRTC_ICE_CANDIDATE`), State Machine de Sessão, Rate Limiting e Geração de credenciais efêmeras TURN RFC 5766.
+3. **Desacoplamento e Escalabilidade (Redis-Ready):**
+   - O gerenciamento de estado no Go é isolado através da interface `ScreenShareRepository` (`InMemoryScreenShareRepository` com lock atômico via `sync.RWMutex`, pronto para substituição futura por Redis).
+   - O roteamento de sinalização é isolado pela interface `SignalingRouter`.
+
+### 🛡️ 6.2 Segurança, Anti-Spoofing e Pipeline Anti-BOLA (P0)
+- **Prevenção de Impersonation:** O campo `from_user_id` enviado pelo cliente é sempre **ignorado** pelo servidor. O remetente é injetado com autoridade exclusiva a partir da sessão WebSocket autenticada (`client.UserID`).
+- **Validação de Mensagens em 5 Etapas:**
+  1. *Autenticação:* Remetente possui token JWT válido.
+  2. *Matrícula de Canal:* O `channel_id` é validado como claim contra a presença do usuário registrada no WebSocket Hub. O `session.ChannelID` no repositório é a autoridade.
+  3. *Validação de Destinatário:* `to_user_id` está ativo e presente no mesmo canal.
+  4. *Correspondência de Sessão:* `session_id` pertence ao canal e está no estado `ACTIVE`.
+  5. *Autoridade de Encerramento:* `SCREEN_SHARE_STOP` é processado estritamente se `client.UserID == session.BroadcasterID`.
+- **Token Bucket Rate Limiting:**
+  - `WEBRTC_OFFER` / `WEBRTC_ANSWER`: 10 ops/s (burst 15).
+  - `WEBRTC_ICE_CANDIDATE`: 100 ops/s (burst 150) — *sem ordenação artificial de sequence*.
+  - `SCREEN_SHARE_START`: 5 ops/min.
+  - `SCREEN_SHARE_JOIN`: 15 ops/min.
+  - Limite de buffer: SDP $\le$ 64 KB, ICE Candidate $\le$ 4 KB.
+- **Capacidade Atômica (`AddViewerIfCapacity`):**
+  - Limite de espectadores: `MAX_SCREEN_VIEWERS = 5` (configurável via `ScreenShareConfig`), prevenindo saturação de uplink e encoder no transmissor.
+- **Grace Period Temporal (10s):**
+  - Quando o host oscila a conexão, a sessão permanece com `State == ACTIVE` e `GraceUntil = now + 10s`.
+  - Se o host reconectar dentro da janela, o grace period é cancelado e os espectadores continuam assistindo normalmente. Se expirar, a sessão é finalizada e os espectadores são notificados.
+
+### 🌐 6.3 WebRTC P2P Mesh no Flutter
+- **Contratos Plugáveis:**
+  - `ScreenCaptureSource`: Abstração para captura de monitores e janelas (`DesktopScreenCaptureSource` com `DesktopCapturer`).
+  - `ScreenShareTransport`: Abstração de rede (`P2PWebRTCScreenTransport` usando `flutter_webrtc`, permitindo plugar SFU no futuro sem alterar a UI).
+  - `ScreenShareController`: Gerenciamento reativo via Riverpod (`StateNotifier<ScreenShareState>`).
+- **Padrão Perfect Negotiation:**
+  - Broadcaster: Peer `impolite` (`polite = false`) — inicia a oferta após o evento `SCREEN_SHARE_VIEWER_JOINED`.
+  - Viewer: Peer `polite` (`polite = true`) — responde com Answer e realiza rollback em colisões.
+- **Resiliência e Recuperação:**
+  - ICE Restart automático com limite de 3 tentativas (`MAX_ICE_RESTART_ATTEMPTS = 3`).
+  - Endpoint de credenciais temporárias TURN: `GET /api/v1/webrtc/turn-credentials` (RFC 5766 HMAC-SHA1, TTL 1h). O Flutter nunca armazena secrets estáticos.
+- **Perfis de Qualidade Alvo (Target Configurations):**
+  - 🌿 **Low / Econômico:** 720p @ 20 FPS (~1.2 Mbps) — Código e texto.
+  - ⚖️ **Medium / Balanceado:** 1080p @ 30 FPS (~3.0 Mbps) — Apresentações e padrão geral.
+  - 🚀 **High / Fluidez:** 1080p @ 60 FPS (~6.0 Mbps) — Vídeos e alta movimentação.
+- **Interface e Experiência do Usuário:**
+  - `ScreenPickerDialog`: Modal com prévias/thumbnails de monitores e janelas abertas e seleção de perfil no início.
+  - `ScreenShareView`: Renderizador `RTCVideoRenderer` com modo cinema/foco, overlay de controles no hover, ajuste de aspect ratio e métricas de conexão em tempo real ($P_{50} / P_{95}$ RTT e perda de pacotes).
+
+---
+
+## 📦 7. Convenções de Código, Linter e Formatação
 
 ### 🚫 Regra de Imports no Flutter
 - **PROIBIDO o uso de imports relativos** (ex: `import '../../../core/...'`).
@@ -129,7 +214,7 @@ O projeto adota uma identidade visual única e moderna inspirada em estética de
 
 ---
 
-## 🔍 7. Qualidade de Código e SonarQube / SonarCloud
+## 🔍 8. Qualidade de Código e SonarQube / SonarCloud
 
 - **Configuração do Sonar:** Definida em [sonar-project.properties](file:///d:/Github/My/projectNBX/sonar-project.properties) cobrindo tanto Flutter (`lib`, `test`) quanto Go (`backend`).
 - **Cobertura de Código (Coverage):**
@@ -140,13 +225,16 @@ O projeto adota uma identidade visual única e moderna inspirada em estética de
 
 ---
 
-## 🛡️ 8. Boas Práticas Operacionais
+## 🛡️ 9. Boas Práticas Operacionais
 
 - **Zero Warnings:** Executar `flutter analyze` e garantir 0 warnings antes de qualquer commit ou entrega.
 - **Segurança:** Nunca comitar senhas, chaves de API do LiveKit ou segredos JWT hardcoded.
 - **Testes Automatizados:** Manter testes de unidade e widget para todos os novos fluxos e controllers.
+- **Testes de Concorrência em Go:** Sempre validar pacotes concorrentes com `go test -race ./...`.
 
-## 🛠️ 9. Diretrizes de Execução do Agente e Uso de Ferramentas
+---
+
+## 🛠️ 10. Diretrizes de Execução do Agente e Uso de Ferramentas
 
 ### 🚫 Restrição Estrita de Edição via Shell / Terminal
 - **PROIBIDO usar comandos de terminal/shell (`cmd.exe`, PowerShell, bash, `sed`, `awk`, `echo`, `patch`, scripts Python/Node ou redirecionamentos)** para criar, sobrescrever ou alterar arquivos do projeto.
