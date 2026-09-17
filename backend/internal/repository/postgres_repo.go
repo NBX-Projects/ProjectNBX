@@ -195,10 +195,16 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 	if server.MemberCount <= 0 {
 		server.MemberCount = 1
 	}
+	if server.Category == "" {
+		server.Category = "Comunidade Geral"
+	}
+	if server.CreatedAt.IsZero() {
+		server.CreatedAt = time.Now()
+	}
 
 	query := `
-	INSERT INTO servers (id, name, icon_url, owner_id, member_count, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	INSERT INTO servers (id, name, icon_url, owner_id, member_count, is_public, description, category, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	_, err := r.db.Exec(query,
 		server.ID,
@@ -206,6 +212,9 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 		server.IconURL,
 		server.OwnerID,
 		server.MemberCount,
+		server.IsPublic,
+		server.Description,
+		server.Category,
 		server.CreatedAt,
 		time.Now(),
 	)
@@ -221,7 +230,7 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 
 func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
 	query := `
-	SELECT id, name, COALESCE(icon_url, ''), owner_id, member_count, created_at
+	SELECT id, name, COALESCE(icon_url, ''), owner_id, member_count, COALESCE(is_public, FALSE), COALESCE(description, ''), COALESCE(category, 'Comunidade Geral'), created_at
 	FROM servers WHERE id = $1`
 
 	srv := &models.Server{}
@@ -231,6 +240,9 @@ func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
 		&srv.IconURL,
 		&srv.OwnerID,
 		&srv.MemberCount,
+		&srv.IsPublic,
+		&srv.Description,
+		&srv.Category,
 		&srv.CreatedAt,
 	)
 	if err != nil {
@@ -249,7 +261,7 @@ func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
 
 func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 	query := `
-	SELECT id, name, COALESCE(icon_url, ''), owner_id, member_count, created_at
+	SELECT id, name, COALESCE(icon_url, ''), owner_id, member_count, COALESCE(is_public, FALSE), COALESCE(description, ''), COALESCE(category, 'Comunidade Geral'), created_at
 	FROM servers ORDER BY created_at ASC`
 
 	rows, err := r.db.Query(query)
@@ -267,6 +279,9 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 			&srv.IconURL,
 			&srv.OwnerID,
 			&srv.MemberCount,
+			&srv.IsPublic,
+			&srv.Description,
+			&srv.Category,
 			&srv.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -652,6 +667,8 @@ func (r *PostgresRepository) ListServerMembers(serverID string) ([]*models.Serve
 		} else {
 			sm.Role = "member"
 		}
+		roles, _ := r.GetMemberRoles(serverID, sm.UserID)
+		sm.Roles = roles
 		members = append(members, &sm)
 	}
 	if err := rows.Err(); err != nil {
@@ -889,6 +906,438 @@ func (r *PostgresRepository) DeleteInvite(code string) error {
 // Ping verifica se a conexão com o banco de dados PostgreSQL está ativa
 func (r *PostgresRepository) Ping(ctx context.Context) error {
 	return r.db.PingContext(ctx)
+}
+
+// ==========================================
+// Servidores Públicos & Descoberta
+// ==========================================
+
+func (r *PostgresRepository) ListPublicServers(userID string) ([]*models.PublicServerDTO, error) {
+	query := `
+	SELECT s.id, s.name, COALESCE(s.icon_url, ''), s.owner_id, s.member_count, s.is_public,
+	       COALESCE(s.description, ''), COALESCE(s.category, 'Comunidade Geral'), s.created_at,
+	       EXISTS(SELECT 1 FROM server_members sm WHERE sm.server_id = s.id AND sm.user_id = $1) as is_member,
+	       COALESCE((SELECT jr.status FROM server_join_requests jr WHERE jr.server_id = s.id AND jr.user_id = $1 ORDER BY jr.created_at DESC LIMIT 1), 'none') as join_request_status
+	FROM servers s
+	WHERE s.is_public = TRUE
+	ORDER BY s.member_count DESC, s.created_at DESC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]*models.PublicServerDTO, 0)
+	for rows.Next() {
+		var dto models.PublicServerDTO
+		if err := rows.Scan(
+			&dto.ID,
+			&dto.Name,
+			&dto.IconURL,
+			&dto.OwnerID,
+			&dto.MemberCount,
+			&dto.IsPublic,
+			&dto.Description,
+			&dto.Category,
+			&dto.CreatedAt,
+			&dto.IsMember,
+			&dto.JoinRequestStatus,
+		); err != nil {
+			return nil, err
+		}
+		channels, _ := r.ListChannelsByServer(dto.ID)
+		dto.Channels = channels
+		list = append(list, &dto)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// ==========================================
+// Solicitações de Entrada (Join Requests)
+// ==========================================
+
+func (r *PostgresRepository) CreateJoinRequest(req *models.ServerJoinRequest) error {
+	if req.ID == "" {
+		req.ID = "req_" + uuid.New().String()
+	}
+	req.Status = "pending"
+	req.CreatedAt = time.Now()
+
+	query := `
+	INSERT INTO server_join_requests (id, server_id, user_id, status, created_at)
+	VALUES ($1, $2, $3, $4, $5)
+	ON CONFLICT (server_id, user_id) 
+	DO UPDATE SET status = 'pending', created_at = EXCLUDED.created_at, reviewed_by = NULL, reviewed_at = NULL`
+
+	_, err := r.db.Exec(query, req.ID, req.ServerID, req.UserID, req.Status, req.CreatedAt)
+	return err
+}
+
+func (r *PostgresRepository) GetJoinRequest(serverID, userID string) (*models.ServerJoinRequest, error) {
+	query := `
+	SELECT jr.id, jr.server_id, jr.user_id, jr.status, jr.created_at, jr.reviewed_by, jr.reviewed_at,
+	       u.username, u.email, COALESCE(u.avatar_url, ''), u.status
+	FROM server_join_requests jr
+	JOIN users u ON u.id = jr.user_id
+	WHERE jr.server_id = $1 AND jr.user_id = $2`
+
+	var req models.ServerJoinRequest
+	var u models.User
+	var revBy sql.NullString
+	var revAt sql.NullTime
+
+	err := r.db.QueryRow(query, serverID, userID).Scan(
+		&req.ID,
+		&req.ServerID,
+		&req.UserID,
+		&req.Status,
+		&req.CreatedAt,
+		&revBy,
+		&revAt,
+		&u.Username,
+		&u.Email,
+		&u.AvatarURL,
+		&u.Status,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	u.ID = req.UserID
+	req.User = &u
+	if revBy.Valid {
+		req.ReviewedBy = &revBy.String
+	}
+	if revAt.Valid {
+		req.ReviewedAt = &revAt.Time
+	}
+	return &req, nil
+}
+
+func (r *PostgresRepository) ListJoinRequests(serverID string, status string) ([]*models.ServerJoinRequest, error) {
+	query := `
+	SELECT jr.id, jr.server_id, jr.user_id, jr.status, jr.created_at, jr.reviewed_by, jr.reviewed_at,
+	       u.username, u.email, COALESCE(u.avatar_url, ''), u.status
+	FROM server_join_requests jr
+	JOIN users u ON u.id = jr.user_id
+	WHERE jr.server_id = $1`
+
+	args := []interface{}{serverID}
+	if status != "" {
+		query += " AND jr.status = $2"
+		args = append(args, status)
+	}
+	query += " ORDER BY jr.created_at ASC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]*models.ServerJoinRequest, 0)
+	for rows.Next() {
+		var req models.ServerJoinRequest
+		var u models.User
+		var revBy sql.NullString
+		var revAt sql.NullTime
+
+		if err := rows.Scan(
+			&req.ID,
+			&req.ServerID,
+			&req.UserID,
+			&req.Status,
+			&req.CreatedAt,
+			&revBy,
+			&revAt,
+			&u.Username,
+			&u.Email,
+			&u.AvatarURL,
+			&u.Status,
+		); err != nil {
+			return nil, err
+		}
+
+		u.ID = req.UserID
+		req.User = &u
+		if revBy.Valid {
+			req.ReviewedBy = &revBy.String
+		}
+		if revAt.Valid {
+			req.ReviewedAt = &revAt.Time
+		}
+		list = append(list, &req)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (r *PostgresRepository) ReviewJoinRequest(requestID, reviewerID, status string) error {
+	query := `
+	UPDATE server_join_requests
+	SET status = $1, reviewed_by = $2, reviewed_at = NOW()
+	WHERE id = $3
+	RETURNING server_id, user_id`
+
+	var serverID, userID string
+	err := r.db.QueryRow(query, status, reviewerID, requestID).Scan(&serverID, &userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	if status == "approved" {
+		return r.AddServerMember(serverID, userID)
+	}
+	return nil
+}
+
+// ==========================================
+// Cargos do Servidor (Roles)
+// ==========================================
+
+func (r *PostgresRepository) CreateRole(role *models.ServerRole) error {
+	if role.ID == "" {
+		role.ID = "role_" + uuid.New().String()
+	}
+	if role.CreatedAt.IsZero() {
+		role.CreatedAt = time.Now()
+	}
+	if role.Color == 0 {
+		role.Color = 4126743207 // 0xFFF5CBA7
+	}
+	if role.Permissions == nil {
+		role.Permissions = make(map[string]bool)
+	}
+
+	permJSON, err := json.Marshal(role.Permissions)
+	if err != nil {
+		permJSON = []byte("{}")
+	}
+
+	query := `
+	INSERT INTO server_roles (id, server_id, name, color, position, permissions, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+	_, err = r.db.Exec(query,
+		role.ID,
+		role.ServerID,
+		role.Name,
+		role.Color,
+		role.Position,
+		permJSON,
+		role.CreatedAt,
+	)
+	return err
+}
+
+func (r *PostgresRepository) GetRoleByID(id string) (*models.ServerRole, error) {
+	query := `
+	SELECT id, server_id, name, color, position, permissions, created_at
+	FROM server_roles WHERE id = $1`
+
+	var role models.ServerRole
+	var permJSON []byte
+
+	err := r.db.QueryRow(query, id).Scan(
+		&role.ID,
+		&role.ServerID,
+		&role.Name,
+		&role.Color,
+		&role.Position,
+		&permJSON,
+		&role.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	role.Permissions = make(map[string]bool)
+	if len(permJSON) > 0 {
+		_ = json.Unmarshal(permJSON, &role.Permissions)
+	}
+	return &role, nil
+}
+
+func (r *PostgresRepository) UpdateRole(role *models.ServerRole) error {
+	if role.Permissions == nil {
+		role.Permissions = make(map[string]bool)
+	}
+	permJSON, err := json.Marshal(role.Permissions)
+	if err != nil {
+		permJSON = []byte("{}")
+	}
+
+	query := `
+	UPDATE server_roles
+	SET name = $1, color = $2, position = $3, permissions = $4
+	WHERE id = $5 AND server_id = $6`
+
+	res, err := r.db.Exec(query, role.Name, role.Color, role.Position, permJSON, role.ID, role.ServerID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) DeleteRole(roleID string) error {
+	query := `DELETE FROM server_roles WHERE id = $1`
+	res, err := r.db.Exec(query, roleID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) ListServerRoles(serverID string) ([]*models.ServerRole, error) {
+	query := `
+	SELECT id, server_id, name, color, position, permissions, created_at
+	FROM server_roles
+	WHERE server_id = $1
+	ORDER BY position ASC, created_at ASC`
+
+	rows, err := r.db.Query(query, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make([]*models.ServerRole, 0)
+	for rows.Next() {
+		var role models.ServerRole
+		var permJSON []byte
+		if err := rows.Scan(
+			&role.ID,
+			&role.ServerID,
+			&role.Name,
+			&role.Color,
+			&role.Position,
+			&permJSON,
+			&role.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		role.Permissions = make(map[string]bool)
+		if len(permJSON) > 0 {
+			_ = json.Unmarshal(permJSON, &role.Permissions)
+		}
+		roles = append(roles, &role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+func (r *PostgresRepository) AssignMemberRole(serverID, userID, roleID string) error {
+	query := `
+	INSERT INTO server_member_roles (server_id, user_id, role_id)
+	VALUES ($1, $2, $3)
+	ON CONFLICT DO NOTHING`
+	_, err := r.db.Exec(query, serverID, userID, roleID)
+	return err
+}
+
+func (r *PostgresRepository) RemoveMemberRole(serverID, userID, roleID string) error {
+	query := `DELETE FROM server_member_roles WHERE server_id = $1 AND user_id = $2 AND role_id = $3`
+	_, err := r.db.Exec(query, serverID, userID, roleID)
+	return err
+}
+
+func (r *PostgresRepository) GetMemberRoles(serverID, userID string) ([]*models.ServerRole, error) {
+	query := `
+	SELECT sr.id, sr.server_id, sr.name, sr.color, sr.position, sr.permissions, sr.created_at
+	FROM server_roles sr
+	JOIN server_member_roles smr ON smr.role_id = sr.id
+	WHERE smr.server_id = $1 AND smr.user_id = $2
+	ORDER BY sr.position ASC, sr.created_at ASC`
+
+	rows, err := r.db.Query(query, serverID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make([]*models.ServerRole, 0)
+	for rows.Next() {
+		var role models.ServerRole
+		var permJSON []byte
+		if err := rows.Scan(
+			&role.ID,
+			&role.ServerID,
+			&role.Name,
+			&role.Color,
+			&role.Position,
+			&permJSON,
+			&role.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		role.Permissions = make(map[string]bool)
+		if len(permJSON) > 0 {
+			_ = json.Unmarshal(permJSON, &role.Permissions)
+		}
+		roles = append(roles, &role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+func (r *PostgresRepository) HasServerPermission(serverID, userID, permission string) (bool, error) {
+	// 1. O dono do servidor tem todas as permissões irrestritas
+	var ownerID string
+	err := r.db.QueryRow(`SELECT owner_id FROM servers WHERE id = $1`, serverID).Scan(&ownerID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	if ownerID == userID {
+		return true, nil
+	}
+
+	// 2. Consulta permissões concedidas pelos cargos atribuídos
+	roles, err := r.GetMemberRoles(serverID, userID)
+	if err != nil {
+		return false, err
+	}
+	for _, role := range roles {
+		if role.Permissions != nil && role.Permissions[permission] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 

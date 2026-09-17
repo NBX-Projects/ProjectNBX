@@ -64,5 +64,25 @@ type Repository interface {
 	IncrementInviteUses(code string) error
 	ListServerInvites(serverID string) ([]*models.ServerInvite, error)
 	DeleteInvite(code string) error
+
+	// Servidores Públicos & Descoberta
+	ListPublicServers(userID string) ([]*models.PublicServerDTO, error)
+
+	// Solicitações de Entrada (Join Requests)
+	CreateJoinRequest(req *models.ServerJoinRequest) error
+	GetJoinRequest(serverID, userID string) (*models.ServerJoinRequest, error)
+	ListJoinRequests(serverID string, status string) ([]*models.ServerJoinRequest, error)
+	ReviewJoinRequest(requestID, reviewerID, status string) error
+
+	// Cargos do Servidor (Roles)
+	CreateRole(role *models.ServerRole) error
+	GetRoleByID(id string) (*models.ServerRole, error)
+	UpdateRole(role *models.ServerRole) error
+	DeleteRole(roleID string) error
+	ListServerRoles(serverID string) ([]*models.ServerRole, error)
+	AssignMemberRole(serverID, userID, roleID string) error
+	RemoveMemberRole(serverID, userID, roleID string) error
+	GetMemberRoles(serverID, userID string) ([]*models.ServerRole, error)
+	HasServerPermission(serverID, userID, permission string) (bool, error)
 }
 

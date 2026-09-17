@@ -6,6 +6,7 @@ import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
+import 'package:projectnbx/features/servers/models/server_model.dart';
 
 class CreateServerDialog extends ConsumerStatefulWidget {
   const CreateServerDialog({super.key});
@@ -26,20 +27,16 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _iconUrlController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _joinCodeController = TextEditingController();
   bool _isJoinMode = false;
-  String _selectedCategory = 'Gaming';
+  bool _isPublic = false;
+  String _selectedCategory = ServerModel.canonicalCategories.first;
   int _selectedBannerPreset = 0;
   Color _selectedAccentColor = const Color(0xFFF5CBA7);
   bool _isSubmitting = false;
 
-  final List<String> _categories = [
-    'Gaming',
-    'Desenvolvimento',
-    'Comunidade Geral',
-    'Estudos',
-    'Música & Arte',
-  ];
+  final List<String> _categories = ServerModel.canonicalCategories;
 
   @override
   void initState() {
@@ -52,6 +49,7 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
   void dispose() {
     _nameController.dispose();
     _iconUrlController.dispose();
+    _descriptionController.dispose();
     _joinCodeController.dispose();
     super.dispose();
   }
@@ -113,6 +111,8 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
           category: _selectedCategory,
           bannerPreset: _selectedBannerPreset,
           accentColor: _selectedAccentColor.toARGB32(),
+          isPublic: _isPublic,
+          description: _descriptionController.text.trim(),
         );
 
     if (mounted) {
@@ -607,6 +607,230 @@ class _CreateServerDialogState extends ConsumerState<CreateServerDialog> {
                             ),
                           );
                         }).toList(),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Server Visibility (Public vs Private)
+                      Text(
+                        'VISIBILIDADE DO SERVIDOR',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => setState(() => _isPublic = false),
+                              borderRadius: AppRadius.borderMd,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: !_isPublic
+                                      ? (isDark
+                                          ? const Color(0xFF232538)
+                                          : const Color(0xFFE2E8F0))
+                                      : (isDark
+                                          ? AppColors.darkInput
+                                          : AppColors.lightCanvas),
+                                  borderRadius: AppRadius.borderMd,
+                                  border: Border.all(
+                                    color: !_isPublic
+                                        ? _selectedAccentColor
+                                        : (isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder),
+                                    width: !_isPublic ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      LucideIcons.lock,
+                                      size: 16,
+                                      color: !_isPublic
+                                          ? _selectedAccentColor
+                                          : (isDark
+                                              ? AppColors.darkTextMuted
+                                              : AppColors.lightTextMuted),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Privado',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? AppColors.darkTextPrimary
+                                                  : AppColors.lightTextPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Apenas por convite direto',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: isDark
+                                                  ? AppColors.darkTextMuted
+                                                  : AppColors.lightTextMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => setState(() => _isPublic = true),
+                              borderRadius: AppRadius.borderMd,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isPublic
+                                      ? (isDark
+                                          ? const Color(0xFF232538)
+                                          : const Color(0xFFE2E8F0))
+                                      : (isDark
+                                          ? AppColors.darkInput
+                                          : AppColors.lightCanvas),
+                                  borderRadius: AppRadius.borderMd,
+                                  border: Border.all(
+                                    color: _isPublic
+                                        ? _selectedAccentColor
+                                        : (isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder),
+                                    width: _isPublic ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      LucideIcons.globe,
+                                      size: 16,
+                                      color: _isPublic
+                                          ? _selectedAccentColor
+                                          : (isDark
+                                              ? AppColors.darkTextMuted
+                                              : AppColors.lightTextMuted),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Público',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? AppColors.darkTextPrimary
+                                                  : AppColors.lightTextPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Listado no Hub para explorar',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: isDark
+                                                  ? AppColors.darkTextMuted
+                                                  : AppColors.lightTextMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Server Description
+                      Text(
+                        'DESCRIÇÃO / BIO (OPCIONAL)',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _descriptionController,
+                        maxLines: 2,
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          hintText:
+                              'Sobre o que é este servidor? Descreva para quem for entrar...',
+                          hintStyle: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: isDark
+                                ? AppColors.darkTextMuted
+                                : AppColors.lightTextMuted,
+                          ),
+                          filled: true,
+                          fillColor: isDark
+                              ? AppColors.darkInput
+                              : AppColors.lightCanvas,
+                          border: OutlineInputBorder(
+                            borderRadius: AppRadius.borderMd,
+                            borderSide: BorderSide(
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: AppRadius.borderMd,
+                            borderSide: BorderSide(
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: AppRadius.borderMd,
+                            borderSide: BorderSide(
+                              color: _selectedAccentColor,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 16),
 

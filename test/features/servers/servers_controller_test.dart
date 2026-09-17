@@ -212,13 +212,22 @@ class FakeServersApiClient extends ApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>?> createServer(String name, {String? iconUrl}) async {
+  Future<Map<String, dynamic>?> createServer(
+    String name, {
+    String? iconUrl,
+    bool isPublic = false,
+    String? description,
+    String? category,
+  }) async {
     if (shouldFail) throw Exception('Falha ao criar servidor');
     return {
       'id': 's-created',
       'name': name,
       'owner_id': 'u1',
       'channels': <dynamic>[],
+      'is_public': isPublic,
+      'description': description ?? '',
+      'category': category ?? 'Comunidade Geral',
     };
   }
 

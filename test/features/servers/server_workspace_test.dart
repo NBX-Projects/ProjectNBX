@@ -10,7 +10,9 @@ import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
+import 'package:projectnbx/features/servers/models/server_join_request_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:projectnbx/features/servers/models/server_role_model.dart';
 import 'package:projectnbx/features/servers/widgets/docked_voice_footer.dart';
 import 'package:projectnbx/features/servers/widgets/server_home_view.dart';
 import 'package:projectnbx/features/servers/widgets/server_right_sidebar.dart';
@@ -156,23 +158,29 @@ void main() {
     });
 
     testWidgets('ServerHomeView renders hero banner and channels', (tester) async {
+      final fakeApi = FakeWorkspaceApiClient();
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ServerHomeView(
-              server: testServer,
-              isDark: true,
-              username: 'Tester',
-              channels: testChannels,
-              isTransmitting: false,
-              selectedBannerPreset: 0,
-              onSelectBannerPreset: (_) {},
-              selectedAccentColor: Colors.blue,
-              onSelectAccentColor: (_) {},
-              isCustomizingBanner: false,
-              onToggleCustomizeBanner: () {},
-              onSaveCustomization: () async {},
-              onOpenChannel: (c) {},
+        ProviderScope(
+          overrides: [
+            apiClientProvider.overrideWithValue(fakeApi),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: ServerHomeView(
+                server: testServer,
+                isDark: true,
+                username: 'Tester',
+                channels: testChannels,
+                isTransmitting: false,
+                selectedBannerPreset: 0,
+                onSelectBannerPreset: (_) {},
+                selectedAccentColor: Colors.blue,
+                onSelectAccentColor: (_) {},
+                isCustomizingBanner: false,
+                onToggleCustomizeBanner: () {},
+                onSaveCustomization: () async {},
+                onOpenChannel: (c) {},
+              ),
             ),
           ),
         ),
@@ -181,7 +189,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Dev Hub Workspace'), findsOneWidget);
-      expect(find.text('Acontecendo no servidor'), findsOneWidget);
+      expect(find.text('MEMBROS DO SERVIDOR'), findsOneWidget);
     });
 
     testWidgets('ServerRightSidebar renders and toggles tabs', (tester) async {
@@ -768,6 +776,16 @@ class FakeWorkspaceApiClient extends ApiClient {
     return [
       {'user_id': 'usr-1', 'username': 'Tester', 'role': 'owner'},
     ];
+  }
+
+  @override
+  Future<List<ServerRoleModel>> getServerRoles(String serverId) async {
+    return [];
+  }
+
+  @override
+  Future<List<ServerJoinRequestModel>> getJoinRequests(String serverId, {String? status}) async {
+    return [];
   }
 }
 

@@ -8,6 +8,8 @@ class AudioDevicesState {
   final List<AudioDeviceInfo> outputDevices;
   final String? selectedInputDeviceId;
   final String? selectedOutputDeviceId;
+  final String? defaultInputDeviceId;
+  final String? defaultOutputDeviceId;
   final String? error;
 
   const AudioDevicesState({
@@ -16,6 +18,8 @@ class AudioDevicesState {
     this.outputDevices = const [],
     this.selectedInputDeviceId,
     this.selectedOutputDeviceId,
+    this.defaultInputDeviceId,
+    this.defaultOutputDeviceId,
     this.error,
   });
 
@@ -25,6 +29,8 @@ class AudioDevicesState {
     List<AudioDeviceInfo>? outputDevices,
     String? selectedInputDeviceId,
     String? selectedOutputDeviceId,
+    String? defaultInputDeviceId,
+    String? defaultOutputDeviceId,
     String? error,
   }) {
     return AudioDevicesState(
@@ -33,8 +39,28 @@ class AudioDevicesState {
       outputDevices: outputDevices ?? this.outputDevices,
       selectedInputDeviceId: selectedInputDeviceId ?? this.selectedInputDeviceId,
       selectedOutputDeviceId: selectedOutputDeviceId ?? this.selectedOutputDeviceId,
+      defaultInputDeviceId: defaultInputDeviceId ?? this.defaultInputDeviceId,
+      defaultOutputDeviceId: defaultOutputDeviceId ?? this.defaultOutputDeviceId,
       error: error,
     );
+  }
+
+  /// Retorna o ID real a ser passado para o WebRTC (resolve 'default' para o microfone padrão detectado)
+  String? get effectiveInputDeviceId {
+    if (selectedInputDeviceId == null || selectedInputDeviceId == 'default') {
+      return defaultInputDeviceId ??
+          inputDevices.where((d) => d.deviceId != 'default').firstOrNull?.deviceId;
+    }
+    return selectedInputDeviceId;
+  }
+
+  /// Retorna o ID real a ser passado para o WebRTC (resolve 'default' para a saída padrão detectada)
+  String? get effectiveOutputDeviceId {
+    if (selectedOutputDeviceId == null || selectedOutputDeviceId == 'default') {
+      return defaultOutputDeviceId ??
+          outputDevices.where((d) => d.deviceId != 'default').firstOrNull?.deviceId;
+    }
+    return selectedOutputDeviceId;
   }
 
   String get selectedInputLabel {
@@ -67,19 +93,38 @@ class AudioDevicesNotifier extends StateNotifier<AudioDevicesState> {
       final savedInputId = prefs.getString('preferred_audio_input_id');
       final savedOutputId = prefs.getString('preferred_audio_output_id');
 
-      final inputs = await _service.getInputDevices();
-      final outputs = await _service.getOutputDevices();
+      final snapshot = await _service.getAudioDevicesSnapshot();
+      final inputs = snapshot.inputs;
+      final outputs = snapshot.outputs;
+      final defaultInputId = snapshot.defaultInputId;
+      final defaultOutputId = snapshot.defaultOutputId;
+
+      String? cleanId(String? raw) {
+        if (raw == null) return null;
+        var s = raw;
+        if (s.startsWith(r'SWD\MMDEVAPI\')) {
+          s = s.substring(r'SWD\MMDEVAPI\'.length);
+        }
+        return s.trim().toLowerCase();
+      }
+
+      final normalizedSavedInput = cleanId(savedInputId);
+      final normalizedSavedOutput = cleanId(savedOutputId);
 
       String? activeInputId;
-      if (savedInputId != null && inputs.any((d) => d.deviceId == savedInputId)) {
-        activeInputId = savedInputId;
+      if (savedInputId == 'default') {
+        activeInputId = 'default';
+      } else if (normalizedSavedInput != null && inputs.any((d) => d.deviceId.toLowerCase() == normalizedSavedInput)) {
+        activeInputId = inputs.firstWhere((d) => d.deviceId.toLowerCase() == normalizedSavedInput).deviceId;
       } else if (inputs.isNotEmpty) {
         activeInputId = inputs.first.deviceId;
       }
 
       String? activeOutputId;
-      if (savedOutputId != null && outputs.any((d) => d.deviceId == savedOutputId)) {
-        activeOutputId = savedOutputId;
+      if (savedOutputId == 'default') {
+        activeOutputId = 'default';
+      } else if (normalizedSavedOutput != null && outputs.any((d) => d.deviceId.toLowerCase() == normalizedSavedOutput)) {
+        activeOutputId = outputs.firstWhere((d) => d.deviceId.toLowerCase() == normalizedSavedOutput).deviceId;
       } else if (outputs.isNotEmpty) {
         activeOutputId = outputs.first.deviceId;
       }
@@ -90,6 +135,8 @@ class AudioDevicesNotifier extends StateNotifier<AudioDevicesState> {
         outputDevices: outputs,
         selectedInputDeviceId: activeInputId,
         selectedOutputDeviceId: activeOutputId,
+        defaultInputDeviceId: defaultInputId,
+        defaultOutputDeviceId: defaultOutputId,
       );
     } catch (e) {
       state = state.copyWith(

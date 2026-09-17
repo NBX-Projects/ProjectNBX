@@ -78,6 +78,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   String? _connectedVoiceChannelId;
   Room? _liveKitRoom;
   Timer? _noiseGateReleaseTimer;
+  Timer? _audioLevelDecayTimer;
   bool _isGateOpen = true;
 
   late final String _clientSessionId =
@@ -96,6 +97,32 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
     }
     return null;
+  }
+
+  void _updateLocalAudioLevel(double level) {
+    if (!mounted) return;
+    _audioLevelDecayTimer?.cancel();
+    _audioLevelDecayTimer = null;
+
+    final voiceState = ref.read(voiceStateProvider);
+    if (voiceState.isMicMuted || voiceState.isDeafened || !voiceState.isConnected) {
+      if (ref.read(localAudioLevelProvider) != 0.0) {
+        ref.read(localAudioLevelProvider.notifier).state = 0.0;
+      }
+      return;
+    }
+
+    ref.read(localAudioLevelProvider.notifier).state = level;
+
+    // Quando o usuário para de falar, LiveKit pode parar de enviar eventos de active speakers.
+    // Decaimento para 0.0 após 350ms sem novos eventos de voz para evitar que a barra fique travada.
+    if (level > 0.0) {
+      _audioLevelDecayTimer = Timer(const Duration(milliseconds: 350), () {
+        if (mounted && ref.read(localAudioLevelProvider) != 0.0) {
+          ref.read(localAudioLevelProvider.notifier).state = 0.0;
+        }
+      });
+    }
   }
 
   void _processNoiseGate(double audioLevel) {
@@ -147,13 +174,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     }
   }
 
-    AudioCaptureOptions _buildAudioCaptureOptions() {
+  AudioCaptureOptions _buildAudioCaptureOptions() {
     final audioSettings = ref.read(audioSettingsProvider);
-    final selectedInputId = ref.read(audioDevicesProvider).selectedInputDeviceId;
-    final deviceId = (selectedInputId == null || selectedInputId == 'default')
-        ? null
-        : selectedInputId;
-    return audioSettings.toAudioCaptureOptions(deviceId: deviceId);
+    final audioDevicesState = ref.read(audioDevicesProvider);
+    final effectiveId = audioDevicesState.effectiveInputDeviceId;
+    return audioSettings.toAudioCaptureOptions(deviceId: effectiveId);
   }
 
   Future<void> _updateLiveKitAudioProcessing(AudioSettings settings) async {
@@ -192,10 +217,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     try {
       final pubs = _liveKitRoom?.localParticipant?.audioTrackPublications;
       if (pubs == null) return;
-      var targetId = deviceId == 'default' ? '' : deviceId;
+      final audioDevicesState = ref.read(audioDevicesProvider);
+      var targetId = (deviceId == 'default')
+          ? (audioDevicesState.effectiveInputDeviceId ?? '')
+          : deviceId;
       if (targetId.startsWith(r'SWD\MMDEVAPI\')) {
         targetId = targetId.replaceFirst(r'SWD\MMDEVAPI\', '');
       }
+      if (targetId.startsWith(r'\')) {
+        targetId = targetId.replaceFirst(RegExp(r'^\\+'), '');
+      }
+      targetId = targetId.trim().toLowerCase();
 
       if (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.windows ||
@@ -213,11 +245,6 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         final track = pub.track;
         if (track is LocalAudioTrack) {
           await track.setDeviceId(targetId);
-          try {
-            await track.restartTrack();
-          } catch (e) {
-            debugPrint('[LiveKit] Erro ao reiniciar track após troca de microfone: $e');
-          }
           debugPrint('[LiveKit] Dispositivo de microfone atualizado: $targetId');
         }
       }
@@ -229,10 +256,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   Future<void> _updateLiveKitAudioOutputDevice(String? deviceId) async {
     if (deviceId == null) return;
     try {
-      var targetId = deviceId == 'default' ? '' : deviceId;
+      final audioDevicesState = ref.read(audioDevicesProvider);
+      var targetId = (deviceId == 'default')
+          ? (audioDevicesState.effectiveOutputDeviceId ?? '')
+          : deviceId;
       if (targetId.startsWith(r'SWD\MMDEVAPI\')) {
         targetId = targetId.replaceFirst(r'SWD\MMDEVAPI\', '');
       }
+      if (targetId.startsWith(r'\')) {
+        targetId = targetId.replaceFirst(RegExp(r'^\\+'), '');
+      }
+      targetId = targetId.trim().toLowerCase();
       if (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.windows ||
               defaultTargetPlatform == TargetPlatform.macOS ||
@@ -385,12 +419,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           setState(() {});
         } else if (event is ActiveSpeakersChangedEvent) {
           final localSid = room.localParticipant?.sid;
+          final localIdentity = room.localParticipant?.identity;
+          var localLevel = 0.0;
           for (final speaker in event.speakers) {
-            if (speaker.sid == localSid) {
-              _processNoiseGate(speaker.audioLevel);
+            if ((localSid != null && speaker.sid.isNotEmpty && speaker.sid == localSid) ||
+                (localIdentity != null && speaker.identity.isNotEmpty && speaker.identity == localIdentity)) {
+              localLevel = speaker.audioLevel;
               break;
             }
           }
+          _updateLocalAudioLevel(localLevel);
+          _processNoiseGate(localLevel);
         }
       });
 
@@ -398,6 +437,23 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         serverUrl,
         token,
       );
+
+      // No Desktop, pré-seleciona explicitamente o microfone de entrada
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.linux)) {
+        final targetId = captureOptions.deviceId;
+        if (targetId != null && targetId.isNotEmpty) {
+          try {
+            await rtc.Helper.selectAudioInput(targetId);
+            debugPrint('[LiveKit] selectAudioInput pré-configurado na conexão: $targetId');
+          } catch (e) {
+            debugPrint('[LiveKit] selectAudioInput falhou na conexão: $e');
+          }
+        }
+      }
+
       final currentVoiceState = ref.read(voiceStateProvider);
       final shouldMuteMic = currentVoiceState.isMicMuted || currentVoiceState.isDeafened;
       try {
@@ -405,7 +461,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           !shouldMuteMic,
           audioCaptureOptions: captureOptions,
         );
-      } catch (_) {}
+        debugPrint('[LiveKit] Microfone inicializado com sucesso (muted: $shouldMuteMic, device: ${captureOptions.deviceId})');
+      } catch (e) {
+        debugPrint('[LiveKit] Falha ao habilitar microfone com opções customizadas: $e, tentando fallback padrão...');
+        try {
+          await room.localParticipant?.setMicrophoneEnabled(!shouldMuteMic);
+          debugPrint('[LiveKit] Microfone inicializado via fallback padrão');
+        } catch (fallbackError) {
+          debugPrint('[LiveKit] Fallback de microfone também falhou: $fallbackError');
+        }
+      }
 
       // Se já estiver ensurdecido ao conectar, muta o áudio remoto imediatamente
       if (currentVoiceState.isDeafened) {
@@ -464,7 +529,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       try {
         _noiseGateReleaseTimer?.cancel();
         _noiseGateReleaseTimer = null;
+        _audioLevelDecayTimer?.cancel();
+        _audioLevelDecayTimer = null;
         _isGateOpen = true;
+        if (mounted) {
+          ref.read(localAudioLevelProvider.notifier).state = 0.0;
+        }
         await _liveKitRoom?.disconnect();
         await _liveKitRoom?.dispose();
         final chId = _connectedVoiceChannelId ?? _activeChannel?.id;
@@ -555,6 +625,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   Future<void> _applyMicState(bool isMuted) async {
     final isDeafened = ref.read(voiceStateProvider).isDeafened;
     final shouldMute = isMuted || isDeafened;
+    if (shouldMute) {
+      _updateLocalAudioLevel(0.0);
+    }
     try {
       final captureOptions = _buildAudioCaptureOptions();
       await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(
@@ -563,7 +636,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       );
       debugPrint('[LiveKit] Microfone alterado: isMuted=$isMuted, shouldMute=$shouldMute');
     } catch (e) {
-      debugPrint('[LiveKit] Erro ao alterar microfone: $e');
+      debugPrint('[LiveKit] Erro ao alterar microfone com opções: $e, tentando fallback...');
+      try {
+        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMute);
+      } catch (e2) {
+        debugPrint('[LiveKit] Falha no fallback de microfone: $e2');
+      }
     }
     final uid = ref.read(authControllerProvider).user?.id ?? '';
     final cid = _connectedVoiceChannelId ?? _activeChannel?.id;
@@ -601,10 +679,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         final voiceState = ref.read(voiceStateProvider);
         final shouldMuteMic = isDeafened || voiceState.isMicMuted;
         final captureOptions = _buildAudioCaptureOptions();
-        await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(
-          !shouldMuteMic,
-          audioCaptureOptions: captureOptions,
-        );
+        try {
+          await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(
+            !shouldMuteMic,
+            audioCaptureOptions: captureOptions,
+          );
+        } catch (e) {
+          await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMuteMic);
+        }
       }
       debugPrint('[LiveKit] Áudio alterado (deafen): isDeafened=$isDeafened');
     } catch (e) {
@@ -958,6 +1040,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   void dispose() {
     _noiseGateReleaseTimer?.cancel();
     _noiseGateReleaseTimer = null;
+    _audioLevelDecayTimer?.cancel();
+    _audioLevelDecayTimer = null;
     _streamRefreshTimer?.cancel();
     _localScreenShareTrack?.stop();
     _localScreenShareTrack?.dispose();

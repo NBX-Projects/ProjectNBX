@@ -52,4 +52,19 @@ void main() {
     final sliderFinder = find.byType(Slider);
     expect(sliderFinder, findsOneWidget);
   });
+
+  testWidgets('QuickAudioDeviceMenu VU meter remains silent when audioLevel is 0', (tester) async {
+    await tester.pumpWidget(createMenuScope());
+    await tester.pumpAndSettle();
+
+    // Verify 'Nível de entrada' title exists
+    expect(find.text('Nível de entrada'), findsOneWidget);
+    
+    // Total bars are 24 Containers with height: 14 inside Row
+    final containers = find.byWidgetPredicate((widget) =>
+        widget is Container &&
+        widget.constraints?.maxHeight == 14 &&
+        widget.margin == const EdgeInsets.symmetric(horizontal: 1));
+    expect(containers, findsNWidgets(24));
+  });
 }

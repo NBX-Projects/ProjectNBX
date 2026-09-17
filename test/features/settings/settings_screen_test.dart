@@ -33,6 +33,26 @@ class MockAudioHardwareService extends AudioHardwareService {
           kind: 'audiooutput',
         ),
       ];
+
+  @override
+  Future<AudioSnapshot> getAudioDevicesSnapshot() async => (
+        inputs: const [
+          AudioDeviceInfo(
+            deviceId: 'default',
+            label: 'Microfone Teste',
+            kind: 'audioinput',
+          ),
+        ],
+        outputs: const [
+          AudioDeviceInfo(
+            deviceId: 'default',
+            label: 'Fone Teste',
+            kind: 'audiooutput',
+          ),
+        ],
+        defaultInputId: 'default',
+        defaultOutputId: 'default',
+      );
 }
 
 void main() {

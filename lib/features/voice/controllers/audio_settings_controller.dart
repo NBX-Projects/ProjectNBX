@@ -66,8 +66,14 @@ class AudioSettings {
         ? deviceId
         : null;
 
-    if (effectiveDeviceId != null && effectiveDeviceId.startsWith(r'SWD\MMDEVAPI\')) {
-      effectiveDeviceId = effectiveDeviceId.substring(r'SWD\MMDEVAPI\'.length);
+    if (effectiveDeviceId != null) {
+      if (effectiveDeviceId.startsWith(r'SWD\MMDEVAPI\')) {
+        effectiveDeviceId = effectiveDeviceId.substring(r'SWD\MMDEVAPI\'.length);
+      }
+      if (effectiveDeviceId.startsWith(r'\')) {
+        effectiveDeviceId = effectiveDeviceId.replaceFirst(RegExp(r'^\\+'), '');
+      }
+      effectiveDeviceId = effectiveDeviceId.trim().toLowerCase();
     }
 
     return AudioCaptureOptions(

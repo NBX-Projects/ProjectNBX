@@ -20,7 +20,9 @@ import 'package:projectnbx/features/home/widgets/create_server_card.dart';
 import 'package:projectnbx/features/home/widgets/hub_left_rail.dart';
 import 'package:projectnbx/features/home/widgets/hub_right_panel.dart';
 import 'package:projectnbx/features/home/widgets/hub_server_card.dart';
+import 'package:projectnbx/features/home/widgets/public_server_card.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
+import 'package:projectnbx/features/servers/models/public_server_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
 import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 import 'package:projectnbx/features/servers/widgets/server_workspace_view.dart';
@@ -40,10 +42,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'home';
   final GlobalKey _topMicKey = GlobalKey();
   final GlobalKey _topHeadphonesKey = GlobalKey();
+  List<PublicServerModel> _publicServers = [];
+  bool _isLoadingPublicServers = false;
 
   @override
   void initState() {
     super.initState();
+    _loadPublicServers();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!kIsWeb &&
           !Platform.environment.containsKey('FLUTTER_TEST') &&
@@ -53,6 +58,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             .checkForUpdates(silent: true);
       }
     });
+  }
+
+  Future<void> _loadPublicServers() async {
+    setState(() => _isLoadingPublicServers = true);
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final list = await apiClient.getPublicServers();
+      if (mounted) {
+        setState(() {
+          _publicServers = list;
+          _isLoadingPublicServers = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingPublicServers = false);
+      }
+    }
   }
 
   @override
@@ -175,6 +198,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               ),
                                               const SizedBox(height: 12),
                                               _buildCardGrid(servers),
+
+                                              const SizedBox(height: 28),
+
+                                              // Public Servers Discovery Section
+                                              _buildSectionTitle(
+                                                isDark,
+                                                'EXPLORAR SERVIDORES PÚBLICOS',
+                                                count: _publicServers.length,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              _buildPublicServersGrid(),
 
                                               const SizedBox(height: 32),
                                             ],
@@ -658,6 +692,102 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     .selectServer(server.id);
                 setState(() => _activeTab = server.id);
               },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPublicServersGrid() {
+    if (_isLoadingPublicServers) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_publicServers.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+          borderRadius: AppRadius.borderMd,
+          border: Border.all(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(LucideIcons.globe, size: 20, color: Color(0xFFF5CBA7)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nenhum servidor público disponível no momento',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Crie um servidor com visibilidade pública para que outros possam encontrá-lo e solicitar entrada.',
+                    style: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      color: isDark
+                          ? AppColors.darkTextMuted
+                          : AppColors.lightTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int crossAxisCount = 4;
+        if (constraints.maxWidth < 600) {
+          crossAxisCount = 1;
+        } else if (constraints.maxWidth < 900) {
+          crossAxisCount = 2;
+        } else if (constraints.maxWidth < 1200) {
+          crossAxisCount = 3;
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _publicServers.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+            mainAxisExtent: 220,
+          ),
+          itemBuilder: (context, index) {
+            final pub = _publicServers[index];
+            return PublicServerCard(
+              publicServer: pub,
+              onOpenServer: () {
+                ref
+                    .read(serversControllerProvider.notifier)
+                    .selectServer(pub.server.id);
+                setState(() => _activeTab = pub.server.id);
+              },
+              onRequestSubmitted: _loadPublicServers,
             );
           },
         );

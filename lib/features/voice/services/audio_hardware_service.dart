@@ -8,16 +8,25 @@ class AudioDeviceInfo {
   final String deviceId;
   final String label;
   final String kind;
+  final bool isDefault;
 
   const AudioDeviceInfo({
     required this.deviceId,
     required this.label,
     required this.kind,
+    this.isDefault = false,
   });
 
   @override
-  String toString() => 'AudioDeviceInfo(deviceId: $deviceId, label: $label, kind: $kind)';
+  String toString() => 'AudioDeviceInfo(deviceId: $deviceId, label: $label, kind: $kind, isDefault: $isDefault)';
 }
+
+typedef AudioSnapshot = ({
+  List<AudioDeviceInfo> inputs,
+  List<AudioDeviceInfo> outputs,
+  String? defaultInputId,
+  String? defaultOutputId,
+});
 
 class AudioHardwareService {
   const AudioHardwareService();
@@ -34,14 +43,59 @@ class AudioHardwareService {
     }
   }
 
-  Future<List<AudioDeviceInfo>> getInputDevices() async {
+  Future<AudioSnapshot> getAudioDevicesSnapshot() async {
+    if (!kIsWeb && io.Platform.environment.containsKey('FLUTTER_TEST')) {
+      final inputs = await _getGenericInputDevices();
+      final outputs = await _getGenericOutputDevices();
+      return (
+        inputs: inputs,
+        outputs: outputs,
+        defaultInputId: inputs.where((d) => d.deviceId != 'default').firstOrNull?.deviceId ?? 'default',
+        defaultOutputId: outputs.where((d) => d.deviceId != 'default').firstOrNull?.deviceId ?? 'default',
+      );
+    }
+
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-      final windowsDevices = await _getWindowsAudioEndpoints(isInput: true);
-      if (windowsDevices.isNotEmpty) {
-        return windowsDevices;
+      final snapshot = await _getWindowsAudioSnapshot();
+      if (snapshot.inputs.isNotEmpty || snapshot.outputs.isNotEmpty) {
+        return snapshot;
       }
     }
 
+    final inputs = await _getGenericInputDevices();
+    final outputs = await _getGenericOutputDevices();
+    final defaultIn = inputs.where((d) => d.deviceId != 'default').firstOrNull?.deviceId;
+    final defaultOut = outputs.where((d) => d.deviceId != 'default').firstOrNull?.deviceId;
+
+    return (
+      inputs: inputs,
+      outputs: outputs,
+      defaultInputId: defaultIn,
+      defaultOutputId: defaultOut,
+    );
+  }
+
+  Future<List<AudioDeviceInfo>> getInputDevices() async {
+    final snapshot = await getAudioDevicesSnapshot();
+    return snapshot.inputs;
+  }
+
+  Future<List<AudioDeviceInfo>> getOutputDevices() async {
+    final snapshot = await getAudioDevicesSnapshot();
+    return snapshot.outputs;
+  }
+
+  Future<List<AudioDeviceInfo>> _getGenericInputDevices() async {
+    if (!kIsWeb && io.Platform.environment.containsKey('FLUTTER_TEST')) {
+      return const [
+        AudioDeviceInfo(
+          deviceId: 'default',
+          label: 'Microfone Padrão do Sistema',
+          kind: 'audioinput',
+          isDefault: true,
+        ),
+      ];
+    }
     try {
       await requestMicrophonePermission();
       final rawDevices = await Hardware.instance.enumerateDevices(type: 'audioinput');
@@ -50,6 +104,7 @@ class AudioHardwareService {
           deviceId: 'default',
           label: 'Padrão do Sistema',
           kind: 'audioinput',
+          isDefault: true,
         ),
       ];
 
@@ -73,19 +128,23 @@ class AudioHardwareService {
           deviceId: 'default',
           label: 'Microfone Padrão do Sistema',
           kind: 'audioinput',
+          isDefault: true,
         ),
       ];
     }
   }
 
-  Future<List<AudioDeviceInfo>> getOutputDevices() async {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-      final windowsDevices = await _getWindowsAudioEndpoints(isInput: false);
-      if (windowsDevices.isNotEmpty) {
-        return windowsDevices;
-      }
+  Future<List<AudioDeviceInfo>> _getGenericOutputDevices() async {
+    if (!kIsWeb && io.Platform.environment.containsKey('FLUTTER_TEST')) {
+      return const [
+        AudioDeviceInfo(
+          deviceId: 'default',
+          label: 'Alto-falantes Padrão do Sistema',
+          kind: 'audiooutput',
+          isDefault: true,
+        ),
+      ];
     }
-
     try {
       final rawDevices = await Hardware.instance.enumerateDevices(type: 'audiooutput');
       final list = <AudioDeviceInfo>[
@@ -93,6 +152,7 @@ class AudioHardwareService {
           deviceId: 'default',
           label: 'Padrão do Sistema',
           kind: 'audiooutput',
+          isDefault: true,
         ),
       ];
 
@@ -116,81 +176,159 @@ class AudioHardwareService {
           deviceId: 'default',
           label: 'Alto-falantes Padrão do Sistema',
           kind: 'audiooutput',
+          isDefault: true,
         ),
       ];
     }
   }
 
-  Future<List<AudioDeviceInfo>> _getWindowsAudioEndpoints({required bool isInput}) async {
+  Future<AudioSnapshot> _getWindowsAudioSnapshot() async {
     try {
-      // {0.0.1. is Capture (input/mic), {0.0.0. is Render (output/speakers)
-      final filterMatch = isInput ? '{0.0.1.' : '{0.0.0.';
-      final defaultPrefix = isInput ? 'Padrão do Windows (Microfone)' : 'Padrão do Windows (Alto-falante)';
-
-      final result = await io.Process.run(
-        'powershell',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          r'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-PnpDevice -Class AudioEndpoint -Status OK | ForEach-Object { [PSCustomObject]@{ FriendlyName = $_.FriendlyName; InstanceId = $_.InstanceId } } | ConvertTo-Json -Compress',
-        ],
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
-      );
+      final scriptFile = io.File('scripts/get_windows_audio_devices.ps1');
+      io.ProcessResult result;
+      if (scriptFile.existsSync()) {
+        result = await io.Process.run(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            scriptFile.absolute.path,
+          ],
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        );
+      } else {
+        result = await io.Process.run(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            r'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-PnpDevice -Class AudioEndpoint -Status OK | ForEach-Object { [PSCustomObject]@{ FriendlyName = $_.FriendlyName; InstanceId = $_.InstanceId } } | ConvertTo-Json -Compress',
+          ],
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        );
+      }
 
       if (result.exitCode != 0) {
         debugPrint('[AudioHardwareService] PowerShell exitCode: ${result.exitCode}');
-        return [];
+        return (inputs: <AudioDeviceInfo>[], outputs: <AudioDeviceInfo>[], defaultInputId: null, defaultOutputId: null);
       }
 
       final output = (result.stdout as String).trim();
-      if (output.isEmpty) return [];
+      if (output.isEmpty) {
+        return (inputs: <AudioDeviceInfo>[], outputs: <AudioDeviceInfo>[], defaultInputId: null, defaultOutputId: null);
+      }
 
       dynamic decoded;
       try {
         decoded = jsonDecode(output);
       } catch (e) {
         debugPrint('[AudioHardwareService] JSON parse error: $e');
-        return [];
+        return (inputs: <AudioDeviceInfo>[], outputs: <AudioDeviceInfo>[], defaultInputId: null, defaultOutputId: null);
       }
 
-      final List<dynamic> items = decoded is List ? decoded : [decoded];
-      final devices = <AudioDeviceInfo>[];
+      final inputs = <AudioDeviceInfo>[];
+      final outputs = <AudioDeviceInfo>[];
+      String? defaultInputId;
+      String? defaultOutputId;
 
-      for (final item in items) {
-        if (item is Map) {
-          final friendlyName = (item['FriendlyName'] ?? '').toString();
-          var instanceId = (item['InstanceId'] ?? '').toString();
+      if (decoded is Map<String, dynamic> && decoded.containsKey('inputs')) {
+        defaultInputId = (decoded['defaultInput'] as String?)?.toLowerCase();
+        defaultOutputId = (decoded['defaultOutput'] as String?)?.toLowerCase();
 
-          if (instanceId.contains(filterMatch) && friendlyName.isNotEmpty) {
-            if (instanceId.startsWith(r'SWD\MMDEVAPI\')) {
-              instanceId = instanceId.substring(r'SWD\MMDEVAPI\'.length);
+        final rawInputs = (decoded['inputs'] as List?) ?? [];
+        for (final item in rawInputs) {
+          if (item is Map) {
+            final id = (item['deviceId'] ?? '').toString().toLowerCase();
+            final label = (item['label'] ?? '').toString();
+            final isDef = item['isDefault'] == true;
+            if (id.isNotEmpty && label.isNotEmpty) {
+              inputs.add(AudioDeviceInfo(
+                deviceId: id,
+                label: label,
+                kind: 'audioinput',
+                isDefault: isDef,
+              ));
             }
-            devices.add(AudioDeviceInfo(
-              deviceId: instanceId,
-              label: friendlyName,
-              kind: isInput ? 'audioinput' : 'audiooutput',
-            ));
           }
         }
+
+        final rawOutputs = (decoded['outputs'] as List?) ?? [];
+        for (final item in rawOutputs) {
+          if (item is Map) {
+            final id = (item['deviceId'] ?? '').toString().toLowerCase();
+            final label = (item['label'] ?? '').toString();
+            final isDef = item['isDefault'] == true;
+            if (id.isNotEmpty && label.isNotEmpty) {
+              outputs.add(AudioDeviceInfo(
+                deviceId: id,
+                label: label,
+                kind: 'audiooutput',
+                isDefault: isDef,
+              ));
+            }
+          }
+        }
+      } else {
+        // Fallback para lista plana caso o script retorne apenas lista de PnpDevices
+        final List<dynamic> items = decoded is List ? decoded : [decoded];
+        for (final item in items) {
+          if (item is Map) {
+            final friendlyName = (item['FriendlyName'] ?? '').toString();
+            var instanceId = (item['InstanceId'] ?? '').toString().toLowerCase();
+            if (instanceId.startsWith(r'swd\mmdevapi\')) {
+              instanceId = instanceId.substring(r'swd\mmdevapi\'.length);
+            }
+            if (friendlyName.isNotEmpty) {
+              if (instanceId.contains('{0.0.1.')) {
+                inputs.add(AudioDeviceInfo(deviceId: instanceId, label: friendlyName, kind: 'audioinput'));
+              } else if (instanceId.contains('{0.0.0.')) {
+                outputs.add(AudioDeviceInfo(deviceId: instanceId, label: friendlyName, kind: 'audiooutput'));
+              }
+            }
+          }
+        }
+        defaultInputId = inputs.firstOrNull?.deviceId;
+        defaultOutputId = outputs.firstOrNull?.deviceId;
       }
 
-      // Adiciona o item padrão no início com o nome do primeiro dispositivo caso exista
-      final firstLabel = devices.isNotEmpty ? ' (${devices.first.label})' : '';
-      devices.insert(
+      // Adiciona a opção virtual "Padrão" no início de cada lista
+      final firstInputLabel = inputs.isNotEmpty ? ' (${inputs.first.label})' : '';
+      inputs.insert(
         0,
         AudioDeviceInfo(
           deviceId: 'default',
-          label: '$defaultPrefix$firstLabel',
-          kind: isInput ? 'audioinput' : 'audiooutput',
+          label: 'Padrão do Windows (Microfone)$firstInputLabel',
+          kind: 'audioinput',
+          isDefault: true,
         ),
       );
 
-      return devices;
+      final firstOutputLabel = outputs.isNotEmpty ? ' (${outputs.first.label})' : '';
+      outputs.insert(
+        0,
+        AudioDeviceInfo(
+          deviceId: 'default',
+          label: 'Padrão do Windows (Alto-falante)$firstOutputLabel',
+          kind: 'audiooutput',
+          isDefault: true,
+        ),
+      );
+
+      return (
+        inputs: inputs,
+        outputs: outputs,
+        defaultInputId: defaultInputId ?? inputs.where((d) => d.deviceId != 'default').firstOrNull?.deviceId,
+        defaultOutputId: defaultOutputId ?? outputs.where((d) => d.deviceId != 'default').firstOrNull?.deviceId,
+      );
     } catch (e) {
       debugPrint('[AudioHardwareService] Erro ao enumerar dispositivos Windows: $e');
-      return [];
+      return (inputs: <AudioDeviceInfo>[], outputs: <AudioDeviceInfo>[], defaultInputId: null, defaultOutputId: null);
     }
   }
 }

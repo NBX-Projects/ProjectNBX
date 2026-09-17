@@ -127,6 +127,7 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/v1/webrtc/turn-credentials", webrtcHandler.GetTURNCredentials).Methods("GET", "OPTIONS")
 
 	// Servidores & Canais
+	protected.HandleFunc("/servers/public", serverHandler.ListPublicServers).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers", serverHandler.ListServers).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers", serverHandler.CreateServer).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}", serverHandler.GetServer).Methods("GET", "OPTIONS")
@@ -145,6 +146,19 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/servers/{id}/invites", serverHandler.ListInvites).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/invites", serverHandler.CreateInvite).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/invites/{code}", serverHandler.DeleteInvite).Methods("DELETE", "OPTIONS")
+
+	// Pedidos de Entrada (Join Requests)
+	protected.HandleFunc("/servers/{id}/join-requests", serverHandler.ListJoinRequests).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/join-requests", serverHandler.CreateJoinRequest).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/join-requests/{requestId}/review", serverHandler.ReviewJoinRequest).Methods("POST", "OPTIONS")
+
+	// Cargos & Permissões (Roles)
+	protected.HandleFunc("/servers/{id}/roles", serverHandler.ListRoles).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/roles", serverHandler.CreateRole).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/roles/{roleId}", serverHandler.UpdateRole).Methods("PUT", "PATCH", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/roles/{roleId}", serverHandler.DeleteRole).Methods("DELETE", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/members/{userId}/roles/{roleId}", serverHandler.AssignMemberRole).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/servers/{id}/members/{userId}/roles/{roleId}", serverHandler.RemoveMemberRole).Methods("DELETE", "OPTIONS")
 
 	// Busca de Usuários
 	protected.HandleFunc("/users/search", authHandler.SearchUsers).Methods("GET", "OPTIONS")

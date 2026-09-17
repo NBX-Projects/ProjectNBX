@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -101,33 +98,16 @@ class QuickAudioDeviceMenu extends ConsumerStatefulWidget {
   ConsumerState<QuickAudioDeviceMenu> createState() => _QuickAudioDeviceMenuState();
 }
 
-class _QuickAudioDeviceMenuState extends ConsumerState<QuickAudioDeviceMenu>
-    with SingleTickerProviderStateMixin {
+class _QuickAudioDeviceMenuState extends ConsumerState<QuickAudioDeviceMenu> {
   bool _expandedInput = false;
   bool _expandedOutput = false;
   bool _expandedProfile = false;
-
-  late AnimationController _vuController;
 
   @override
   void initState() {
     super.initState();
     _expandedInput = widget.initialShowInput;
     _expandedOutput = !widget.initialShowInput;
-
-    _vuController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
-      _vuController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _vuController.dispose();
-    super.dispose();
   }
 
   @override
@@ -509,17 +489,23 @@ class _QuickAudioDeviceMenuState extends ConsumerState<QuickAudioDeviceMenu>
   Widget _buildVuMeter(bool isDark) {
     const totalBars = 24;
     final voiceState = ref.watch(voiceStateProvider);
-    final isMuted = voiceState.isMicMuted || voiceState.isDeafened;
+    final audioLevel = ref.watch(localAudioLevelProvider);
+    final isMuted = voiceState.isMicMuted || voiceState.isDeafened || !voiceState.isConnected;
+    final effectiveLevel = isMuted ? 0.0 : audioLevel.clamp(0.0, 1.0);
 
-    return AnimatedBuilder(
-      animation: _vuController,
-      builder: (context, _) {
-        final activeBars = isMuted
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: effectiveLevel),
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeOutCubic,
+      builder: (context, currentLevel, _) {
+        // Quando silencioso (< 0.02) ou com o microfone desativado, nenhum traço se acende (0 barras)
+        final activeBars = (currentLevel < 0.02)
             ? 0
-            : ((_vuController.value * 14) + 4).clamp(0, totalBars).toInt();
+            : (currentLevel * totalBars).round().clamp(0, totalBars);
+
         return Row(
           children: List.generate(totalBars, (index) {
-            final isActive = index <= activeBars;
+            final isActive = index < activeBars;
             Color barColor;
             if (index < 16) {
               barColor = isDark ? const Color(0xFFA8C5B5) : const Color(0xFF2D6A4F);

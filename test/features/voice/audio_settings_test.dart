@@ -205,12 +205,12 @@ void main() {
       expect(notifier.state.autoNoiseGate, isTrue);
     });
 
-    test('toAudioCaptureOptions strips Windows SWD prefix', () {
+    test('toAudioCaptureOptions strips Windows SWD prefix and normalizes to lowercase', () {
       const settings = AudioSettings();
       final capture = settings.toAudioCaptureOptions(
         deviceId: r'SWD\MMDEVAPI\{0.0.1.00000000}.{GUID-1234}',
       );
-      expect(capture.deviceId, '{0.0.1.00000000}.{GUID-1234}');
+      expect(capture.deviceId, '{0.0.1.00000000}.{guid-1234}');
     });
   });
 }

@@ -1,6 +1,17 @@
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 
 class ServerModel {
+  static const List<String> canonicalCategories = [
+    'Gaming',
+    'Programação',
+    'Música',
+    'Estudos',
+    'Design',
+    'Cripto & Finanças',
+    'Comunidade Geral',
+    'Outros',
+  ];
+
   final String id;
   final String name;
   final String? iconUrl;
@@ -10,6 +21,8 @@ class ServerModel {
   final String category;
   final int bannerPreset;
   final int accentColor;
+  final bool isPublic;
+  final String description;
 
   const ServerModel({
     required this.id,
@@ -21,6 +34,8 @@ class ServerModel {
     this.category = 'Comunidade Geral',
     this.bannerPreset = 0,
     this.accentColor = 0xFFF5CBA7,
+    this.isPublic = false,
+    this.description = '',
   });
 
   factory ServerModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +56,8 @@ class ServerModel {
       category: json['category'] as String? ?? 'Comunidade Geral',
       bannerPreset: rawPreset is int ? rawPreset : 0,
       accentColor: rawAccent is int ? rawAccent : 0xFFF5CBA7,
+      isPublic: json['is_public'] as bool? ?? false,
+      description: json['description'] as String? ?? '',
     );
   }
 
@@ -55,6 +72,8 @@ class ServerModel {
       'category': category,
       'banner_preset': bannerPreset,
       'accent_color': accentColor,
+      'is_public': isPublic,
+      'description': description,
     };
   }
 
@@ -68,6 +87,8 @@ class ServerModel {
     String? category,
     int? bannerPreset,
     int? accentColor,
+    bool? isPublic,
+    String? description,
   }) {
     return ServerModel(
       id: id ?? this.id,
@@ -79,6 +100,8 @@ class ServerModel {
       category: category ?? this.category,
       bannerPreset: bannerPreset ?? this.bannerPreset,
       accentColor: accentColor ?? this.accentColor,
+      isPublic: isPublic ?? this.isPublic,
+      description: description ?? this.description,
     );
   }
 }

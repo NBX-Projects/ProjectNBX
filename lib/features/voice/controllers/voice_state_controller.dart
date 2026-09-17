@@ -95,3 +95,6 @@ final voiceStateProvider =
     StateNotifierProvider<VoiceStateNotifier, VoiceState>((ref) {
   return VoiceStateNotifier();
 });
+
+/// Provedor reativo para o nível real de áudio capturado pelo microfone local (0.0 a 1.0)
+final localAudioLevelProvider = StateProvider<double>((ref) => 0.0);

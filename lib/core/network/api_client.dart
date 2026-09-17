@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/network/api_offline_exception.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
+import 'package:projectnbx/features/servers/models/public_server_model.dart';
+import 'package:projectnbx/features/servers/models/server_join_request_model.dart';
+import 'package:projectnbx/features/servers/models/server_role_model.dart';
 
 class ApiClient {
   static String? _customBaseUrl;
@@ -299,12 +302,21 @@ class ApiClient {
   Future<Map<String, dynamic>?> createServer(
     String name, {
     String? iconUrl,
+    bool isPublic = false,
+    String? description,
+    String? category,
   }) async {
     final url = Uri.parse('$baseUrl/servers');
     final response = await _client.post(
       url,
       headers: _headers,
-      body: jsonEncode({'name': name, 'icon_url': iconUrl ?? ''}),
+      body: jsonEncode({
+        'name': name,
+        'icon_url': iconUrl ?? '',
+        'is_public': isPublic,
+        'description': description ?? '',
+        'category': category ?? 'Comunidade Geral',
+      }),
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -544,6 +556,219 @@ class ApiClient {
       return {};
     } catch (_) {
       return {};
+    }
+  }
+
+  // ==========================================
+  // Servidores Públicos & Descoberta
+  // ==========================================
+
+  Future<List<PublicServerModel>> getPublicServers() async {
+    final url = Uri.parse('$baseUrl/servers/public');
+    try {
+      final response = await _client.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data
+            .map((item) =>
+                PublicServerModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ==========================================
+  // Pedidos de Entrada (Join Requests)
+  // ==========================================
+
+  Future<ServerJoinRequestModel?> createJoinRequest(
+    String serverId, {
+    String message = '',
+  }) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/join-requests');
+    try {
+      final response = await _client.post(
+        url,
+        headers: _headers,
+        body: jsonEncode({'message': message}),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return ServerJoinRequestModel.fromJson(data);
+      } else {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        throw Exception(
+            data?['error'] ?? 'Falha ao solicitar entrada no servidor');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<ServerJoinRequestModel>> getJoinRequests(
+    String serverId, {
+    String status = 'pending',
+  }) async {
+    final url =
+        Uri.parse('$baseUrl/servers/$serverId/join-requests?status=$status');
+    try {
+      final response = await _client.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data
+            .map((item) =>
+                ServerJoinRequestModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> reviewJoinRequest(
+    String serverId,
+    String requestId, {
+    required bool approve,
+  }) async {
+    final url =
+        Uri.parse('$baseUrl/servers/$serverId/join-requests/$requestId/review');
+    try {
+      final response = await _client.post(
+        url,
+        headers: _headers,
+        body: jsonEncode({'status': approve ? 'approved' : 'rejected'}),
+      );
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ==========================================
+  // Cargos & Permissões (Roles)
+  // ==========================================
+
+  Future<List<ServerRoleModel>> getServerRoles(String serverId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/roles');
+    try {
+      final response = await _client.get(url, headers: _headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as List<dynamic>? ?? [];
+        return data
+            .map((item) =>
+                ServerRoleModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<ServerRoleModel?> createServerRole(
+    String serverId, {
+    required String name,
+    int color = 0xFFF5CBA7,
+    int position = 0,
+    Map<String, bool> permissions = const {},
+  }) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/roles');
+    try {
+      final response = await _client.post(
+        url,
+        headers: _headers,
+        body: jsonEncode({
+          'name': name,
+          'color': color,
+          'position': position,
+          'permissions': permissions,
+        }),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return ServerRoleModel.fromJson(data);
+      } else {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        throw Exception(data?['error'] ?? 'Falha ao criar cargo');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<ServerRoleModel?> updateServerRole(
+    String serverId,
+    String roleId, {
+    required String name,
+    int? color,
+    int? position,
+    Map<String, bool>? permissions,
+  }) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/roles/$roleId');
+    try {
+      final payload = <String, dynamic>{'name': name};
+      if (color != null) payload['color'] = color;
+      if (position != null) payload['position'] = position;
+      if (permissions != null) payload['permissions'] = permissions;
+
+      final response = await _client.put(
+        url,
+        headers: _headers,
+        body: jsonEncode(payload),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return ServerRoleModel.fromJson(data);
+      } else {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        throw Exception(data?['error'] ?? 'Falha ao atualizar cargo');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<bool> deleteServerRole(String serverId, String roleId) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId/roles/$roleId');
+    try {
+      final response = await _client.delete(url, headers: _headers);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> assignMemberRole(
+    String serverId,
+    String userId,
+    String roleId,
+  ) async {
+    final url =
+        Uri.parse('$baseUrl/servers/$serverId/members/$userId/roles/$roleId');
+    try {
+      final response = await _client.post(url, headers: _headers);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> removeMemberRole(
+    String serverId,
+    String userId,
+    String roleId,
+  ) async {
+    final url =
+        Uri.parse('$baseUrl/servers/$serverId/members/$userId/roles/$roleId');
+    try {
+      final response = await _client.delete(url, headers: _headers);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
     }
   }
 }

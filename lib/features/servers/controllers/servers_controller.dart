@@ -190,10 +190,18 @@ class ServersNotifier extends StateNotifier<ServersState> {
     String? category,
     int? bannerPreset,
     int? accentColor,
+    bool isPublic = false,
+    String? description,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final res = await _apiClient.createServer(name, iconUrl: iconUrl);
+      final res = await _apiClient.createServer(
+        name,
+        iconUrl: iconUrl,
+        isPublic: isPublic,
+        description: description,
+        category: category,
+      );
       if (res != null) {
         var newServer = ServerModel.fromJson(res);
         if (category != null && category.isNotEmpty) {

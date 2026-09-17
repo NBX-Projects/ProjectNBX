@@ -64,9 +64,12 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
 	server := &models.Server{
-		Name:    req.Name,
-		IconURL: req.IconURL,
-		OwnerID: userID,
+		Name:        req.Name,
+		IconURL:     req.IconURL,
+		OwnerID:     userID,
+		IsPublic:    req.IsPublic,
+		Description: req.Description,
+		Category:    req.Category,
 	}
 
 	if err := h.repo.CreateServer(server); err != nil {
@@ -552,6 +555,290 @@ func (h *ServerHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.repo.DeleteInvite(code); err != nil {
 		http.Error(w, `{"error":"Erro ao revogar convite"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListPublicServers lista servidores públicos disponíveis para descoberta
+func (h *ServerHandler) ListPublicServers(w http.ResponseWriter, r *http.Request) {
+	currentUserID := auth.GetUserID(r.Context())
+	servers, err := h.repo.ListPublicServers(currentUserID)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao listar servidores públicos"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(servers)
+}
+
+// CreateJoinRequest submete pedido de entrada em servidor público
+func (h *ServerHandler) CreateJoinRequest(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	if currentUserID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	server, err := h.repo.GetServerByID(serverID)
+	if err != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if !server.IsPublic {
+		http.Error(w, `{"error":"Este servidor é privado e não aceita pedidos de entrada"}`, http.StatusBadRequest)
+		return
+	}
+
+	var reqBody struct {
+		Message string `json:"message"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
+	joinReq := &models.ServerJoinRequest{
+		ServerID: serverID,
+		UserID:   currentUserID,
+		Message:  reqBody.Message,
+	}
+
+	if err := h.repo.CreateJoinRequest(joinReq); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	joinReq.User, _ = h.repo.GetUserByID(currentUserID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(joinReq)
+}
+
+// ListJoinRequests lista pedidos de entrada para moderadores
+func (h *ServerHandler) ListJoinRequests(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_accept_join_requests")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para visualizar pedidos de entrada"}`, http.StatusForbidden)
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	requests, err := h.repo.ListJoinRequests(serverID, status)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao listar pedidos de entrada"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(requests)
+}
+
+// ReviewJoinRequest aprova ou rejeita pedido de entrada
+func (h *ServerHandler) ReviewJoinRequest(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	requestID := vars["requestId"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_accept_join_requests")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para gerenciar pedidos de entrada"}`, http.StatusForbidden)
+		return
+	}
+
+	var reqBody struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil || (reqBody.Status != "approved" && reqBody.Status != "rejected") {
+		http.Error(w, `{"error":"Status inválido. Use 'approved' ou 'rejected'"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.repo.ReviewJoinRequest(requestID, currentUserID, reqBody.Status); err != nil {
+		http.Error(w, `{"error":"Erro ao processar pedido de entrada"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": reqBody.Status})
+}
+
+// ListRoles lista os cargos de um servidor
+func (h *ServerHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+
+	roles, err := h.repo.ListServerRoles(serverID)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao listar cargos"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(roles)
+}
+
+// CreateRole cria um novo cargo com permissões
+func (h *ServerHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_manage_roles")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para criar cargos"}`, http.StatusForbidden)
+		return
+	}
+
+	var req models.CreateRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, `{"error":"Nome do cargo é obrigatório"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Color == 0 {
+		req.Color = 4294334375 // 0xFFF5CBA7
+	}
+	if req.Permissions == nil {
+		req.Permissions = make(map[string]bool)
+	}
+
+	role := &models.ServerRole{
+		ServerID:    serverID,
+		Name:        strings.TrimSpace(req.Name),
+		Color:       req.Color,
+		Position:    req.Position,
+		Permissions: req.Permissions,
+	}
+
+	if err := h.repo.CreateRole(role); err != nil {
+		http.Error(w, `{"error":"Erro ao criar cargo"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(role)
+}
+
+// UpdateRole atualiza cargo e suas permissões
+func (h *ServerHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	roleID := vars["roleId"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_manage_roles")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para editar cargos"}`, http.StatusForbidden)
+		return
+	}
+
+	var req models.CreateRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, `{"error":"Dados do cargo inválidos"}`, http.StatusBadRequest)
+		return
+	}
+
+	role, err := h.repo.GetRoleByID(roleID)
+	if err != nil || role == nil || role.ServerID != serverID {
+		http.Error(w, `{"error":"Cargo não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	role.Name = strings.TrimSpace(req.Name)
+	if req.Color != 0 {
+		role.Color = req.Color
+	}
+	role.Position = req.Position
+	if req.Permissions != nil {
+		role.Permissions = req.Permissions
+	}
+
+	if err := h.repo.UpdateRole(role); err != nil {
+		http.Error(w, `{"error":"Erro ao atualizar cargo"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(role)
+}
+
+// DeleteRole remove um cargo
+func (h *ServerHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	roleID := vars["roleId"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_manage_roles")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para remover cargos"}`, http.StatusForbidden)
+		return
+	}
+
+	role, err := h.repo.GetRoleByID(roleID)
+	if err != nil || role == nil || role.ServerID != serverID {
+		http.Error(w, `{"error":"Cargo não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if err := h.repo.DeleteRole(roleID); err != nil {
+		http.Error(w, `{"error":"Erro ao remover cargo"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// AssignMemberRole vincula um cargo a um membro
+func (h *ServerHandler) AssignMemberRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	targetUserID := vars["userId"]
+	roleID := vars["roleId"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_manage_roles")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para atribuir cargos"}`, http.StatusForbidden)
+		return
+	}
+
+	if err := h.repo.AssignMemberRole(serverID, targetUserID, roleID); err != nil {
+		http.Error(w, `{"error":"Erro ao atribuir cargo"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// RemoveMemberRole remove atribuição de cargo de um membro
+func (h *ServerHandler) RemoveMemberRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	targetUserID := vars["userId"]
+	roleID := vars["roleId"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	hasPerm, err := h.repo.HasServerPermission(serverID, currentUserID, "can_manage_roles")
+	if err != nil || !hasPerm {
+		http.Error(w, `{"error":"Sem permissão para remover cargo do membro"}`, http.StatusForbidden)
+		return
+	}
+
+	if err := h.repo.RemoveMemberRole(serverID, targetUserID, roleID); err != nil {
+		http.Error(w, `{"error":"Erro ao remover cargo"}`, http.StatusInternalServerError)
 		return
 	}
 

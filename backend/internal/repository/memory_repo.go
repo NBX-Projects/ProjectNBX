@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -13,24 +15,30 @@ import (
 
 // MemoryRepository implementação em memória thread-safe para desenvolvimento ágil
 type MemoryRepository struct {
-	mu       sync.RWMutex
-	users    map[string]*models.User
-	servers  map[string]*models.Server
-	channels map[string]*models.Channel
-	messages map[string][]*models.Message // channelID -> messages
-	members  map[string]map[string]time.Time // serverID -> userID -> joinedAt
-	invites  map[string]*models.ServerInvite // code -> invite
+	mu           sync.RWMutex
+	users        map[string]*models.User
+	servers      map[string]*models.Server
+	channels     map[string]*models.Channel
+	messages     map[string][]*models.Message // channelID -> messages
+	members      map[string]map[string]time.Time // serverID -> userID -> joinedAt
+	invites      map[string]*models.ServerInvite // code -> invite
+	joinRequests map[string]*models.ServerJoinRequest // requestID -> joinRequest
+	roles        map[string]*models.ServerRole // roleID -> role
+	memberRoles  map[string]map[string][]string // serverID -> userID -> []roleID
 }
 
 // NewMemoryRepository inicializa o repositório com dados padrão de demonstração
 func NewMemoryRepository() *MemoryRepository {
 	repo := &MemoryRepository{
-		users:    make(map[string]*models.User),
-		servers:  make(map[string]*models.Server),
-		channels: make(map[string]*models.Channel),
-		messages: make(map[string][]*models.Message),
-		members:  make(map[string]map[string]time.Time),
-		invites:  make(map[string]*models.ServerInvite),
+		users:        make(map[string]*models.User),
+		servers:      make(map[string]*models.Server),
+		channels:     make(map[string]*models.Channel),
+		messages:     make(map[string][]*models.Message),
+		members:      make(map[string]map[string]time.Time),
+		invites:      make(map[string]*models.ServerInvite),
+		joinRequests: make(map[string]*models.ServerJoinRequest),
+		roles:        make(map[string]*models.ServerRole),
+		memberRoles:  make(map[string]map[string][]string),
 	}
 
 	repo.seedInitialData()
@@ -67,19 +75,25 @@ func (r *MemoryRepository) seedInitialData() {
 	r.users[devUser.ID] = devUser
 
 	seedServers := []struct {
-		ID       string
-		Name     string
-		Banner   string
-		Channels []struct {
+		ID          string
+		Name        string
+		Banner      string
+		IsPublic    bool
+		Category    string
+		Description string
+		Channels    []struct {
 			ID   string
 			Name string
 			Type models.ChannelType
 		}
 	}{
 		{
-			ID:     "1",
-			Name:   "Apex Predators",
-			Banner: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1400&h=420&fit=crop&auto=format",
+			ID:          "1",
+			Name:        "Apex Predators",
+			Banner:      "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1400&h=420&fit=crop&auto=format",
+			IsPublic:    true,
+			Category:    "Gaming",
+			Description: "Servidor oficial de partidas competitivas e ranked matches.",
 			Channels: []struct {
 				ID   string
 				Name string
@@ -91,9 +105,12 @@ func (r *MemoryRepository) seedInitialData() {
 			},
 		},
 		{
-			ID:     "2",
-			Name:   "Dev Lounge",
-			Banner: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400&h=420&fit=crop&auto=format",
+			ID:          "2",
+			Name:        "Dev Lounge",
+			Banner:      "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400&h=420&fit=crop&auto=format",
+			IsPublic:    true,
+			Category:    "Programação",
+			Description: "Espaço para desenvolvedores discutirem código, arquitetura e carreira.",
 			Channels: []struct {
 				ID   string
 				Name string
@@ -104,9 +121,12 @@ func (r *MemoryRepository) seedInitialData() {
 			},
 		},
 		{
-			ID:     "3",
-			Name:   "Le Mans Ultimate",
-			Banner: "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=1400&h=420&fit=crop&auto=format",
+			ID:          "3",
+			Name:        "Le Mans Ultimate",
+			Banner:      "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=1400&h=420&fit=crop&auto=format",
+			IsPublic:    true,
+			Category:    "Gaming",
+			Description: "Comunidade de automobilismo virtual e simuladores de endurance.",
 			Channels: []struct {
 				ID   string
 				Name string
@@ -117,9 +137,12 @@ func (r *MemoryRepository) seedInitialData() {
 			},
 		},
 		{
-			ID:     "4",
-			Name:   "Minecraft Realm",
-			Banner: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1400&h=420&fit=crop&auto=format",
+			ID:          "4",
+			Name:        "Minecraft Realm",
+			Banner:      "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1400&h=420&fit=crop&auto=format",
+			IsPublic:    true,
+			Category:    "Gaming",
+			Description: "Mundo survival comunitário com vilas e projetos gigantes.",
 			Channels: []struct {
 				ID   string
 				Name string
@@ -130,9 +153,12 @@ func (r *MemoryRepository) seedInitialData() {
 			},
 		},
 		{
-			ID:     "5",
-			Name:   "CS2 Tactics",
-			Banner: "https://images.unsplash.com/photo-1547394765-185e1e68f34e?w=1400&h=420&fit=crop&auto=format",
+			ID:          "5",
+			Name:        "CS2 Tactics",
+			Banner:      "https://images.unsplash.com/photo-1547394765-185e1e68f34e?w=1400&h=420&fit=crop&auto=format",
+			IsPublic:    false,
+			Category:    "Gaming",
+			Description: "Treinos fechados e táticas exclusivas da equipe.",
 			Channels: []struct {
 				ID   string
 				Name string
@@ -143,9 +169,12 @@ func (r *MemoryRepository) seedInitialData() {
 			},
 		},
 		{
-			ID:     "6",
-			Name:   "Study Group",
-			Banner: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1400&h=420&fit=crop&auto=format",
+			ID:          "6",
+			Name:        "Study Group",
+			Banner:      "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1400&h=420&fit=crop&auto=format",
+			IsPublic:    true,
+			Category:    "Estudos",
+			Description: "Salas de foco e pomodoro para estudos em grupo.",
 			Channels: []struct {
 				ID   string
 				Name string
@@ -163,10 +192,18 @@ func (r *MemoryRepository) seedInitialData() {
 			Name:        sData.Name,
 			IconURL:     sData.Banner,
 			OwnerID:     adminUser.ID,
+			IsPublic:    sData.IsPublic,
+			Category:    sData.Category,
+			Description: sData.Description,
 			MemberCount: 100,
 			CreatedAt:   time.Now(),
 		}
 		r.servers[srv.ID] = srv
+
+		if r.members[srv.ID] == nil {
+			r.members[srv.ID] = make(map[string]time.Time)
+		}
+		r.members[srv.ID][adminUser.ID] = time.Now()
 
 		for pos, cData := range sData.Channels {
 			ch := &models.Channel{
@@ -316,6 +353,11 @@ func (r *MemoryRepository) CreateServer(server *models.Server) error {
 	server.CreatedAt = time.Now()
 	server.MemberCount = 1
 	r.servers[server.ID] = server
+
+	if r.members[server.ID] == nil {
+		r.members[server.ID] = make(map[string]time.Time)
+	}
+	r.members[server.ID][server.OwnerID] = server.CreatedAt
 	return nil
 }
 
@@ -518,6 +560,7 @@ func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerM
 					User:     owner,
 					Role:     "owner",
 					JoinedAt: srv.CreatedAt,
+					Roles:    r.getMemberRolesInternal(serverID, owner.ID),
 				},
 			}, nil
 		}
@@ -540,6 +583,7 @@ func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerM
 			User:     u,
 			Role:     role,
 			JoinedAt: joinedAt,
+			Roles:    r.getMemberRolesInternal(serverID, uid),
 		})
 	}
 	return result, nil
@@ -682,6 +726,317 @@ func (r *MemoryRepository) DeleteInvite(code string) error {
 
 	delete(r.invites, code)
 	return nil
+}
+
+func (r *MemoryRepository) getMemberRolesInternal(serverID, userID string) []*models.ServerRole {
+	res := make([]*models.ServerRole, 0)
+	if sMap, ok := r.memberRoles[serverID]; ok {
+		if roleIDs, ok := sMap[userID]; ok {
+			for _, rid := range roleIDs {
+				if role, exists := r.roles[rid]; exists {
+					res = append(res, role)
+				}
+			}
+		}
+	}
+	return res
+}
+
+// ListPublicServers lista servidores públicos com metadados do usuário solicitante
+func (r *MemoryRepository) ListPublicServers(userID string) ([]*models.PublicServerDTO, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []*models.PublicServerDTO
+	for _, s := range r.servers {
+		if !s.IsPublic {
+			continue
+		}
+
+		memberCount := len(r.members[s.ID])
+		if memberCount == 0 {
+			memberCount = s.MemberCount
+			if memberCount == 0 {
+				memberCount = 1
+			}
+		}
+
+		isMember := false
+		if membersMap, ok := r.members[s.ID]; ok {
+			if _, exists := membersMap[userID]; exists {
+				isMember = true
+			}
+		} else if s.OwnerID == userID {
+			isMember = true
+		}
+
+		joinStatus := ""
+		for _, req := range r.joinRequests {
+			if req.ServerID == s.ID && req.UserID == userID {
+				joinStatus = req.Status
+				break
+			}
+		}
+
+		sCopy := *s
+		sCopy.MemberCount = memberCount
+		if joinStatus == "" {
+			joinStatus = "none"
+		}
+
+		result = append(result, &models.PublicServerDTO{
+			Server:            sCopy,
+			IsMember:          isMember,
+			JoinRequestStatus: joinStatus,
+		})
+	}
+	return result, nil
+}
+
+// CreateJoinRequest cria uma solicitação de entrada em servidor público
+func (r *MemoryRepository) CreateJoinRequest(req *models.ServerJoinRequest) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Checa se já é membro
+	if membersMap, ok := r.members[req.ServerID]; ok {
+		if _, exists := membersMap[req.UserID]; exists {
+			return errors.New("usuário já é membro deste servidor")
+		}
+	}
+
+	// Checa se já existe pedido pendente
+	for _, existing := range r.joinRequests {
+		if existing.ServerID == req.ServerID && existing.UserID == req.UserID && existing.Status == "pending" {
+			return errors.New("já existe um pedido pendente para este servidor")
+		}
+	}
+
+	if req.ID == "" {
+		req.ID = "req_" + uuid.New().String()
+	}
+	if req.CreatedAt.IsZero() {
+		req.CreatedAt = time.Now()
+	}
+	if req.Status == "" {
+		req.Status = "pending"
+	}
+	r.joinRequests[req.ID] = req
+	return nil
+}
+
+// GetJoinRequest busca solicitação por servidor e usuário
+func (r *MemoryRepository) GetJoinRequest(serverID, userID string) (*models.ServerJoinRequest, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, req := range r.joinRequests {
+		if req.ServerID == serverID && req.UserID == userID {
+			reqCopy := *req
+			if u, exists := r.users[req.UserID]; exists {
+				reqCopy.User = u
+			}
+			return &reqCopy, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// ListJoinRequests lista solicitações para moderadores
+func (r *MemoryRepository) ListJoinRequests(serverID string, status string) ([]*models.ServerJoinRequest, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []*models.ServerJoinRequest
+	for _, req := range r.joinRequests {
+		if req.ServerID != serverID {
+			continue
+		}
+		if status != "" && req.Status != status {
+			continue
+		}
+		reqCopy := *req
+		if u, exists := r.users[req.UserID]; exists {
+			reqCopy.User = u
+		}
+		result = append(result, &reqCopy)
+	}
+	return result, nil
+}
+
+// ReviewJoinRequest aprova ou rejeita solicitação
+func (r *MemoryRepository) ReviewJoinRequest(requestID, reviewerID, status string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	req, ok := r.joinRequests[requestID]
+	if !ok {
+		return ErrNotFound
+	}
+
+	now := time.Now()
+	req.Status = status
+	req.ReviewedBy = &reviewerID
+	req.ReviewedAt = &now
+
+	if status == "approved" {
+		if r.members[req.ServerID] == nil {
+			r.members[req.ServerID] = make(map[string]time.Time)
+		}
+		r.members[req.ServerID][req.UserID] = now
+	}
+	return nil
+}
+
+// CreateRole cria um novo cargo
+func (r *MemoryRepository) CreateRole(role *models.ServerRole) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if role.ID == "" {
+		role.ID = "role_" + uuid.New().String()
+	}
+	if role.CreatedAt.IsZero() {
+		role.CreatedAt = time.Now()
+	}
+	if role.Permissions == nil {
+		role.Permissions = make(map[string]bool)
+	}
+	r.roles[role.ID] = role
+	return nil
+}
+
+// GetRoleByID busca cargo por ID
+func (r *MemoryRepository) GetRoleByID(roleID string) (*models.ServerRole, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	role, ok := r.roles[roleID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return role, nil
+}
+
+// UpdateRole atualiza cargo
+func (r *MemoryRepository) UpdateRole(role *models.ServerRole) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	existing, ok := r.roles[role.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	existing.Name = role.Name
+	existing.Color = role.Color
+	existing.Position = role.Position
+	if role.Permissions != nil {
+		existing.Permissions = role.Permissions
+	}
+	return nil
+}
+
+// DeleteRole remove cargo
+func (r *MemoryRepository) DeleteRole(roleID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.roles, roleID)
+
+	for serverID, userMap := range r.memberRoles {
+		for userID, roleIDs := range userMap {
+			var filtered []string
+			for _, rid := range roleIDs {
+				if rid != roleID {
+					filtered = append(filtered, rid)
+				}
+			}
+			r.memberRoles[serverID][userID] = filtered
+		}
+	}
+	return nil
+}
+
+// ListServerRoles lista cargos de um servidor
+func (r *MemoryRepository) ListServerRoles(serverID string) ([]*models.ServerRole, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []*models.ServerRole
+	for _, role := range r.roles {
+		if role.ServerID == serverID {
+			result = append(result, role)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Position < result[j].Position
+	})
+	return result, nil
+}
+
+// AssignMemberRole atribui cargo a membro
+func (r *MemoryRepository) AssignMemberRole(serverID, userID, roleID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.memberRoles[serverID] == nil {
+		r.memberRoles[serverID] = make(map[string][]string)
+	}
+	for _, rid := range r.memberRoles[serverID][userID] {
+		if rid == roleID {
+			return nil
+		}
+	}
+	r.memberRoles[serverID][userID] = append(r.memberRoles[serverID][userID], roleID)
+	return nil
+}
+
+// RemoveMemberRole remove cargo de membro
+func (r *MemoryRepository) RemoveMemberRole(serverID, userID, roleID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.memberRoles[serverID] == nil {
+		return nil
+	}
+	var filtered []string
+	for _, rid := range r.memberRoles[serverID][userID] {
+		if rid != roleID {
+			filtered = append(filtered, rid)
+		}
+	}
+	r.memberRoles[serverID][userID] = filtered
+	return nil
+}
+
+// GetMemberRoles lista cargos atribuídos a membro
+func (r *MemoryRepository) GetMemberRoles(serverID, userID string) ([]*models.ServerRole, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.getMemberRolesInternal(serverID, userID), nil
+}
+
+// HasServerPermission verifica se usuário possui permissão no servidor
+func (r *MemoryRepository) HasServerPermission(serverID, userID string, permission string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	srv, ok := r.servers[serverID]
+	if !ok {
+		return false, ErrNotFound
+	}
+	if srv.OwnerID == userID {
+		return true, nil
+	}
+
+	roles := r.getMemberRolesInternal(serverID, userID)
+	for _, role := range roles {
+		if role.Permissions != nil && role.Permissions[permission] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Ping simula teste de integridade da memória
