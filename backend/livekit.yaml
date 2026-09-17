@@ -8,8 +8,9 @@ rtc:
   port_range_end: 50020
   use_external_ip: true
   stun_servers:
+    - "74.125.250.129:19302"
+    - "142.250.180.127:19302"
     - "stun.l.google.com:19302"
-    - "stun1.l.google.com:19302"
   ips:
     excludes:
       - "172.16.0.0/12"
