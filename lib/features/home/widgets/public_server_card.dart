@@ -78,8 +78,8 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF5CBA7),
-                foregroundColor: Colors.black,
+                backgroundColor: Color(widget.publicServer.server.accentColor != 0 ? widget.publicServer.server.accentColor : 0xFFF5CBA7),
+                foregroundColor: Color(widget.publicServer.server.accentColor != 0 ? widget.publicServer.server.accentColor : 0xFFF5CBA7).computeLuminance() > 0.5 ? Colors.black : Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(9999),
                 ),
@@ -144,6 +144,8 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
         AppColors.getBannerGradient(server.bannerPreset, server.id);
     final isMember = widget.publicServer.isMember;
     final status = widget.publicServer.joinRequestStatus;
+    final accentColor = Color(server.accentColor != 0 ? server.accentColor : 0xFFF5CBA7);
+    final isLightAccent = accentColor.computeLuminance() > 0.5;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -156,14 +158,14 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
           borderRadius: AppRadius.borderMd,
           border: Border.all(
             color: _isHovered
-                ? const Color(0xFFF5CBA7)
+                ? accentColor
                 : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
             width: _isHovered ? 1.5 : 1.0,
           ),
           boxShadow: _isHovered
               ? [
                   BoxShadow(
-                    color: const Color(0xFFF5CBA7).withValues(alpha: 0.15),
+                    color: accentColor.withValues(alpha: 0.18),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -198,6 +200,9 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: accentColor.withValues(alpha: 0.35),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -240,9 +245,7 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
                           shape: BoxShape.circle,
                           color: isDark ? const Color(0xFF141520) : Colors.white,
                           border: Border.all(
-                            color: isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
+                            color: accentColor.withValues(alpha: 0.45),
                           ),
                         ),
                         child: ClipOval(
@@ -260,6 +263,7 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
                                       style: GoogleFonts.spaceGrotesk(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 12,
+                                        color: accentColor,
                                       ),
                                     ),
                                   ),
@@ -267,11 +271,12 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
                               : Center(
                                   child: Text(
                                     server.name.isNotEmpty
-                                        ? server.name[0].toUpperCase()
-                                        : '?',
+                                          ? server.name[0].toUpperCase()
+                                          : '?',
                                     style: GoogleFonts.spaceGrotesk(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 12,
+                                      color: accentColor,
                                     ),
                                   ),
                                 ),
@@ -308,29 +313,12 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-
-                  // Descrição / bio do servidor
-                  Text(
-                    server.description.isNotEmpty
-                        ? server.description
-                        : 'Servidor público da comunidade ProjectNBX.',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
-                      height: 1.3,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                   const SizedBox(height: 12),
 
                   // Botão de Ação
                   SizedBox(
                     width: double.infinity,
-                    child: _buildActionButton(isMember, status),
+                    child: _buildActionButton(isMember, status, accentColor, isLightAccent),
                   ),
                 ],
               ),
@@ -341,13 +329,13 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
     );
   }
 
-  Widget _buildActionButton(bool isMember, String status) {
+  Widget _buildActionButton(bool isMember, String status, Color accentColor, bool isLightAccent) {
     if (isMember) {
       return ElevatedButton(
         onPressed: widget.onOpenServer,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF22C55E),
-          foregroundColor: Colors.black,
+          backgroundColor: accentColor,
+          foregroundColor: isLightAccent ? const Color(0xFF181926) : Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 8),
           shape: RoundedRectangleBorder(
@@ -402,22 +390,30 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
     return ElevatedButton.icon(
       onPressed: _isSubmitting ? null : _showJoinRequestDialog,
       icon: _isSubmitting
-          ? const SizedBox(
+          ? SizedBox(
               width: 12,
               height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: isLightAccent ? const Color(0xFF181926) : Colors.white,
+              ),
             )
-          : const Icon(LucideIcons.userPlus, size: 13),
+          : Icon(
+              LucideIcons.userPlus,
+              size: 13,
+              color: isLightAccent ? const Color(0xFF181926) : Colors.white,
+            ),
       label: Text(
         'Pedir para entrar',
         style: GoogleFonts.jetBrainsMono(
           fontSize: 11,
           fontWeight: FontWeight.w700,
+          color: isLightAccent ? const Color(0xFF181926) : Colors.white,
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFF5CBA7),
-        foregroundColor: Colors.black,
+        backgroundColor: accentColor,
+        foregroundColor: isLightAccent ? const Color(0xFF181926) : Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 8),
         shape: RoundedRectangleBorder(

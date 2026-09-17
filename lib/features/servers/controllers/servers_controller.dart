@@ -184,6 +184,46 @@ class ServersNotifier extends StateNotifier<ServersState> {
     } catch (_) {}
   }
 
+  Future<bool> updateServer(
+    String serverId, {
+    String? name,
+    String? iconUrl,
+    bool? isPublic,
+    String? description,
+    String? category,
+  }) async {
+    try {
+      final res = await _apiClient.updateServer(
+        serverId,
+        name: name,
+        iconUrl: iconUrl,
+        isPublic: isPublic,
+        description: description,
+        category: category,
+      );
+      if (res != null) {
+        final updatedServer = ServerModel.fromJson(res);
+        final updatedServers = state.servers.map((s) {
+          if (s.id == serverId) {
+            return s.copyWith(
+              name: updatedServer.name,
+              iconUrl: updatedServer.iconUrl,
+              isPublic: updatedServer.isPublic,
+              description: updatedServer.description,
+              category: updatedServer.category,
+            );
+          }
+          return s;
+        }).toList();
+        state = state.copyWith(servers: updatedServers);
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> createServer(
     String name, {
     String? iconUrl,

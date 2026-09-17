@@ -131,6 +131,7 @@ func (r *Router) SetupRoutes() http.Handler {
 	protected.HandleFunc("/servers", serverHandler.ListServers).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers", serverHandler.CreateServer).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}", serverHandler.GetServer).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/servers/{id}", serverHandler.UpdateServer).Methods("PUT", "PATCH", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels", serverHandler.ListChannels).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels", serverHandler.CreateChannel).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/servers/{id}/channels/{channelId}/messages", serverHandler.ListMessages).Methods("GET", "OPTIONS")

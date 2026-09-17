@@ -33,6 +33,7 @@ type Repository interface {
 	CreateServer(server *models.Server) error
 	GetServerByID(id string) (*models.Server, error)
 	ListServers() ([]*models.Server, error)
+	UpdateServer(server *models.Server) error
 
 	// Canais
 	CreateChannel(channel *models.Channel) error

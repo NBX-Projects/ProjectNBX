@@ -392,6 +392,22 @@ func (r *MemoryRepository) ListServers() ([]*models.Server, error) {
 	return servers, nil
 }
 
+func (r *MemoryRepository) UpdateServer(server *models.Server) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	srv, ok := r.servers[server.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	srv.Name = server.Name
+	srv.IconURL = server.IconURL
+	srv.IsPublic = server.IsPublic
+	srv.Description = server.Description
+	srv.Category = server.Category
+	return nil
+}
+
 // Channel methods
 func (r *MemoryRepository) CreateChannel(channel *models.Channel) error {
 	r.mu.Lock()
@@ -553,11 +569,15 @@ func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerM
 	if !ok {
 		// If empty, return owner as member
 		if owner, ok := r.users[srv.OwnerID]; ok {
+			ownerCopy := *owner
+			if ownerCopy.Name == "" {
+				ownerCopy.Name = ownerCopy.Username
+			}
 			return []*models.ServerMember{
 				{
 					ServerID: serverID,
 					UserID:   owner.ID,
-					User:     owner,
+					User:     &ownerCopy,
 					Role:     "owner",
 					JoinedAt: srv.CreatedAt,
 					Roles:    r.getMemberRolesInternal(serverID, owner.ID),
@@ -573,6 +593,10 @@ func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerM
 		if !ok {
 			continue
 		}
+		uCopy := *u
+		if uCopy.Name == "" {
+			uCopy.Name = uCopy.Username
+		}
 		role := "member"
 		if uid == srv.OwnerID {
 			role = "owner"
@@ -580,7 +604,7 @@ func (r *MemoryRepository) ListServerMembers(serverID string) ([]*models.ServerM
 		result = append(result, &models.ServerMember{
 			ServerID: serverID,
 			UserID:   uid,
-			User:     u,
+			User:     &uCopy,
 			Role:     role,
 			JoinedAt: joinedAt,
 			Roles:    r.getMemberRolesInternal(serverID, uid),

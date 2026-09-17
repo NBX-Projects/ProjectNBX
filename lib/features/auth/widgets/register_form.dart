@@ -353,41 +353,6 @@ class _RegisterFormState extends ConsumerState<RegisterForm> {
                     ),
             ),
           ),
-          const SizedBox(height: 18),
-
-          // Footer: Já tem uma conta? Entrar
-          Center(
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: widget.onSwitchToLogin,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Text.rich(
-                    TextSpan(
-                      text: 'Já tem uma conta? ',
-                      style: GoogleFonts.inter(
-                        fontSize: 12.5,
-                        color: textMuted,
-                      ),
-                      children: [
-                        TextSpan(
-                          text: 'Entrar',
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

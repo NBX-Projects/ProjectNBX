@@ -324,6 +324,37 @@ class ApiClient {
     return null;
   }
 
+  Future<Map<String, dynamic>?> updateServer(
+    String serverId, {
+    String? name,
+    String? iconUrl,
+    bool? isPublic,
+    String? description,
+    String? category,
+  }) async {
+    final url = Uri.parse('$baseUrl/servers/$serverId');
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name.trim();
+    if (iconUrl != null) payload['icon_url'] = iconUrl.trim();
+    if (isPublic != null) payload['is_public'] = isPublic;
+    if (description != null) payload['description'] = description.trim();
+    if (category != null) payload['category'] = category.trim();
+
+    try {
+      final response = await _client.put(
+        url,
+        headers: _headers,
+        body: jsonEncode(payload),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getChannels(String serverId) async {
     final url = Uri.parse('$baseUrl/servers/$serverId/channels');
     try {

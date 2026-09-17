@@ -201,14 +201,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                               const SizedBox(height: 28),
 
-                                              // Public Servers Discovery Section
-                                              _buildSectionTitle(
-                                                isDark,
-                                                'EXPLORAR SERVIDORES PÚBLICOS',
-                                                count: _publicServers.length,
-                                              ),
-                                              const SizedBox(height: 12),
-                                              _buildPublicServersGrid(),
+                                              // Public Servers Discovery Section (não listar servidores que o usuário já participa)
+                                              () {
+                                                final myServerIds = servers.map((s) => s.id).toSet();
+                                                final availablePublicServers = _publicServers.where((pub) {
+                                                  return !pub.isMember && !myServerIds.contains(pub.server.id);
+                                                }).toList();
+
+                                                return Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    _buildSectionTitle(
+                                                      isDark,
+                                                      'EXPLORAR SERVIDORES PÚBLICOS',
+                                                      count: availablePublicServers.length,
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    _buildPublicServersGrid(availablePublicServers),
+                                                  ],
+                                                );
+                                              }(),
 
                                               const SizedBox(height: 32),
                                             ],
@@ -677,7 +689,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 14,
             mainAxisSpacing: 14,
-            mainAxisExtent: 220,
+            mainAxisExtent: 204,
           ),
           itemBuilder: (context, index) {
             if (servers.isEmpty) {
@@ -699,7 +711,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildPublicServersGrid() {
+  Widget _buildPublicServersGrid(List<PublicServerModel> publicServers) {
     if (_isLoadingPublicServers) {
       return const Center(
         child: Padding(
@@ -709,7 +721,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    if (_publicServers.isEmpty) {
+    if (publicServers.isEmpty) {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       return Container(
         padding: const EdgeInsets.all(20),
@@ -770,15 +782,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _publicServers.length,
+          itemCount: publicServers.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 14,
             mainAxisSpacing: 14,
-            mainAxisExtent: 220,
+            mainAxisExtent: 172,
           ),
           itemBuilder: (context, index) {
-            final pub = _publicServers[index];
+            final pub = publicServers[index];
             return PublicServerCard(
               publicServer: pub,
               onOpenServer: () {

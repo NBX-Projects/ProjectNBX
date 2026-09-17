@@ -133,6 +133,59 @@ func (h *ServerHandler) GetServer(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(server)
 }
 
+func (h *ServerHandler) UpdateServer(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+	userID := auth.GetUserID(r.Context())
+
+	server, err := h.repo.GetServerByID(serverID)
+	if err != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if server.OwnerID != userID {
+		hasPerm, errP := h.repo.HasServerPermission(serverID, userID, "can_manage_roles")
+		if errP != nil || !hasPerm {
+			http.Error(w, `{"error":"Sem permissão para atualizar configurações do servidor"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var req models.UpdateServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Corpo da requisição inválido"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
+		server.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.IconURL != nil {
+		server.IconURL = strings.TrimSpace(*req.IconURL)
+	}
+	if req.IsPublic != nil {
+		server.IsPublic = *req.IsPublic
+	}
+	if req.Description != nil {
+		server.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Category != nil && strings.TrimSpace(*req.Category) != "" {
+		server.Category = strings.TrimSpace(*req.Category)
+	}
+
+	if err := h.repo.UpdateServer(server); err != nil {
+		http.Error(w, `{"error":"Erro ao atualizar servidor"}`, http.StatusInternalServerError)
+		return
+	}
+
+	channels, _ := h.repo.ListChannelsByServer(serverID)
+	server.Channels = channels
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(server)
+}
+
 func (h *ServerHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]

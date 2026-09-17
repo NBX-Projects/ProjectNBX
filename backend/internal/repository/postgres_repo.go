@@ -297,6 +297,26 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 	return servers, nil
 }
 
+func (r *PostgresRepository) UpdateServer(server *models.Server) error {
+	query := `
+	UPDATE servers
+	SET name = $1, icon_url = $2, is_public = $3, description = $4, category = $5
+	WHERE id = $6`
+
+	result, err := r.db.Exec(query, server.Name, server.IconURL, server.IsPublic, server.Description, server.Category, server.ID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Channel methods
 func (r *PostgresRepository) CreateChannel(channel *models.Channel) error {
 	if channel.ID == "" {
@@ -629,7 +649,7 @@ func (r *PostgresRepository) RemoveServerMember(serverID, userID string) error {
 func (r *PostgresRepository) ListServerMembers(serverID string) ([]*models.ServerMember, error) {
 	query := `
 	SELECT sm.server_id, sm.user_id, sm.joined_at, s.owner_id,
-	       u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
+	       u.username, COALESCE(u.name, ''), u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
 	FROM server_members sm
 	JOIN servers s ON s.id = sm.server_id
 	JOIN users u ON u.id = sm.user_id
@@ -653,6 +673,7 @@ func (r *PostgresRepository) ListServerMembers(serverID string) ([]*models.Serve
 			&sm.JoinedAt,
 			&ownerID,
 			&u.Username,
+			&u.Name,
 			&u.Email,
 			&u.AvatarURL,
 			&u.Status,

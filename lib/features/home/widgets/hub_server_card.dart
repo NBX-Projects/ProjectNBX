@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
 
 class HubServerCard extends StatefulWidget {
@@ -48,7 +47,7 @@ class _HubServerCardState extends State<HubServerCard> {
     if (lower.contains('cs2') || lower.contains('fps') || lower.contains('valorant')) {
       return 'FPS';
     }
-    return 'COMUNIDADE GERAL';
+    return 'GERAL';
   }
 
   IconData _getCategoryWatermarkIcon(ServerModel server) {
@@ -72,16 +71,19 @@ class _HubServerCardState extends State<HubServerCard> {
   }
 
   Widget _buildAvatarFallback(ServerModel server, Color accentColor) {
-    final isLightAccent = accentColor.computeLuminance() > 0.5;
+    final name = server.name.trim();
     return Container(
       width: 44,
       height: 44,
-      color: accentColor.withValues(alpha: 0.28),
+      color: accentColor.withValues(alpha: 0.3),
       child: Center(
-        child: Icon(
-          LucideIcons.zap,
-          size: 20,
-          color: isLightAccent ? const Color(0xFF181926) : Colors.white,
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
       ),
     );
@@ -98,12 +100,12 @@ class _HubServerCardState extends State<HubServerCard> {
         shape: BoxShape.circle,
         color: isDark ? const Color(0xFF141520) : Colors.white,
         border: Border.all(
-          color: accentColor.withValues(alpha: 0.55),
-          width: 1.5,
+          color: Colors.white.withValues(alpha: 0.7),
+          width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: 0.22),
+            color: Colors.black.withValues(alpha: 0.35),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -140,12 +142,8 @@ class _HubServerCardState extends State<HubServerCard> {
     final server = widget.server;
     final category = _getCategoryForServer(server);
     final gradient = _getGradientForServer(server);
-    final accentColor = Color(server.accentColor);
-
-    final voiceChannels = server.channels
-        .where((c) => c.type == ChannelType.voice)
-        .toList();
-    final hasVoice = voiceChannels.isNotEmpty;
+    final accentColor = Color(server.accentColor != 0 ? server.accentColor : 0xFFF5CBA7);
+    final isLightAccent = accentColor.computeLuminance() > 0.5;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -186,7 +184,7 @@ class _HubServerCardState extends State<HubServerCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 1. Top Thumbnail / Banner
+              // 1. Top Thumbnail / Banner com Foto do Servidor
               Container(
                 height: 96,
                 width: double.infinity,
@@ -213,7 +211,7 @@ class _HubServerCardState extends State<HubServerCard> {
                     // Top Category Pill
                     Positioned(
                       top: 8,
-                      left: 8,
+                      left: 10,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -238,163 +236,73 @@ class _HubServerCardState extends State<HubServerCard> {
                       ),
                     ),
 
-                    // Voice Badge (Bottom Right)
-                    if (hasVoice)
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: AppRadius.borderPill,
-                            border: Border.all(
-                              color: const Color(0xFF4ADE80).withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF4ADE80),
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF4ADE80).withValues(alpha: 0.5),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                voiceChannels.length == 1
-                                    ? '1 canal de voz'
-                                    : '${voiceChannels.length} canais de voz',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    // Foto do Servidor na parte roxa (banner)
+                    Positioned(
+                      bottom: 10,
+                      left: 12,
+                      child: _buildServerAvatar(server, accentColor, isDark),
+                    ),
                   ],
                 ),
               ),
 
-              // 2. Card Content
+              // 2. Conteúdo do Card com Nome, Membros e Botão Entrar
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _buildServerAvatar(server, accentColor, isDark),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                server.name,
-                                style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? AppColors.darkTextPrimary
-                                      : AppColors.lightTextPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${server.memberCount} ${server.memberCount == 1 ? "membro" : "membros"} · ${server.channels.length} ${server.channels.length == 1 ? "canal" : "canais"}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark
-                                      ? AppColors.darkTextMuted
-                                      : AppColors.lightTextMuted,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    Text(
+                      server.name,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${server.memberCount} ${server.memberCount == 1 ? "membro" : "membros"} · ${server.channels.length} ${server.channels.length == 1 ? "canal" : "canais"}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 10),
 
-                    // Activity Status Pill
-                    Container(
+                    // Botão Entrar na cor default do servidor
+                    SizedBox(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: (hasVoice
-                                ? const Color(0xFF4ADE80)
-                                : accentColor)
-                            .withValues(alpha: isDark ? 0.08 : 0.06),
-                        borderRadius: AppRadius.borderSm,
-                        border: Border.all(
-                          color: (hasVoice
-                                  ? const Color(0xFF4ADE80)
-                                  : accentColor)
-                              .withValues(alpha: 0.22),
+                      height: 32,
+                      child: ElevatedButton(
+                        onPressed: widget.onTap,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: isLightAccent
+                              ? const Color(0xFF181926)
+                              : Colors.white,
+                          elevation: 0,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            hasVoice ? LucideIcons.volume2 : LucideIcons.messageSquare,
-                            size: 13,
-                            color: hasVoice
-                                ? (isDark
-                                    ? const Color(0xFF4ADE80)
-                                    : AppColors.lightSage)
-                                : accentColor,
+                        child: Text(
+                          'Entrar',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
                           ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              hasVoice
-                                  ? 'Voz em Alta Definição'
-                                  : 'Canais de Texto Ativos',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? AppColors.darkTextSecondary
-                                    : AppColors.lightTextSecondary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Icon(
-                            LucideIcons.chevronRight,
-                            size: 13,
-                            color: isDark
-                                ? AppColors.darkTextMuted.withValues(alpha: 0.6)
-                                : AppColors.lightTextMuted.withValues(alpha: 0.6),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ],

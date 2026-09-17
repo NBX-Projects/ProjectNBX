@@ -43,6 +43,15 @@ type CreateServerRequest struct {
 	Category    string `json:"category,omitempty"`
 }
 
+// UpdateServerRequest payload para atualizar dados de um servidor
+type UpdateServerRequest struct {
+	Name        *string `json:"name,omitempty"`
+	IconURL     *string `json:"icon_url,omitempty"`
+	IsPublic    *bool   `json:"is_public,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Category    *string `json:"category,omitempty"`
+}
+
 // CreateChannelRequest payload para criar um canal
 type CreateChannelRequest struct {
 	Name string      `json:"name"`
