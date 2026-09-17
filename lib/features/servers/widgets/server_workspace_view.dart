@@ -99,6 +99,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     return null;
   }
 
+  void _removeParticipantFromAllVoiceChannels(String? userId, [String? sessionId]) {
+    for (final chMap in _voiceParticipants.values) {
+      chMap.removeWhere((k, v) =>
+          (userId != null && userId.isNotEmpty && (v.userId == userId || k == userId)) ||
+          (sessionId != null && sessionId.isNotEmpty && (v.sessionId == sessionId || k == sessionId)));
+    }
+  }
+
   void _updateLocalAudioLevel(double level) {
     if (!mounted) return;
     _audioLevelDecayTimer?.cancel();
@@ -537,10 +545,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
         await _liveKitRoom?.disconnect();
         await _liveKitRoom?.dispose();
-        final chId = _connectedVoiceChannelId ?? _activeChannel?.id;
-        if (chId != null && mounted) {
+        if (mounted) {
           final currentUserId = ref.read(authControllerProvider).user?.id;
-          _voiceParticipants[chId]?.removeWhere((k, v) => v.userId == currentUserId || v.sessionId == _clientSessionId);
+          _removeParticipantFromAllVoiceChannels(currentUserId, _clientSessionId);
         }
       } catch (e) {
         debugPrint('[LiveKit] Erro ao desconectar da sala: $e');
@@ -555,30 +562,24 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     if (uid.isEmpty) return;
     final uname = participant.name.isNotEmpty ? participant.name : uid;
     setState(() {
-      final chMap = _voiceParticipants.putIfAbsent(channelId, () => {});
+      _removeParticipantFromAllVoiceChannels(uid, participant.sid.isNotEmpty ? participant.sid : null);
       if (joined) {
-        final existing = chMap[uid];
+        final chMap = _voiceParticipants.putIfAbsent(channelId, () => {});
         chMap[uid] = VoiceParticipantInfo(
-          sessionId: participant.sid.isNotEmpty ? participant.sid : (existing?.sessionId ?? uid),
+          sessionId: participant.sid.isNotEmpty ? participant.sid : uid,
           userId: uid,
           username: uname,
           serverId: widget.server.id,
           channelId: channelId,
-          device: existing?.device ?? 'desktop',
+          device: 'desktop',
           isInVoice: true,
           isConnecting: false,
-          isTransmitting: existing?.isTransmitting ?? false,
-          streamTitle: existing?.streamTitle,
-          previewType: existing?.previewType,
-          thumbnail: existing?.thumbnail,
-          isMuted: participant.isMuted || (existing?.isMuted ?? false),
-          isDeafened: existing?.isDeafened ?? false,
+          isTransmitting: false,
+          isMuted: participant.isMuted,
+          isDeafened: false,
           isSpeaking: participant.isSpeaking,
           updatedAt: DateTime.now(),
         );
-      } else {
-        chMap.remove(uid);
-        chMap.removeWhere((k, v) => v.userId == uid || (participant.sid.isNotEmpty && v.sessionId == participant.sid));
       }
     });
   }
@@ -757,12 +758,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
     if (cid.isNotEmpty) {
       setState(() {
-        final chMap = _voiceParticipants.putIfAbsent(cid, () => {});
+        _removeParticipantFromAllVoiceChannels(uid, _clientSessionId);
         if (isInVoice) {
+          final chMap = _voiceParticipants.putIfAbsent(cid, () => {});
           chMap[uid.isNotEmpty ? uid : _clientSessionId] = VoiceParticipantInfo.fromJson(payload);
-        } else {
-          chMap.remove(uid);
-          chMap.remove(_clientSessionId);
         }
       });
     }
@@ -831,16 +830,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           : (event['channel_id'] ?? _activeChannel?.id ?? '').toString();
       if (chId.isNotEmpty) {
         setState(() {
-          final chMap = _voiceParticipants.putIfAbsent(chId, () => {});
+          // Remove de TODOS os canais primeiro para eliminar duplicatas e usuários desconectados
+          _removeParticipantFromAllVoiceChannels(p.userId, p.sessionId);
+
           if (p.isInVoice) {
-            chMap.removeWhere((k, v) => v.userId == p.userId || v.sessionId == p.sessionId);
+            final chMap = _voiceParticipants.putIfAbsent(chId, () => {});
             chMap[p.userId.isNotEmpty ? p.userId : p.key] = p;
             if (_watchingRemoteStream?.sessionId == p.sessionId ||
                 _watchingRemoteStream?.userId == p.userId) {
               _watchingRemoteStream = p;
             }
           } else {
-            chMap.removeWhere((k, v) => v.userId == p.userId || v.sessionId == p.sessionId);
             if (_watchingRemoteStream?.sessionId == p.sessionId ||
                 _watchingRemoteStream?.userId == p.userId) {
               _watchingRemoteStream = null;
@@ -862,14 +862,36 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         } catch (_) {}
       }
       setState(() {
+        final currentUserId = ref.read(authControllerProvider).user?.id ?? '';
+        VoiceParticipantInfo? localVoiceInfo;
+        final currentChannelId = _connectedVoiceChannelId;
+        if (currentChannelId != null && _isInVoice && currentUserId.isNotEmpty) {
+          final currentMap = _voiceParticipants[currentChannelId];
+          if (currentMap != null) {
+            localVoiceInfo = currentMap[currentUserId];
+          }
+        }
+
+        // Limpa estado anterior para sincronizar exatamente com o snapshot autoritativo
+        _voiceParticipants.clear();
+
         for (final item in list) {
           if (item is Map) {
             final p = VoiceParticipantInfo.fromJson(Map<String, dynamic>.from(item));
             if (p.channelId.isNotEmpty && p.isInVoice) {
+              _removeParticipantFromAllVoiceChannels(p.userId, p.sessionId);
               final chMap = _voiceParticipants.putIfAbsent(p.channelId, () => {});
-              chMap.removeWhere((k, v) => v.userId == p.userId || v.sessionId == p.sessionId);
               chMap[p.userId.isNotEmpty ? p.userId : p.key] = p;
             }
+          }
+        }
+
+        // Preserva o participante local caso ele esteja conectado e não tenha vindo ainda no sync
+        if (_isInVoice && _connectedVoiceChannelId != null && currentUserId.isNotEmpty) {
+          final userInSync = _voiceParticipants.values.any((m) => m.containsKey(currentUserId));
+          if (!userInSync && localVoiceInfo != null) {
+            final chMap = _voiceParticipants.putIfAbsent(_connectedVoiceChannelId!, () => {});
+            chMap[currentUserId] = localVoiceInfo;
           }
         }
       });
@@ -1046,6 +1068,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     _localScreenShareTrack?.stop();
     _localScreenShareTrack?.dispose();
     _localScreenShareTrack = null;
+
+    if (_isInVoice && _connectedVoiceChannelId != null) {
+      _broadcastVoiceState(isInVoice: false, channelId: _connectedVoiceChannelId);
+    }
+
     _wsSubscription?.cancel();
     _disconnectFromLiveKitVoice();
     _messageFocusNode.dispose();
@@ -1185,6 +1212,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         _isLiveKitConnected = false;
 
         if (uid.isNotEmpty) {
+          _removeParticipantFromAllVoiceChannels(uid, _clientSessionId);
           final chMap = _voiceParticipants.putIfAbsent(channel.id, () => {});
           chMap[uid] = VoiceParticipantInfo(
             sessionId: _clientSessionId,
@@ -1226,12 +1254,20 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   void _leaveVoice() {
+    final leavingChannelId = _connectedVoiceChannelId ?? _activeChannel?.id;
+    final currentUserId = ref.read(authControllerProvider).user?.id ?? '';
+
     ref.read(voiceStateProvider.notifier).disconnectVoice();
     _streamRefreshTimer?.cancel();
     _localScreenShareTrack?.stop();
     _localScreenShareTrack?.dispose();
     _localScreenShareTrack = null;
     _disconnectFromLiveKitVoice();
+
+    if (leavingChannelId != null && leavingChannelId.isNotEmpty) {
+      _broadcastVoiceState(isInVoice: false, channelId: leavingChannelId);
+    }
+
     setState(() {
       _isInVoice = false;
       _isConnectingLiveKit = false;
@@ -1242,12 +1278,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       _isRightSidebarVisible = true;
       _viewMode = ServerViewMode.home;
       _watchingRemoteStream = null;
-      final prevChannelId = _connectedVoiceChannelId ?? _activeChannel?.id;
-      final uid = ref.read(authControllerProvider).user?.id ?? '';
-      if (prevChannelId != null) {
-        _voiceParticipants[prevChannelId]?.remove(uid);
-        _voiceParticipants[prevChannelId]?.remove(_clientSessionId);
-      }
+
+      _removeParticipantFromAllVoiceChannels(currentUserId, _clientSessionId);
     });
   }
 
