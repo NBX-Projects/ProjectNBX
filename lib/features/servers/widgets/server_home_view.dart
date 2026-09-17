@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
@@ -158,7 +159,7 @@ class ServerHomeView extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: selectedAccentColor.withValues(alpha: 0.35),
           width: 1.5,
@@ -177,12 +178,9 @@ class ServerHomeView extends StatelessWidget {
             height: isMobile ? 120 : 140,
             width: double.infinity,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.vertical(
-                top: const Radius.circular(15),
-                bottom: isCustomizingBanner
-                    ? Radius.zero
-                    : const Radius.circular(15),
-              ),
+              borderRadius: isCustomizingBanner
+                  ? AppRadius.topLg
+                  : AppRadius.borderLgInset,
               gradient: LinearGradient(
                 colors: currentGradient,
                 begin: Alignment.topLeft,
@@ -210,7 +208,7 @@ class ServerHomeView extends StatelessWidget {
                         height: isMobile ? 46 : 60,
                         decoration: BoxDecoration(
                           color: selectedAccentColor,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppRadius.borderMd,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.35),
@@ -270,14 +268,16 @@ class ServerHomeView extends StatelessWidget {
                             size: 16,
                             color: Colors.white,
                           ),
-                          tooltip:
-                              isCustomizingBanner ? 'Fechar' : 'Personalizar',
+                          tooltip: isCustomizingBanner
+                              ? 'Fechar'
+                              : 'Personalizar',
                           style: IconButton.styleFrom(
-                            backgroundColor: const Color(0xFF181926)
-                                .withValues(alpha: 0.85),
+                            backgroundColor: const Color(
+                              0xFF181926,
+                            ).withValues(alpha: 0.85),
                             padding: const EdgeInsets.all(8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderSm,
                             ),
                             side: BorderSide(
                               color: Colors.white.withValues(alpha: 0.2),
@@ -301,15 +301,16 @@ class ServerHomeView extends StatelessWidget {
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF181926)
-                                .withValues(alpha: 0.85),
+                            backgroundColor: const Color(
+                              0xFF181926,
+                            ).withValues(alpha: 0.85),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
                               vertical: 10,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderSm,
                             ),
                             side: BorderSide(
                               color: Colors.white.withValues(alpha: 0.2),
@@ -332,12 +333,9 @@ class ServerHomeView extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: const Color(0xFF141520),
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(15),
-                ),
+                borderRadius: AppRadius.bottomLgInset,
                 border: Border(
-                  top: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.1)),
+                  top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                 ),
               ),
               child: SingleChildScrollView(
@@ -358,13 +356,13 @@ class ServerHomeView extends StatelessWidget {
                       return InkWell(
                         onTap: () => onSelectBannerPreset(idx),
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppRadius.borderSm,
                         child: Container(
                           width: 30,
                           height: 20,
                           margin: const EdgeInsets.only(right: 6),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: AppRadius.borderSm,
                             gradient: LinearGradient(
                               colors: preset,
                               begin: Alignment.topLeft,
@@ -395,7 +393,7 @@ class ServerHomeView extends StatelessWidget {
                       return InkWell(
                         onTap: () => onSelectAccentColor(color),
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(9999),
+                        borderRadius: AppRadius.borderPill,
                         child: Container(
                           width: 20,
                           height: 20,
@@ -420,14 +418,14 @@ class ServerHomeView extends StatelessWidget {
                         backgroundColor: selectedAccentColor,
                         foregroundColor:
                             selectedAccentColor.computeLuminance() > 0.5
-                                ? Colors.black
-                                : Colors.white,
+                            ? Colors.black
+                            : Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 6,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderSm,
                         ),
                       ),
                       child: const Text(
@@ -478,7 +476,7 @@ class ServerHomeView extends StatelessWidget {
       padding: EdgeInsets.all(isMobile ? 14 : 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF132219) : const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: const Color(0xFF22C55E).withValues(alpha: isDark ? 0.6 : 0.4),
           width: 1.5,
@@ -519,7 +517,7 @@ class ServerHomeView extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFF22C55E).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(9999),
+                  borderRadius: AppRadius.borderPill,
                   border: Border.all(
                     color: const Color(0xFF22C55E).withValues(alpha: 0.4),
                   ),
@@ -527,8 +525,11 @@ class ServerHomeView extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(LucideIcons.volume2,
-                        size: 12, color: Color(0xFF22C55E)),
+                    const Icon(
+                      LucideIcons.volume2,
+                      size: 12,
+                      color: Color(0xFF22C55E),
+                    ),
                     const SizedBox(width: 5),
                     Text(
                       '${activeCallParticipants.length} ${activeCallParticipants.length == 1 ? "na sala" : "na sala"}',
@@ -549,9 +550,9 @@ class ServerHomeView extends StatelessWidget {
               Container(
                 width: isMobile ? 38 : 44,
                 height: isMobile ? 38 : 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22C55E),
-                  borderRadius: BorderRadius.circular(10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF22C55E),
+                  borderRadius: AppRadius.borderSm,
                 ),
                 child: const Center(
                   child: Icon(
@@ -600,9 +601,7 @@ class ServerHomeView extends StatelessWidget {
                   }
                 },
                 icon: Icon(
-                  isUserInThisCall
-                      ? LucideIcons.check
-                      : LucideIcons.phoneCall,
+                  isUserInThisCall ? LucideIcons.check : LucideIcons.phoneCall,
                   size: 13,
                 ),
                 label: Text(
@@ -619,8 +618,8 @@ class ServerHomeView extends StatelessWidget {
                     horizontal: isMobile ? 12 : 16,
                     vertical: isMobile ? 8 : 10,
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(9999),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.borderPill,
                   ),
                 ),
               ),
@@ -638,20 +637,19 @@ class ServerHomeView extends StatelessWidget {
               final devLabel = p.device == 'mobile'
                   ? ' (Celular)'
                   : p.device == 'desktop'
-                      ? ' (Desktop)'
-                      : '';
+                  ? ' (Desktop)'
+                  : '';
               final displayName =
                   '${p.username}$devLabel${isMe ? " (Você)" : ""}';
               final color = resolveAuthorColor(p.username, isDark);
 
               return Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: isDark
                       ? const Color(0xFF1E2F24)
                       : const Color(0xFFE2FBE8),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppRadius.borderPill,
                   border: Border.all(
                     color: const Color(0xFF22C55E).withValues(alpha: 0.3),
                   ),
@@ -665,8 +663,7 @@ class ServerHomeView extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.25),
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: color, width: 1),
+                        border: Border.all(color: color, width: 1),
                       ),
                       child: Center(
                         child: Text(
@@ -695,8 +692,10 @@ class ServerHomeView extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(2.5),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(4),
+                            color: const Color(
+                              0xFFEF4444,
+                            ).withValues(alpha: 0.18),
+                            borderRadius: AppRadius.borderXs,
                           ),
                           child: const Icon(
                             LucideIcons.headphones,
@@ -712,8 +711,10 @@ class ServerHomeView extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(2.5),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(4),
+                            color: const Color(
+                              0xFFEF4444,
+                            ).withValues(alpha: 0.18),
+                            borderRadius: AppRadius.borderXs,
                           ),
                           child: const Icon(
                             LucideIcons.micOff,
@@ -727,10 +728,12 @@ class ServerHomeView extends StatelessWidget {
                       const SizedBox(width: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF9333EA).withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: AppRadius.borderXs,
                         ),
                         child: const Text(
                           'LIVE',
@@ -758,7 +761,7 @@ class ServerHomeView extends StatelessWidget {
       padding: EdgeInsets.all(isMobile ? 14 : 20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -780,11 +783,10 @@ class ServerHomeView extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: selectedAccentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(9999),
+                  borderRadius: AppRadius.borderPill,
                 ),
                 child: Text(
                   '${channels.length} ${channels.length == 1 ? "canal" : "canais"}',
@@ -808,19 +810,17 @@ class ServerHomeView extends StatelessWidget {
                 color: isDark
                     ? const Color(0xFF161724)
                     : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadius.borderMd,
                 border: Border.all(
                   color: hasParticipants
                       ? const Color(0xFF22C55E).withValues(alpha: 0.5)
-                      : (isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder),
+                      : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
                   width: hasParticipants ? 1.5 : 1,
                 ),
               ),
               child: InkWell(
                 onTap: () => onOpenChannel(ch),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadius.borderMd,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -836,8 +836,8 @@ class ServerHomeView extends StatelessWidget {
                             color: hasParticipants
                                 ? const Color(0xFF22C55E)
                                 : (isDark
-                                    ? Colors.white70
-                                    : const Color(0xFF64748B)),
+                                      ? Colors.white70
+                                      : const Color(0xFF64748B)),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -846,26 +846,30 @@ class ServerHomeView extends StatelessWidget {
                               style: GoogleFonts.inter(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
-                                color: isDark
-                                    ? Colors.white
-                                    : Colors.black87,
+                                color: isDark ? Colors.white : Colors.black87,
                               ),
                             ),
                           ),
                           if (hasParticipants) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF22C55E)
-                                    .withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(9999),
+                                color: const Color(
+                                  0xFF22C55E,
+                                ).withValues(alpha: 0.15),
+                                borderRadius: AppRadius.borderPill,
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(LucideIcons.headphones,
-                                      size: 11, color: Color(0xFF22C55E)),
+                                  const Icon(
+                                    LucideIcons.headphones,
+                                    size: 11,
+                                    color: Color(0xFF22C55E),
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${chParticipants.length} em call',
@@ -883,9 +887,7 @@ class ServerHomeView extends StatelessWidget {
                           Icon(
                             LucideIcons.chevronRight,
                             size: 16,
-                            color: isDark
-                                ? Colors.white38
-                                : Colors.black38,
+                            color: isDark ? Colors.white38 : Colors.black38,
                           ),
                         ],
                       ),
@@ -903,10 +905,12 @@ class ServerHomeView extends StatelessWidget {
                               final devLabel = p.device == 'mobile'
                                   ? ' (Celular)'
                                   : p.device == 'desktop'
-                                      ? ' (Desktop)'
-                                      : '';
-                              final pColor =
-                                  resolveAuthorColor(p.username, isDark);
+                                  ? ' (Desktop)'
+                                  : '';
+                              final pColor = resolveAuthorColor(
+                                p.username,
+                                isDark,
+                              );
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -914,8 +918,7 @@ class ServerHomeView extends StatelessWidget {
                                     width: 16,
                                     height: 16,
                                     decoration: BoxDecoration(
-                                      color:
-                                          pColor.withValues(alpha: 0.3),
+                                      color: pColor.withValues(alpha: 0.3),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Center(
@@ -943,8 +946,10 @@ class ServerHomeView extends StatelessWidget {
                                     Container(
                                       padding: const EdgeInsets.all(2),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(3),
+                                        color: const Color(
+                                          0xFFEF4444,
+                                        ).withValues(alpha: 0.18),
+                                        borderRadius: AppRadius.borderXs,
                                       ),
                                       child: const Icon(
                                         LucideIcons.headphones,
@@ -957,8 +962,10 @@ class ServerHomeView extends StatelessWidget {
                                     Container(
                                       padding: const EdgeInsets.all(2),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(3),
+                                        color: const Color(
+                                          0xFFEF4444,
+                                        ).withValues(alpha: 0.18),
+                                        borderRadius: AppRadius.borderXs,
                                       ),
                                       child: const Icon(
                                         LucideIcons.micOff,
@@ -984,8 +991,10 @@ class ServerHomeView extends StatelessWidget {
     );
   }
 
-  Widget _buildActivityCard(List<ChannelModel> channels,
-      {bool isMobile = false}) {
+  Widget _buildActivityCard(
+    List<ChannelModel> channels, {
+    bool isMobile = false,
+  }) {
     final firstChannel = channels.isNotEmpty ? channels.first : null;
     final chParticipants = firstChannel != null
         ? _getChannelVoiceParticipants(firstChannel.id)
@@ -996,7 +1005,7 @@ class ServerHomeView extends StatelessWidget {
       padding: EdgeInsets.all(isMobile ? 14 : 20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -1044,14 +1053,14 @@ class ServerHomeView extends StatelessWidget {
                     backgroundColor: selectedAccentColor,
                     foregroundColor:
                         selectedAccentColor.computeLuminance() > 0.5
-                            ? Colors.black
-                            : Colors.white,
+                        ? Colors.black
+                        : Colors.white,
                     padding: EdgeInsets.symmetric(
                       horizontal: isMobile ? 10 : 14,
                       vertical: isMobile ? 6 : 8,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: AppRadius.borderSm,
                     ),
                   ),
                   child: Text(
@@ -1080,11 +1089,9 @@ class ServerHomeView extends StatelessWidget {
             subtitle: hasVoice
                 ? '${chParticipants.map((p) => p.username).join(", ")} conversando na sala'
                 : (isTransmitting
-                    ? 'Transmissão de tela ativa no canal'
-                    : 'Conecte-se para conversar por texto, voz ou transmitir sua tela'),
-            time: hasVoice
-                ? 'Ao Vivo'
-                : (isTransmitting ? 'Ao Vivo' : 'Ativo'),
+                      ? 'Transmissão de tela ativa no canal'
+                      : 'Conecte-se para conversar por texto, voz ou transmitir sua tela'),
+            time: hasVoice ? 'Ao Vivo' : (isTransmitting ? 'Ao Vivo' : 'Ativo'),
           ),
         ],
       ),
@@ -1101,7 +1108,7 @@ class ServerHomeView extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF161724) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -1114,7 +1121,7 @@ class ServerHomeView extends StatelessWidget {
               color: isDark
                   ? AppColors.darkSurfaceElevated
                   : const Color(0xFFE2E8F0),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppRadius.borderSm,
             ),
             child: Icon(icon, size: 16, color: selectedAccentColor),
           ),
@@ -1170,7 +1177,7 @@ class ServerHomeView extends StatelessWidget {
         color: hasActiveVoice
             ? (isDark ? const Color(0xFF132A1C) : const Color(0xFFDCFCE7))
             : (isDark ? const Color(0xFF10281C) : const Color(0xFFECFDF5)),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: hasActiveVoice
               ? const Color(0xFF22C55E).withValues(alpha: 0.5)
@@ -1218,15 +1225,15 @@ class ServerHomeView extends StatelessWidget {
                   color: hasActiveVoice
                       ? const Color(0xFF22C55E)
                       : const Color(0xFF10B981),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadius.borderSm,
                 ),
                 child: Center(
                   child: Icon(
                     hasActiveVoice
                         ? LucideIcons.phoneCall
                         : (isTransmitting
-                            ? LucideIcons.screenShare
-                            : LucideIcons.headphones),
+                              ? LucideIcons.screenShare
+                              : LucideIcons.headphones),
                     size: 18,
                     color: Colors.black,
                   ),
@@ -1241,8 +1248,8 @@ class ServerHomeView extends StatelessWidget {
                       hasActiveVoice
                           ? 'Voz em Andamento'
                           : (isTransmitting
-                              ? 'Transmissão Ativa'
-                              : 'Sala de Áudio e Texto'),
+                                ? 'Transmissão Ativa'
+                                : 'Sala de Áudio e Texto'),
                       style: GoogleFonts.spaceGrotesk(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
@@ -1254,8 +1261,8 @@ class ServerHomeView extends StatelessWidget {
                       hasActiveVoice
                           ? '$names em chamada'
                           : (isTransmitting
-                              ? 'Transmissão de tela ao vivo'
-                              : 'Pronto para conversas e transmissões'),
+                                ? 'Transmissão de tela ao vivo'
+                                : 'Pronto para conversas e transmissões'),
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: isDark ? Colors.white70 : Colors.black54,
@@ -1277,7 +1284,7 @@ class ServerHomeView extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -1382,7 +1389,7 @@ class ServerHomeView extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -1431,7 +1438,7 @@ class ServerHomeView extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -1441,11 +1448,7 @@ class ServerHomeView extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                LucideIcons.sparkles,
-                size: 14,
-                color: selectedAccentColor,
-              ),
+              Icon(LucideIcons.sparkles, size: 14, color: selectedAccentColor),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(

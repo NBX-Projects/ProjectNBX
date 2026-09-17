@@ -9,6 +9,7 @@ import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/core/updater/update_controller.dart';
 import 'package:projectnbx/core/updater/widgets/update_banner.dart';
@@ -244,7 +245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.darkInput : AppColors.lightSurface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderMd,
                   border: Border.all(
                     color: isDark
                         ? AppColors.darkBorder
@@ -282,7 +283,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         color: isDark
                             ? AppColors.darkSurfaceElevated
                             : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: AppRadius.borderXs,
                       ),
                       child: Text(
                         'Ctrl K',
@@ -308,7 +309,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               decoration: BoxDecoration(
                 color: (isDark ? AppColors.darkSage : AppColors.lightSage)
                     .withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(9999),
+                borderRadius: AppRadius.borderPill,
                 border: Border.all(
                   color: (isDark ? AppColors.darkSage : AppColors.lightSage)
                       .withValues(alpha: 0.3),
@@ -394,7 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: AppRadius.borderSm,
                 border: Border.all(
                   color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
@@ -485,8 +486,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ? AppColors.darkPrimary
                       : AppColors.lightPrimary,
                   foregroundColor: isDark ? Colors.black : Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(9999),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.borderPill,
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -555,8 +556,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? AppColors.darkPrimary
                 : AppColors.lightPrimary,
             foregroundColor: isDark ? Colors.black : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9999),
+            shape: const RoundedRectangleBorder(
+              borderRadius: AppRadius.borderPill,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           ),

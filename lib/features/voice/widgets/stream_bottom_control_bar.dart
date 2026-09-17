@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
 
@@ -110,9 +111,9 @@ class StreamStageBottomBar extends StatelessWidget {
                     horizontal: 6,
                     vertical: 2,
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF334155),
-                    borderRadius: BorderRadius.circular(4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF334155),
+                    borderRadius: AppRadius.borderXs,
                   ),
                   child: Text(
                     isCompact ? '$fps FPS' : '$resolution $fps FPS',
@@ -177,8 +178,9 @@ class StreamStageBottomBar extends StatelessWidget {
                   size: 16,
                   color: isChatVisible ? accentColor : Colors.white70,
                 ),
-                tooltip:
-                    isChatVisible ? 'Ocultar Chat HUD' : 'Mostrar Chat HUD',
+                tooltip: isChatVisible
+                    ? 'Ocultar Chat HUD'
+                    : 'Mostrar Chat HUD',
                 onPressed: onToggleChat,
               ),
 
@@ -220,9 +222,7 @@ class StreamStageBottomBar extends StatelessWidget {
                     horizontal: isCompact ? 10 : 14,
                     vertical: 8,
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
+                  shape: AppRadius.shapePill,
                   elevation: 0,
                 ),
               ),

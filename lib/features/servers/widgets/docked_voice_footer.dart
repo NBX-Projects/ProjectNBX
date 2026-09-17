@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 
 /// Rodapé fixo indicando conexão ativa de áudio no canal
@@ -110,7 +111,7 @@ class DockedVoiceFooter extends StatelessWidget {
                     onToggleMic?.call();
                   },
                   mouseCursor: SystemMouseCursors.click,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderSm,
                   child: Container(
                     width: 38,
                     height: 38,
@@ -120,7 +121,7 @@ class DockedVoiceFooter extends StatelessWidget {
                           : (isDark
                               ? const Color(0xFF1E2030)
                               : const Color(0xFFF1F5F9)),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderSm,
                       border: isDark
                           ? (voiceState.isMicMuted
                               ? Border.all(
@@ -161,7 +162,7 @@ class DockedVoiceFooter extends StatelessWidget {
                     onToggleDeafened?.call();
                   },
                   mouseCursor: SystemMouseCursors.click,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderSm,
                   child: Container(
                     width: 38,
                     height: 38,
@@ -171,7 +172,7 @@ class DockedVoiceFooter extends StatelessWidget {
                           : (isDark
                               ? const Color(0xFF1E2030)
                               : const Color(0xFFF1F5F9)),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderSm,
                       border: isDark
                           ? (voiceState.isDeafened
                               ? Border.all(
@@ -217,13 +218,13 @@ class DockedVoiceFooter extends StatelessWidget {
               InkWell(
                 onTap: onLeaveVoice,
                 mouseCursor: SystemMouseCursors.click,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppRadius.borderPill,
                 child: Container(
                   height: 38,
                   padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444),
-                    borderRadius: BorderRadius.circular(10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    borderRadius: AppRadius.borderPill,
                   ),
                   child: Center(
                     child: Text(

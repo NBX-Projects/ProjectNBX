@@ -1,8 +1,10 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
 import 'package:projectnbx/features/voice/widgets/viewports/stream_preview_viewports.dart';
@@ -27,7 +29,7 @@ class ActiveLiveStreamBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1428) : const Color(0xFFFAF5FF),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: const Color(0xFFA855F7).withValues(alpha: isDark ? 0.6 : 0.4),
         ),
@@ -45,7 +47,7 @@ class ActiveLiveStreamBanner extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(9999),
+              borderRadius: AppRadius.borderPill,
               border: Border.all(
                 color: const Color(0xFFEF4444).withValues(alpha: 0.6),
               ),
@@ -113,9 +115,7 @@ class ActiveLiveStreamBanner extends StatelessWidget {
               backgroundColor: const Color(0xFF9333EA),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: AppRadius.shapePill,
             ),
           ),
         ],
@@ -199,14 +199,15 @@ class ImmersiveStreamPlayer extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(9999),
+                        borderRadius: AppRadius.borderPill,
                         border: Border.all(
                           color: const Color(0xFFEF4444).withValues(alpha: 0.6),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFEF4444)
-                                .withValues(alpha: 0.35),
+                            color: const Color(
+                              0xFFEF4444,
+                            ).withValues(alpha: 0.35),
                             blurRadius: 12,
                             spreadRadius: 1,
                           ),
@@ -247,7 +248,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(9999),
+                          borderRadius: AppRadius.borderPill,
                           border: Border.all(
                             color: accentColor.withValues(alpha: 0.4),
                           ),
@@ -288,7 +289,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(9999),
+                          borderRadius: AppRadius.borderPill,
                           border: Border.all(color: Colors.white24),
                         ),
                         child: Text(
@@ -314,12 +315,14 @@ class ImmersiveStreamPlayer extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color:
-                              const Color(0xFF10B981).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(9999),
+                          color: const Color(
+                            0xFF10B981,
+                          ).withValues(alpha: 0.15),
+                          borderRadius: AppRadius.borderPill,
                           border: Border.all(
-                            color:
-                                const Color(0xFF10B981).withValues(alpha: 0.4),
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.4),
                           ),
                         ),
                         child: Row(
@@ -351,7 +354,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
                       const SizedBox(width: 8),
                       InkWell(
                         onTap: onBackToChat,
-                        borderRadius: BorderRadius.circular(9999),
+                        borderRadius: AppRadius.borderPill,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
@@ -359,7 +362,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(9999),
+                            borderRadius: AppRadius.borderPill,
                             border: Border.all(color: Colors.white30),
                           ),
                           child: Row(
@@ -469,9 +472,9 @@ class ImmersiveStreamPlayer extends StatelessWidget {
           width: 2.5,
           height: heights[i].toDouble(),
           margin: const EdgeInsets.symmetric(horizontal: 1.2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF10B981),
-            borderRadius: BorderRadius.circular(2),
+          decoration: const BoxDecoration(
+            color: Color(0xFF10B981),
+            borderRadius: AppRadius.borderXs,
           ),
         );
       }),

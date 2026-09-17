@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
@@ -183,14 +184,14 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
       child: InkWell(
         onTap: () => setState(() => _activeTab = tab),
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppRadius.borderSm,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: isSelected
                 ? (isDark ? const Color(0xFF25283E) : const Color(0xFFE2E8F0))
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: AppRadius.borderSm,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -254,7 +255,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                   color: isDark
                       ? const Color(0xFF1E2034)
                       : const Color(0xFFFFFFFF),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderMd,
                   border: Border.all(
                     color: isDark
                         ? const Color(0xFF333758)
@@ -278,9 +279,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                     InkWell(
                       onTap: () => widget.onChannelSelected(activeCh),
                       mouseCursor: SystemMouseCursors.click,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(10),
-                      ),
+                      borderRadius: AppRadius.topMd,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -316,7 +315,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                   color: const Color(
                                     0xFF14532D,
                                   ).withValues(alpha: isDark ? 0.6 : 0.15),
-                                  borderRadius: BorderRadius.circular(9999),
+                                  borderRadius: AppRadius.borderPill,
                                 ),
                                 child: Text(
                                   activeParticipants.length.toString(),
@@ -362,7 +361,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                   widget.onWatchStream?.call(p);
                                 }
                               },
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: AppRadius.borderSm,
                               child: _buildNestedMemberRow(
                                 initials: getAuthorInitials(p.username),
                                 name: displayName,
@@ -391,7 +390,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                     InkWell(
                       onTap: () => widget.onChannelSelected(c),
                       mouseCursor: SystemMouseCursors.click,
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: AppRadius.borderSm,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -432,7 +431,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF14532D)
                                       .withValues(alpha: isDark ? 0.6 : 0.15),
-                                  borderRadius: BorderRadius.circular(9999),
+                                  borderRadius: AppRadius.borderPill,
                                 ),
                                 child: Text(
                                   chParticipants.length.toString(),
@@ -475,7 +474,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                   widget.onWatchStream?.call(p);
                                 }
                               },
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: AppRadius.borderSm,
                               child: _buildNestedMemberRow(
                                 initials: getAuthorInitials(p.username),
                                 name:
@@ -522,7 +521,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                 widget.server,
                 onMembersUpdated: widget.onMembersUpdated,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppRadius.borderSm,
               child: Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(
@@ -531,7 +530,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                 ),
                 decoration: BoxDecoration(
                   color: widget.accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadius.borderSm,
                   border: Border.all(
                     color: widget.accentColor.withValues(alpha: 0.4),
                   ),
@@ -696,7 +695,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                 ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: AppRadius.borderXs,
                   border: Border.all(
                     color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
                     width: 0.8,
@@ -750,7 +749,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEF4444).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: AppRadius.borderXs,
                   ),
                   child: const Icon(
                     LucideIcons.headphones,
@@ -769,7 +768,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEF4444).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: AppRadius.borderXs,
                   ),
                   child: const Icon(
                     LucideIcons.micOff,
@@ -785,7 +784,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
                 color: const Color(0xFF9333EA).withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: AppRadius.borderXs,
               ),
               child: const Text(
                 'AO VIVO',

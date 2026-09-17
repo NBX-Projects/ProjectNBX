@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 
@@ -100,7 +101,7 @@ class HubRightPanel extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color:
                       isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadius.borderMd,
                   border: Border.all(
                     color:
                         isDark ? AppColors.darkBorder : AppColors.lightBorder,
@@ -115,7 +116,7 @@ class HubRightPanel extends ConsumerWidget {
                         color: isDark
                             ? AppColors.darkSurfaceElevated
                             : AppColors.lightSurfaceElevated,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppRadius.borderSm,
                       ),
                       child: Center(
                         child: Text(
@@ -236,7 +237,7 @@ class HubRightPanel extends ConsumerWidget {
               color: isDark
                   ? AppColors.darkSurfaceElevated
                   : AppColors.lightSurfaceElevated,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: AppRadius.borderXs,
             ),
             child: Text(
               '$count',
@@ -266,7 +267,7 @@ class HubRightPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -312,7 +313,7 @@ class HubRightPanel extends ConsumerWidget {
             InkWell(
               onTap: onAction,
               mouseCursor: SystemMouseCursors.click,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppRadius.borderSm,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -322,7 +323,7 @@ class HubRightPanel extends ConsumerWidget {
                   color: isDark
                       ? AppColors.darkSurfaceElevated
                       : AppColors.lightSurfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: AppRadius.borderSm,
                   border: Border.all(
                     color: isDark
                         ? AppColors.darkBorderFocus

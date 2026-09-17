@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
 
 class ScreenShareConfig {
@@ -187,7 +188,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
         height: dialogHeight,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppRadius.borderLg,
           border: Border.all(color: border, width: 1.2),
           boxShadow: [
             BoxShadow(
@@ -210,7 +211,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                     height: 40,
                     decoration: BoxDecoration(
                       color: widget.accentColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.borderMd,
                       border: Border.all(
                         color: widget.accentColor.withValues(alpha: 0.3),
                       ),
@@ -276,7 +277,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         color: cardBg,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppRadius.borderMd,
                         border: Border.all(color: border),
                       ),
                       child: Row(
@@ -377,7 +378,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                                 controller: _scrollController,
                                 thumbVisibility: true,
                                 thickness: 6,
-                                radius: const Radius.circular(8),
+                                radius: AppRadius.radiusSm,
                                 child: GridView.builder(
                                   controller: _scrollController,
                                   padding:
@@ -400,7 +401,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                                   onTap: () =>
                                       setState(() => _selectedSourceIndex = index),
                                   mouseCursor: SystemMouseCursors.click,
-                                  borderRadius: BorderRadius.circular(14),
+                                  borderRadius: AppRadius.borderMd,
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 180),
                                     padding: const EdgeInsets.all(10),
@@ -410,7 +411,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                                               alpha: isDark ? 0.12 : 0.08,
                                             )
                                           : cardBg,
-                                      borderRadius: BorderRadius.circular(14),
+                                      borderRadius: AppRadius.borderMd,
                                       border: Border.all(
                                         color: isSelected
                                             ? widget.accentColor
@@ -479,7 +480,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                                             width: double.infinity,
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF0C0D14),
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius: AppRadius.borderSm,
                                               border: Border.all(
                                                 color: isSelected
                                                     ? widget.accentColor
@@ -640,7 +641,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                         onTap: () =>
                             setState(() => _shareAudio = !_shareAudio),
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppRadius.borderSm,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Row(
@@ -751,9 +752,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                         horizontal: 20,
                         vertical: 12,
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
+                      shape: AppRadius.shapePill,
                       elevation: 0,
                     ),
                   ),
@@ -1494,7 +1493,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
     return InkWell(
       onTap: onTap,
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppRadius.borderSm,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1504,7 +1503,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                   ? AppColors.darkSurfaceElevated
                   : AppColors.lightSurfaceElevated)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppRadius.borderSm,
           border: isSelected
               ? Border.all(
                   color: widget.accentColor.withValues(alpha: 0.5),
@@ -1554,7 +1553,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
     return InkWell(
       onTap: onTap,
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: AppRadius.borderSm,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1562,7 +1561,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
           color: isSelected
               ? widget.accentColor
               : (isDark ? AppColors.darkInput : AppColors.lightCanvas),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: AppRadius.borderSm,
           border: Border.all(
             color: isSelected
                 ? widget.accentColor

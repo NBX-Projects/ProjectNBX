@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
@@ -232,7 +233,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: bgColor ?? color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppRadius.borderXs,
         border: Border.all(color: borderColor ?? color.withValues(alpha: 0.4)),
       ),
       child: Text(
@@ -286,7 +287,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
               filled: true,
               fillColor: isDark ? const Color(0xFF1E2030) : Colors.white,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 borderSide: BorderSide(
                   color: isDark
                       ? const Color(0xFF313244)
@@ -310,7 +311,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
     final isOwner =
         currentUser != null && currentUser.id == widget.server.ownerId;
     final inputBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: AppRadius.borderMd,
       borderSide: BorderSide(
         color: isDark ? const Color(0xFF313244) : const Color(0xFFCBD5E1),
       ),
@@ -324,7 +325,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
         constraints: const BoxConstraints(maxHeight: 620),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF181926) : const Color(0xFFFAF9F6),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           border: Border.all(
             color: isDark ? const Color(0xFF313244) : const Color(0xFFE2E8F0),
             width: 1.2,
@@ -360,7 +361,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                     height: 36,
                     decoration: BoxDecoration(
                       color: accentColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderSm,
                       border: Border.all(
                         color: accentColor.withValues(alpha: 0.5),
                       ),
@@ -450,7 +451,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                       color: isDark
                           ? const Color(0xFF141520)
                           : const Color(0xFFFFFFFF),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderMd,
                       border: Border.all(
                         color: isDark
                             ? const Color(0xFF313244)
@@ -530,8 +531,8 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                               horizontal: 12,
                               vertical: 8,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderSm,
                             ),
                             elevation: 0,
                           ),
@@ -558,7 +559,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                       InkWell(
                         onTap: () =>
                             setState(() => _showSettings = !_showSettings),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: AppRadius.borderXs,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 4,
@@ -600,7 +601,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                         color: isDark
                             ? const Color(0xFF141520)
                             : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: AppRadius.borderMd,
                         border: Border.all(
                           color: isDark
                               ? const Color(0xFF282A3A)
@@ -751,8 +752,8 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 10,
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: AppRadius.borderSm,
                                 ),
                               ),
                             ),
@@ -826,8 +827,8 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                             horizontal: 16,
                             vertical: 14,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppRadius.borderSm,
                           ),
                           elevation: 0,
                         ),
@@ -941,7 +942,7 @@ class _InviteMemberDialogState extends ConsumerState<InviteMemberDialog> {
                       color: isDark
                           ? const Color(0xFF141520)
                           : const Color(0xFFFFFFFF),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderMd,
                       border: Border.all(
                         color: isDark
                             ? const Color(0xFF313244)

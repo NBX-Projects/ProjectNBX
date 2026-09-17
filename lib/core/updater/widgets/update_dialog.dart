@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/updater/update_controller.dart';
 import 'package:projectnbx/core/updater/update_models.dart';
 
@@ -46,7 +47,7 @@ class UpdateDialog extends ConsumerWidget {
         width: 520,
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           border: Border.all(
             color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
           ),
@@ -70,11 +71,12 @@ class UpdateDialog extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: (isDark
-                              ? AppColors.darkPrimary
-                              : AppColors.lightPrimary)
-                          .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      color:
+                          (isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
+                              .withValues(alpha: 0.15),
+                      borderRadius: AppRadius.borderSm,
                     ),
                     child: Icon(
                       LucideIcons.sparkles,
@@ -129,11 +131,12 @@ class UpdateDialog extends ConsumerWidget {
                                 vertical: 1,
                               ),
                               decoration: BoxDecoration(
-                                color: (isDark
-                                        ? AppColors.darkSage
-                                        : AppColors.lightSage)
-                                    .withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
+                                color:
+                                    (isDark
+                                            ? AppColors.darkSage
+                                            : AppColors.lightSage)
+                                        .withValues(alpha: 0.2),
+                                borderRadius: AppRadius.borderXs,
                               ),
                               child: Text(
                                 'v${latest?.version ?? ""}',
@@ -193,7 +196,7 @@ class UpdateDialog extends ConsumerWidget {
                       color: isDark
                           ? AppColors.darkInput
                           : AppColors.lightSurfaceElevated,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppRadius.borderMd,
                       border: Border.all(
                         color: isDark
                             ? AppColors.darkBorder
@@ -248,7 +251,7 @@ class UpdateDialog extends ConsumerWidget {
                     ),
                     const SizedBox(height: 6),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: AppRadius.borderXs,
                       child: LinearProgressIndicator(
                         value: updateState.downloadProgress,
                         minHeight: 6,
@@ -336,8 +339,8 @@ class UpdateDialog extends ConsumerWidget {
                                 ? AppColors.darkBorder
                                 : AppColors.lightBorder,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(9999),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppRadius.borderPill,
                           ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -383,8 +386,8 @@ class UpdateDialog extends ConsumerWidget {
                             horizontal: 18,
                             vertical: 9,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(9999),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppRadius.borderPill,
                           ),
                           elevation: 0,
                         ),

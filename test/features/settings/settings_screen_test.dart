@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/localization/app_language.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/network/api_client.dart';
+import 'package:projectnbx/core/widgets/window_controls.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:projectnbx/features/settings/screens/settings_screen.dart';
@@ -75,6 +76,10 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+
+    // Verify desktop window controls and styled scrollbar are present
+    expect(find.byType(WindowControls), findsOneWidget);
+    expect(find.byType(Scrollbar), findsAtLeastNWidgets(1));
 
     // 1. Account section (default)
     expect(find.text('GamerElite'), findsAtLeastNWidgets(1));

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
 import 'package:projectnbx/features/servers/models/server_workspace_enums.dart';
@@ -137,7 +138,7 @@ class ServerTopNav extends StatelessWidget {
               child: InkWell(
                 onTap: onToggleTransmission,
                 mouseCursor: SystemMouseCursors.click,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 child: Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
@@ -146,7 +147,7 @@ class ServerTopNav extends StatelessWidget {
                         : (isDark
                             ? const Color(0xFF1E2030)
                             : const Color(0xFFE2E8F0)),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isTransmitting
                           ? const Color(0xFFEF4444).withValues(alpha: 0.5)
@@ -182,7 +183,7 @@ class ServerTopNav extends StatelessWidget {
               child: InkWell(
                 onTap: onToggleVoiceChannel,
                 mouseCursor: SystemMouseCursors.click,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 child: Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
@@ -191,7 +192,7 @@ class ServerTopNav extends StatelessWidget {
                         : (isInVoice
                             ? const Color(0xFFEF4444).withValues(alpha: 0.15)
                             : const Color(0xFF10B981).withValues(alpha: 0.15)),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isConnectingVoice
                           ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
@@ -228,7 +229,7 @@ class ServerTopNav extends StatelessWidget {
           InkWell(
             onTap: onInviteMembers,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppRadius.borderSm,
             child: Container(
               padding: EdgeInsets.symmetric(
                 horizontal: isMobile ? 8 : 10,
@@ -236,7 +237,7 @@ class ServerTopNav extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: accentColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 border: Border.all(
                   color: accentColor.withValues(alpha: 0.5),
                 ),
@@ -298,7 +299,7 @@ class ServerTopNav extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF22C55E),
-                        borderRadius: BorderRadius.circular(9999),
+                        borderRadius: AppRadius.borderPill,
                         border: Border.all(
                           color: isDark ? const Color(0xFF141522) : Colors.white,
                           width: 1.5,
@@ -331,14 +332,14 @@ class ServerTopNav extends StatelessWidget {
               child: InkWell(
                 onTap: onToggleRightSidebar,
                 mouseCursor: SystemMouseCursors.click,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color(0xFF1E2030)
                         : const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isDark
                           ? AppColors.darkBorder

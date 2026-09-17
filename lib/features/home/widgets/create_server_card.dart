@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 
 class CreateServerCard extends StatefulWidget {
@@ -34,12 +35,12 @@ class _CreateServerCardState extends State<CreateServerCard> {
           CreateServerDialog.show(context);
         },
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.borderLg,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppRadius.borderLg,
             border: Border.all(
               color: _isHovered
                   ? (isDark
@@ -70,8 +71,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
                 height: 100,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(13)),
+                  borderRadius: AppRadius.topLg,
                   gradient: LinearGradient(
                     colors: isDark
                         ? [
@@ -118,7 +118,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
                                   ? AppColors.darkPrimary
                                   : AppColors.lightPrimary)
                               .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: AppRadius.borderSm,
                           border: Border.all(
                             color: (isDark
                                     ? AppColors.darkPrimary
@@ -215,7 +215,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
                                 ? AppColors.darkPrimary
                                 : AppColors.lightPrimary)
                             .withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppRadius.borderSm,
                         border: Border.all(
                           color: (isDark
                                   ? AppColors.darkPrimary

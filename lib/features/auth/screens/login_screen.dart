@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/core/widgets/window_controls.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
@@ -215,7 +216,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             padding: const EdgeInsets.all(3),
                             decoration: BoxDecoration(
                               color: tabBg,
-                              borderRadius: BorderRadius.circular(9999),
+                              borderRadius: AppRadius.borderPill,
                               border: Border.all(color: borderColor),
                             ),
                             child: Row(
@@ -233,9 +234,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           color: !_isRegister
                                               ? primaryColor
                                               : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            9999,
-                                          ),
+                                          borderRadius: AppRadius.borderPill,
                                         ),
                                         alignment: Alignment.center,
                                         child: Text(
@@ -267,9 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           color: _isRegister
                                               ? primaryColor
                                               : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            9999,
-                                          ),
+                                          borderRadius: AppRadius.borderPill,
                                         ),
                                         alignment: Alignment.center,
                                         child: Text(
@@ -302,7 +299,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: dangerColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: AppRadius.borderSm,
                                 border: Border.all(
                                   color: dangerColor.withValues(alpha: 0.35),
                                 ),

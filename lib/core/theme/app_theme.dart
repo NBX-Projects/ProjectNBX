@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
+
+export 'package:projectnbx/core/theme/app_radius.dart';
 
 class AppTheme {
   // ==========================================
@@ -52,12 +55,12 @@ class AppTheme {
           letterSpacing: 0.8,
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         color: AppColors.darkSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: AppColors.darkBorder, width: 1),
+          borderRadius: AppRadius.borderLg,
+          side: BorderSide(color: AppColors.darkBorder, width: 1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -75,24 +78,24 @@ class AppTheme {
           horizontal: 18,
           vertical: 16,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.darkBorder),
+        border: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: AppColors.darkBorder),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.darkBorder),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: AppColors.darkBorder),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(
             color: AppColors.darkPrimary,
             width: 1.5,
           ),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.darkDanger),
+        errorBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: AppColors.darkDanger),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -138,6 +141,38 @@ class AppTheme {
       ),
       popupMenuTheme: const PopupMenuThemeData(
         mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: const WidgetStatePropertyAll(true),
+        trackVisibility: const WidgetStatePropertyAll(false),
+        interactive: true,
+        radius: const Radius.circular(9999),
+        thickness: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.dragged)) {
+            return 8.0;
+          }
+          return 6.0;
+        }),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.dragged)) {
+            return AppColors.darkPrimary;
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return AppColors.darkPrimary.withValues(alpha: 0.85);
+          }
+          return AppColors.darkTextMuted.withValues(alpha: 0.4);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered)) {
+            return AppColors.darkSurface.withValues(alpha: 0.35);
+          }
+          return Colors.transparent;
+        }),
+        trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
+        crossAxisMargin: 2.0,
+        mainAxisMargin: 4.0,
+        minThumbLength: 36.0,
       ),
     );
   }
@@ -190,12 +225,12 @@ class AppTheme {
           letterSpacing: 0.8,
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         color: AppColors.lightSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: AppColors.lightBorder, width: 1),
+          borderRadius: AppRadius.borderLg,
+          side: BorderSide(color: AppColors.lightBorder, width: 1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -213,24 +248,24 @@ class AppTheme {
           horizontal: 18,
           vertical: 16,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.lightBorder),
+        border: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: AppColors.lightBorder),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.lightBorder),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: AppColors.lightBorder),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(
             color: AppColors.lightPrimary,
             width: 1.5,
           ),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.lightDanger),
+        errorBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: AppColors.lightDanger),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -276,6 +311,38 @@ class AppTheme {
       ),
       popupMenuTheme: const PopupMenuThemeData(
         mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: const WidgetStatePropertyAll(true),
+        trackVisibility: const WidgetStatePropertyAll(false),
+        interactive: true,
+        radius: const Radius.circular(9999),
+        thickness: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.dragged)) {
+            return 8.0;
+          }
+          return 6.0;
+        }),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.dragged)) {
+            return AppColors.lightPrimary;
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return AppColors.lightPrimary.withValues(alpha: 0.85);
+          }
+          return AppColors.lightTextMuted.withValues(alpha: 0.4);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered)) {
+            return AppColors.lightSurfaceElevated.withValues(alpha: 0.5);
+          }
+          return Colors.transparent;
+        }),
+        trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
+        crossAxisMargin: 2.0,
+        mainAxisMargin: 4.0,
+        minThumbLength: 36.0,
       ),
     );
   }

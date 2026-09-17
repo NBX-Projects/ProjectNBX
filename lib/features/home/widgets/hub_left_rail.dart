@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
@@ -31,9 +32,9 @@ class HubLeftRail extends ConsumerWidget {
           behavior: SnackBarBehavior.floating,
           width: 320,
           backgroundColor: const Color(0xFF1E2030),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: Color(0xFF313244)),
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppRadius.borderMd,
+            side: BorderSide(color: Color(0xFF313244)),
           ),
           content: Row(
             children: [
@@ -158,14 +159,14 @@ class HubLeftRail extends ConsumerWidget {
               textStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E2030),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 border: Border.all(color: AppColors.darkBorder),
               ),
               child: Center(
                 child: InkWell(
                   onTap: () => SettingsScreen.show(context),
                   mouseCursor: SystemMouseCursors.click,
-                  borderRadius: BorderRadius.circular(9999),
+                  borderRadius: AppRadius.borderPill,
                   child: Container(
                     width: 44,
                     height: 44,
@@ -235,14 +236,14 @@ class HubLeftRail extends ConsumerWidget {
         textStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
         decoration: BoxDecoration(
           color: const Color(0xFF1E2030),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: AppRadius.borderSm,
           border: Border.all(color: AppColors.darkBorder),
         ),
         child: Center(
           child: InkWell(
             onTap: onTap,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 44,
@@ -253,7 +254,7 @@ class HubLeftRail extends ConsumerWidget {
                           ? AppColors.darkSurfaceElevated
                           : AppColors.lightSurfaceElevated)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
+                borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
                 border: isSelected
                     ? Border.all(
                         color: isDark
@@ -307,14 +308,14 @@ class HubLeftRail extends ConsumerWidget {
         textStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
         decoration: BoxDecoration(
           color: const Color(0xFF1E2030),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: AppRadius.borderSm,
           border: Border.all(color: AppColors.darkBorder),
         ),
         child: Center(
           child: InkWell(
             onTap: onTap,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
+            borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 44,
@@ -323,7 +324,7 @@ class HubLeftRail extends ConsumerWidget {
                 color: isSelected
                     ? accentColor
                     : (isDark ? AppColors.darkSurface : AppColors.lightSurface),
-                borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
+                borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
                 border: Border.all(
                   color: isSelected
                       ? accentColor
@@ -341,7 +342,8 @@ class HubLeftRail extends ConsumerWidget {
                     : null,
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(isSelected ? 14 : 22),
+                borderRadius:
+                    isSelected ? AppRadius.borderMd : AppRadius.borderPill,
                 child: Center(
                   child: hasCustomIcon
                       ? Image.network(
@@ -394,14 +396,14 @@ class HubLeftRail extends ConsumerWidget {
       textStyle: GoogleFonts.inter(fontSize: 12, color: Colors.white),
       decoration: BoxDecoration(
         color: const Color(0xFF1E2030),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppRadius.borderSm,
         border: Border.all(color: AppColors.darkBorder),
       ),
       child: Center(
         child: InkWell(
           onTap: () => CreateServerDialog.show(context),
           mouseCursor: SystemMouseCursors.click,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: AppRadius.borderPill,
           child: Container(
             width: 44,
             height: 44,

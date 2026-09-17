@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
 import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
 import 'package:projectnbx/features/chat/widgets/components/chat_bubble_components.dart';
@@ -140,7 +141,7 @@ class ChannelChatView extends StatelessWidget {
                               color: isDark
                                   ? const Color(0xFF1B3828)
                                   : Colors.white,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: AppRadius.borderPill,
                               border: Border.all(
                                 color: const Color(0xFF22C55E)
                                     .withValues(alpha: 0.4),
@@ -186,7 +187,7 @@ class ChannelChatView extends StatelessWidget {
                                       padding: const EdgeInsets.all(2.5),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(4),
+                                        borderRadius: AppRadius.borderXs,
                                       ),
                                       child: const Icon(
                                         LucideIcons.headphones,
@@ -203,7 +204,7 @@ class ChannelChatView extends StatelessWidget {
                                       padding: const EdgeInsets.all(2.5),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(4),
+                                        borderRadius: AppRadius.borderXs,
                                       ),
                                       child: const Icon(
                                         LucideIcons.micOff,
@@ -224,13 +225,13 @@ class ChannelChatView extends StatelessWidget {
                     const SizedBox(width: 8),
                     InkWell(
                       onTap: onToggleVoiceChannel,
-                      borderRadius: BorderRadius.circular(9999),
+                      borderRadius: AppRadius.borderPill,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF22C55E),
-                          borderRadius: BorderRadius.circular(9999),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          borderRadius: AppRadius.borderPill,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -441,7 +442,7 @@ class ChannelChatView extends StatelessWidget {
                 color: isDark
                     ? const Color(0xFF1E2030)
                     : const Color(0xFFFFFFFF),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppRadius.borderMd,
                 border: Border.all(
                   color: isDark
                       ? const Color(0xFF2E314A)
@@ -463,7 +464,7 @@ class ChannelChatView extends StatelessWidget {
                   InkWell(
                     onTap: () {},
                     mouseCursor: SystemMouseCursors.click,
-                    borderRadius: BorderRadius.circular(9999),
+                    borderRadius: AppRadius.borderPill,
                     child: Icon(
                       LucideIcons.plusCircle,
                       size: 20,
@@ -512,7 +513,7 @@ class ChannelChatView extends StatelessWidget {
                   InkWell(
                     onTap: () {},
                     mouseCursor: SystemMouseCursors.click,
-                    borderRadius: BorderRadius.circular(9999),
+                    borderRadius: AppRadius.borderPill,
                     child: Icon(
                       LucideIcons.smile,
                       size: 20,
@@ -528,7 +529,7 @@ class ChannelChatView extends StatelessWidget {
                       messageFocusNode?.requestFocus();
                     },
                     mouseCursor: SystemMouseCursors.click,
-                    borderRadius: BorderRadius.circular(9999),
+                    borderRadius: AppRadius.borderPill,
                     child: Icon(
                       LucideIcons.send,
                       size: 18,

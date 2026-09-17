@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
 
@@ -71,12 +72,12 @@ class _HubServerCardState extends State<HubServerCard> {
       child: InkWell(
         onTap: widget.onTap,
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.borderLg,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppRadius.borderLg,
             border: Border.all(
               color: _isHovered
                   ? accentColor
@@ -102,8 +103,7 @@ class _HubServerCardState extends State<HubServerCard> {
                 height: 100,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(13)),
+                  borderRadius: AppRadius.topLg,
                   gradient: LinearGradient(
                     colors: gradient,
                     begin: Alignment.topLeft,
@@ -133,7 +133,7 @@ class _HubServerCardState extends State<HubServerCard> {
                         ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: AppRadius.borderSm,
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.2),
                           ),
@@ -162,7 +162,7 @@ class _HubServerCardState extends State<HubServerCard> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(9999),
+                            borderRadius: AppRadius.borderPill,
                             border: Border.all(
                               color: AppColors.darkSage.withValues(alpha: 0.4),
                             ),
@@ -239,7 +239,7 @@ class _HubServerCardState extends State<HubServerCard> {
                                 ? AppColors.darkSage
                                 : AppColors.lightSage)
                             .withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppRadius.borderSm,
                         border: Border.all(
                           color: (isDark
                                   ? AppColors.darkSage

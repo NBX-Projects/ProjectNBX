@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
 
 class ChatTimestampText extends StatelessWidget {
@@ -73,7 +74,7 @@ class ChatMessageActions extends StatelessWidget {
           child: InkWell(
             onTap: onEdit,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: AppRadius.borderXs,
             child: Padding(
               padding: const EdgeInsets.all(4),
               child: Icon(
@@ -92,7 +93,7 @@ class ChatMessageActions extends StatelessWidget {
           child: InkWell(
             onTap: onDelete,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: AppRadius.borderXs,
             child: const Padding(
               padding: EdgeInsets.all(4),
               child: Icon(
@@ -145,22 +146,22 @@ class WhatsAppChatBubble extends StatelessWidget {
 
     final borderColor = isMine
         ? (isDark
-            ? const Color(0xFF265742).withValues(alpha: 0.7)
-            : const Color(0xFFB7E4AF))
+              ? const Color(0xFF265742).withValues(alpha: 0.7)
+              : const Color(0xFFB7E4AF))
         : (isDark ? const Color(0xFF313244) : const Color(0xFFE2E8F0));
 
     final borderRadius = isMine
         ? const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(4),
+            topLeft: AppRadius.radiusLg,
+            topRight: AppRadius.radiusLg,
+            bottomLeft: AppRadius.radiusLg,
+            bottomRight: AppRadius.radiusXs,
           )
         : const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
+            topLeft: AppRadius.radiusXs,
+            topRight: AppRadius.radiusLg,
+            bottomLeft: AppRadius.radiusLg,
+            bottomRight: AppRadius.radiusLg,
           );
 
     final timestampColor = isMine
@@ -169,11 +170,11 @@ class WhatsAppChatBubble extends StatelessWidget {
 
     final textColor = isMine
         ? (isDark
-            ? Colors.white.withValues(alpha: 0.95)
-            : const Color(0xFF0F172A))
+              ? Colors.white.withValues(alpha: 0.95)
+              : const Color(0xFF0F172A))
         : (isDark
-            ? Colors.white.withValues(alpha: 0.92)
-            : const Color(0xFF1E293B));
+              ? Colors.white.withValues(alpha: 0.92)
+              : const Color(0xFF1E293B));
 
     return Flexible(
       child: Container(
@@ -210,7 +211,7 @@ class WhatsAppChatBubble extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF141520) : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppRadius.borderMd,
             border: Border.all(color: accentColor, width: 1.2),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -272,8 +273,8 @@ class WhatsAppChatBubble extends StatelessWidget {
                   ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.borderSm,
                   ),
                 ),
                 child: Text(
@@ -292,8 +293,9 @@ class WhatsAppChatBubble extends StatelessWidget {
 
   Widget _buildMessageContent(Color textColor, Color timestampColor) {
     return Column(
-      crossAxisAlignment:
-          isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isMine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (!isMine) ...[

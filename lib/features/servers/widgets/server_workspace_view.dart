@@ -13,6 +13,7 @@ import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
 import 'package:projectnbx/features/chat/widgets/channel_chat_view.dart';
@@ -1280,7 +1281,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       context: context,
       backgroundColor: isDark ? const Color(0xFF141522) : const Color(0xFFFAF9F6),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: AppRadius.radiusLg),
       ),
       isScrollControlled: true,
       useSafeArea: true,
@@ -1306,7 +1307,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         margin: const EdgeInsets.only(top: 10, bottom: 8),
                         decoration: BoxDecoration(
                           color: isDark ? Colors.white24 : Colors.black26,
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: AppRadius.borderPill,
                         ),
                       ),
                     ),
@@ -1511,7 +1512,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                 child: InkWell(
                   onTap: () => setState(() => _isChatVisible = true),
                   mouseCursor: SystemMouseCursors.click,
-                  borderRadius: BorderRadius.circular(9999),
+                  borderRadius: AppRadius.borderPill,
                   child: Container(
                     width: 38,
                     height: 38,

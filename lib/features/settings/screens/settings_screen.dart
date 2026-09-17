@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -7,14 +11,17 @@ import 'package:projectnbx/core/localization/app_language.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/core/updater/update_controller.dart';
 import 'package:projectnbx/core/updater/update_models.dart';
 import 'package:projectnbx/core/updater/widgets/update_dialog.dart';
+import 'package:projectnbx/core/widgets/window_controls.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
 import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
+import 'package:window_manager/window_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -44,6 +51,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _selectedSection = 'account';
 
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+  final ScrollController _scrollController = ScrollController();
+
   // Voice Settings State
   double _inputVolume = 0.85;
   double _outputVolume = 0.90;
@@ -61,6 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameEditController.dispose();
     _usernameEditController.dispose();
     _emailEditController.dispose();
@@ -70,7 +83,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _startEditingProfile(UserModel? user) {
     setState(() {
       _isEditingProfile = true;
-      _nameEditController.text = (user?.name.isNotEmpty == true) ? user!.name : (user?.username ?? '');
+      _nameEditController.text = (user?.name.isNotEmpty == true)
+          ? user!.name
+          : (user?.username ?? '');
       _usernameEditController.text = user?.username ?? '';
       _emailEditController.text = user?.email ?? '';
     });
@@ -86,11 +101,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!_profileFormKey.currentState!.validate()) return;
     setState(() => _isSavingProfile = true);
 
-    final success = await ref.read(authControllerProvider.notifier).updateProfile(
-      name: _nameEditController.text.trim(),
-      username: _usernameEditController.text.trim(),
-      email: _emailEditController.text.trim(),
-    );
+    final success = await ref
+        .read(authControllerProvider.notifier)
+        .updateProfile(
+          name: _nameEditController.text.trim(),
+          username: _usernameEditController.text.trim(),
+          email: _emailEditController.text.trim(),
+        );
 
     if (mounted) {
       setState(() => _isSavingProfile = false);
@@ -109,7 +126,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         );
       } else {
-        final error = ref.read(authControllerProvider).errorMessage ?? 'Falha ao atualizar perfil';
+        final error =
+            ref.read(authControllerProvider).errorMessage ??
+            'Falha ao atualizar perfil';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFFE53935),
@@ -126,7 +145,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _showChangePasswordDialog(BuildContext context, bool isDark) async {
+  Future<void> _showChangePasswordDialog(
+    BuildContext context,
+    bool isDark,
+  ) async {
     final formKey = GlobalKey<FormState>();
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
@@ -143,17 +165,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+            final primaryColor = isDark
+                ? AppColors.darkPrimary
+                : AppColors.lightPrimary;
             final onPrimaryColor = isDark ? AppColors.darkCanvas : Colors.white;
-            final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-            final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
-            final textPrimary = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
-            final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+            final cardBg = isDark
+                ? AppColors.darkSurface
+                : AppColors.lightSurface;
+            final borderColor = isDark
+                ? AppColors.darkBorder
+                : AppColors.lightBorder;
+            final textPrimary = isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.lightTextPrimary;
+            final textSecondary = isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary;
 
             return Dialog(
               backgroundColor: cardBg,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppRadius.borderLg,
                 side: BorderSide(color: borderColor),
               ),
               child: ConstrainedBox(
@@ -172,7 +204,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: primaryColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: AppRadius.borderSm,
                               ),
                               child: Icon(
                                 LucideIcons.keyRound,
@@ -204,8 +236,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: Icon(LucideIcons.x, size: 18, color: textSecondary),
-                              onPressed: () => Navigator.of(dialogContext).pop(),
+                              icon: Icon(
+                                LucideIcons.x,
+                                size: 18,
+                                color: textSecondary,
+                              ),
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
                             ),
                           ],
                         ),
@@ -214,15 +251,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE53935).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
+                              color: const Color(
+                                0xFFE53935,
+                              ).withValues(alpha: 0.15),
+                              borderRadius: AppRadius.borderSm,
                               border: Border.all(
-                                color: const Color(0xFFE53935).withValues(alpha: 0.4),
+                                color: const Color(
+                                  0xFFE53935,
+                                ).withValues(alpha: 0.4),
                               ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(LucideIcons.triangleAlert, size: 16, color: Color(0xFFE53935)),
+                                const Icon(
+                                  LucideIcons.triangleAlert,
+                                  size: 16,
+                                  color: Color(0xFFE53935),
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -244,19 +289,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           style: TextStyle(color: textPrimary, fontSize: 13.5),
                           decoration: InputDecoration(
                             labelText: 'Senha Atual',
-                            prefixIcon: Icon(LucideIcons.lock, size: 16, color: textSecondary),
+                            prefixIcon: Icon(
+                              LucideIcons.lock,
+                              size: 16,
+                              color: textSecondary,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                obscureCurrent ? LucideIcons.eyeOff : LucideIcons.eye,
+                                obscureCurrent
+                                    ? LucideIcons.eyeOff
+                                    : LucideIcons.eye,
                                 size: 16,
                                 color: textSecondary,
                               ),
                               onPressed: () {
-                                setDialogState(() => obscureCurrent = !obscureCurrent);
+                                setDialogState(
+                                  () => obscureCurrent = !obscureCurrent,
+                                );
                               },
                             ),
                           ),
-                          validator: (v) => (v == null || v.isEmpty) ? 'Informe sua senha atual' : null,
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? 'Informe sua senha atual'
+                              : null,
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
@@ -265,10 +320,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           style: TextStyle(color: textPrimary, fontSize: 13.5),
                           decoration: InputDecoration(
                             labelText: 'Nova Senha',
-                            prefixIcon: Icon(LucideIcons.key, size: 16, color: textSecondary),
+                            prefixIcon: Icon(
+                              LucideIcons.key,
+                              size: 16,
+                              color: textSecondary,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                obscureNew ? LucideIcons.eyeOff : LucideIcons.eye,
+                                obscureNew
+                                    ? LucideIcons.eyeOff
+                                    : LucideIcons.eye,
                                 size: 16,
                                 color: textSecondary,
                               ),
@@ -278,7 +339,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                           validator: (v) {
-                            if (v == null || v.isEmpty) return 'Informe a nova senha';
+                            if (v == null || v.isEmpty) {
+                              return 'Informe a nova senha';
+                            }
                             if (v.length < 6) return 'Mínimo de 6 caracteres';
                             return null;
                           },
@@ -290,20 +353,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           style: TextStyle(color: textPrimary, fontSize: 13.5),
                           decoration: InputDecoration(
                             labelText: 'Confirmar Nova Senha',
-                            prefixIcon: Icon(LucideIcons.checkCheck, size: 16, color: textSecondary),
+                            prefixIcon: Icon(
+                              LucideIcons.checkCheck,
+                              size: 16,
+                              color: textSecondary,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                obscureConfirm ? LucideIcons.eyeOff : LucideIcons.eye,
+                                obscureConfirm
+                                    ? LucideIcons.eyeOff
+                                    : LucideIcons.eye,
                                 size: 16,
                                 color: textSecondary,
                               ),
                               onPressed: () {
-                                setDialogState(() => obscureConfirm = !obscureConfirm);
+                                setDialogState(
+                                  () => obscureConfirm = !obscureConfirm,
+                                );
                               },
                             ),
                           ),
                           validator: (v) {
-                            if (v != newPasswordController.text) return 'As senhas não coincidem';
+                            if (v != newPasswordController.text) {
+                              return 'As senhas não coincidem';
+                            }
                             return null;
                           },
                         ),
@@ -312,7 +385,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             TextButton(
-                              onPressed: isSaving ? null : () => Navigator.of(dialogContext).pop(),
+                              onPressed: isSaving
+                                  ? null
+                                  : () => Navigator.of(dialogContext).pop(),
                               child: Text(
                                 'Cancelar',
                                 style: GoogleFonts.jetBrainsMono(
@@ -326,15 +401,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryColor,
                                 foregroundColor: onPrimaryColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(9999),
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: AppRadius.borderPill,
                                 ),
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
                               ),
                               onPressed: isSaving
                                   ? null
                                   : () async {
-                                      if (!formKey.currentState!.validate()) return;
+                                      if (!formKey.currentState!.validate()) {
+                                        return;
+                                      }
                                       setDialogState(() {
                                         isSaving = true;
                                         errorMessage = null;
@@ -342,15 +422,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       final success = await ref
                                           .read(authControllerProvider.notifier)
                                           .changePassword(
-                                            currentPassword: currentPasswordController.text,
-                                            newPassword: newPasswordController.text,
+                                            currentPassword:
+                                                currentPasswordController.text,
+                                            newPassword:
+                                                newPasswordController.text,
                                           );
                                       if (!dialogContext.mounted) return;
                                       if (success) {
                                         Navigator.of(dialogContext).pop();
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
-                                            backgroundColor: const Color(0xFF2D6A4F),
+                                            backgroundColor: const Color(
+                                              0xFF2D6A4F,
+                                            ),
                                             content: Text(
                                               'Senha alterada com sucesso!',
                                               style: GoogleFonts.inter(
@@ -361,7 +447,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                           ),
                                         );
                                       } else {
-                                        final err = ref.read(authControllerProvider).errorMessage ?? 'Falha ao alterar senha';
+                                        final err =
+                                            ref
+                                                .read(authControllerProvider)
+                                                .errorMessage ??
+                                            'Falha ao alterar senha';
                                         setDialogState(() {
                                           isSaving = false;
                                           errorMessage = err;
@@ -372,7 +462,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ? const SizedBox(
                                       width: 16,
                                       height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
                                     )
                                   : Text(
                                       'Salvar Nova Senha',
@@ -408,55 +501,159 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final strings = ref.watch(stringsProvider);
     final user = authState.user;
 
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
-      body: SafeArea(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Left Settings Navigation Sidebar
-            _buildSettingsSidebar(context, isDark, strings),
-
-            // Vertical Divider
-            Container(
-              width: 1,
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-            ),
-
-            // Right Main Settings Content
-            Expanded(
-              child: Container(
-                alignment: Alignment.topLeft,
-                color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Align(
-                      alignment: Alignment.topLeft,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 40,
-                          vertical: 36,
-                        ),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 720),
-                          child: _buildSectionContent(isDark, user, strings),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          Navigator.of(context).maybePop();
+        },
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: isDark
+              ? AppColors.darkCanvas
+              : AppColors.lightCanvas,
+          body: SafeArea(
+            top: !_isDesktop,
+            child: Column(
+              children: [
+                // Top Titlebar & Desktop Window Controls in SafeArea
+                Container(
+                  height: 42,
+                  color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
+                  child: Row(
+                    children: [
+                      // Settings Title Block
+                      Container(
+                        width: 240,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? AppColors.darkPrimary
+                                    : AppColors.lightPrimary,
+                                borderRadius: AppRadius.borderSm,
+                              ),
+                              child: Icon(
+                                LucideIcons.settings,
+                                size: 16,
+                                color: isDark ? Colors.black : Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                strings.settingsTitle,
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                  color: isDark
+                                      ? AppColors.darkTextPrimary
+                                      : AppColors.lightTextPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
 
-                    // Close / ESC Button at Top Right
-                    Positioned(
-                      top: 24,
-                      right: 32,
-                      child: _buildCloseButton(context, isDark),
-                    ),
-                  ],
+                      // Draggable Area for Window Movement
+                      const Expanded(
+                        child: DragToMoveArea(child: SizedBox.expand()),
+                      ),
+
+                      // Desktop Window Controls
+                      if (_isDesktop)
+                        const WindowControls(height: 42, buttonWidth: 42),
+                    ],
+                  ),
                 ),
-              ),
+
+                // Top Header Horizontal Divider
+                Container(
+                  height: 1,
+                  width: double.infinity,
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+
+                // Main Settings Content Row
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Left Settings Navigation Sidebar
+                      _buildSettingsSidebar(context, isDark, strings),
+
+                      // Vertical Divider
+                      Container(
+                        width: 1,
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
+                      ),
+
+                      // Right Main Settings Content & Isolated ESC Column
+                      Expanded(
+                        child: Container(
+                          color: isDark
+                              ? AppColors.darkCanvas
+                              : AppColors.lightCanvas,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Scrollable Main Content with styled Scrollbar
+                              Expanded(
+                                child: Scrollbar(
+                                  controller: _scrollController,
+                                  child: SingleChildScrollView(
+                                    controller: _scrollController,
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 40,
+                                      vertical: 32,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.topLeft,
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 720,
+                                        ),
+                                        child: _buildSectionContent(
+                                          isDark,
+                                          user,
+                                          strings,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Dedicated ESC / Close action column (completely isolated from scrollbar)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 24,
+                                  right: 28,
+                                  left: 12,
+                                ),
+                                child: _buildCloseButton(context, isDark),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -473,7 +670,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -567,7 +764,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: isDark
                         ? AppColors.darkSurfaceElevated
                         : AppColors.lightSurfaceElevated,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isDark
                           ? AppColors.darkBorderFocus
@@ -589,7 +786,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppRadius.borderSm,
               child: Stack(
                 children: [
                   Container(
@@ -760,47 +957,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Container(
       width: 240,
       color: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 12, bottom: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.darkPrimary
-                        : AppColors.lightPrimary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    LucideIcons.settings,
-                    size: 16,
-                    color: isDark ? Colors.black : Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    strings.settingsTitle,
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.lightTextPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           _buildSidebarCategory(isDark, strings.userCategory),
           _buildSidebarItem(
             id: 'account',
@@ -850,7 +1010,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ref.read(authControllerProvider.notifier).logout();
               },
               mouseCursor: SystemMouseCursors.click,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: AppRadius.borderSm,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -859,7 +1019,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 decoration: BoxDecoration(
                   color: (isDark ? AppColors.darkDanger : AppColors.lightDanger)
                       .withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderSm,
                   border: Border.all(
                     color:
                         (isDark ? AppColors.darkDanger : AppColors.lightDanger)
@@ -927,7 +1087,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: InkWell(
         onTap: () => setState(() => _selectedSection = id),
         mouseCursor: SystemMouseCursors.click,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.borderSm,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -937,7 +1097,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ? AppColors.darkSurfaceElevated
                       : AppColors.lightSurfaceElevated)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppRadius.borderSm,
             border: isSelected
                 ? Border.all(
                     color: isDark
@@ -982,40 +1142,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildCloseButton(BuildContext context, bool isDark) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: () => Navigator.of(context).pop(),
-          mouseCursor: SystemMouseCursors.click,
-          borderRadius: BorderRadius.circular(9999),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-              border: Border.all(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+    return Tooltip(
+      message: 'Fechar (Esc)',
+      waitDuration: const Duration(milliseconds: 400),
+      child: InkWell(
+        onTap: () => Navigator.of(context).pop(),
+        mouseCursor: SystemMouseCursors.click,
+        borderRadius: AppRadius.borderPill,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark
+                      ? AppColors.darkSurface
+                      : AppColors.lightSurface,
+                  border: Border.all(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
+                  ),
+                ),
+                child: Icon(
+                  LucideIcons.x,
+                  size: 16,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
               ),
-            ),
-            child: Icon(
-              LucideIcons.x,
-              size: 16,
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
-            ),
+              const SizedBox(height: 4),
+              Text(
+                'ESC',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppColors.darkTextMuted
+                      : AppColors.lightTextMuted,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'ESC',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -1051,18 +1225,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ) {
     final displayName = (user?.name.isNotEmpty == true)
         ? user!.name
-        : (user?.username.isNotEmpty == true ? user!.username : 'Taui Silva Lima');
-    final username = user?.username.isNotEmpty == true ? user!.username : 'tauilima';
-    final email = user?.email.isNotEmpty == true ? user!.email : 'tauisilva@gmail.com';
+        : (user?.username.isNotEmpty == true
+              ? user!.username
+              : 'Taui Silva Lima');
+    final username = user?.username.isNotEmpty == true
+        ? user!.username
+        : 'tauilima';
+    final email = user?.email.isNotEmpty == true
+        ? user!.email
+        : 'tauisilva@gmail.com';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
 
-    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final primaryColor = isDark
+        ? AppColors.darkPrimary
+        : AppColors.lightPrimary;
     final onPrimaryColor = isDark ? AppColors.darkCanvas : Colors.white;
     final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
-    final textPrimary = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
-    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
-    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    final textPrimary = isDark
+        ? AppColors.darkTextPrimary
+        : AppColors.lightTextPrimary;
+    final textSecondary = isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
+    final textMuted = isDark
+        ? AppColors.darkTextMuted
+        : AppColors.lightTextMuted;
     final dangerColor = isDark ? AppColors.darkDanger : AppColors.lightDanger;
 
     return Column(
@@ -1080,7 +1268,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: cardBg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppRadius.borderLg,
             border: Border.all(color: borderColor),
           ),
           child: Column(
@@ -1098,10 +1286,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ? AppColors.darkLavender
                           : AppColors.lightLavender,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: borderColor,
-                        width: 2,
-                      ),
+                      border: Border.all(color: borderColor, width: 2),
                     ),
                     child: Center(
                       child: Text(
@@ -1124,14 +1309,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             Flexible(
                               child: Text(
                                 displayName,
-                                style: (isDark
-                                        ? GoogleFonts.spaceGrotesk()
-                                        : GoogleFonts.plusJakartaSans())
-                                    .copyWith(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: textPrimary,
-                                ),
+                                style:
+                                    (isDark
+                                            ? GoogleFonts.spaceGrotesk()
+                                            : GoogleFonts.plusJakartaSans())
+                                        .copyWith(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                          color: textPrimary,
+                                        ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -1142,16 +1328,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: (isDark
-                                        ? AppColors.darkSage
-                                        : AppColors.lightSage)
-                                    .withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(9999),
+                                color:
+                                    (isDark
+                                            ? AppColors.darkSage
+                                            : AppColors.lightSage)
+                                        .withValues(alpha: 0.15),
+                                borderRadius: AppRadius.borderPill,
                                 border: Border.all(
-                                  color: (isDark
-                                          ? AppColors.darkSage
-                                          : AppColors.lightSage)
-                                      .withValues(alpha: 0.3),
+                                  color:
+                                      (isDark
+                                              ? AppColors.darkSage
+                                              : AppColors.lightSage)
+                                          .withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Text(
@@ -1196,8 +1384,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         foregroundColor: textPrimary,
                         elevation: 0,
                         side: BorderSide(color: borderColor),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9999),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderPill,
                         ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -1308,7 +1496,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
-                            onPressed: _isSavingProfile ? null : _cancelEditingProfile,
+                            onPressed: _isSavingProfile
+                                ? null
+                                : _cancelEditingProfile,
                             child: Text(
                               'Cancelar',
                               style: GoogleFonts.jetBrainsMono(
@@ -1322,8 +1512,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: primaryColor,
                               foregroundColor: onPrimaryColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(9999),
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: AppRadius.borderPill,
                               ),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 22,
@@ -1354,23 +1544,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
               ] else ...[
-                _buildAccountRow(
-                  isDark,
-                  'Nome Completo',
-                  displayName,
-                ),
+                _buildAccountRow(isDark, 'Nome Completo', displayName),
                 const SizedBox(height: 14),
-                _buildAccountRow(
-                  isDark,
-                  'Nome de Usuário',
-                  '@$username',
-                ),
+                _buildAccountRow(isDark, 'Nome de Usuário', '@$username'),
                 const SizedBox(height: 14),
-                _buildAccountRow(
-                  isDark,
-                  'E-mail Cadastrado',
-                  email,
-                ),
+                _buildAccountRow(isDark, 'E-mail Cadastrado', email),
                 const SizedBox(height: 14),
                 _buildAccountRow(
                   isDark,
@@ -1382,10 +1560,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     value: _userStatus,
                     dropdownColor: cardBg,
                     underline: const SizedBox(),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: textPrimary,
-                    ),
+                    style: GoogleFonts.inter(fontSize: 12, color: textPrimary),
                     items: [
                       DropdownMenuItem(
                         value: 'online',
@@ -1417,7 +1592,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: cardBg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppRadius.borderLg,
             border: Border.all(color: borderColor),
           ),
           child: Column(
@@ -1429,7 +1604,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: primaryColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderSm,
                     ),
                     child: Icon(
                       LucideIcons.shieldCheck,
@@ -1465,8 +1640,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       backgroundColor: primaryColor,
                       foregroundColor: onPrimaryColor,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9999),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppRadius.borderPill,
                       ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -1505,10 +1680,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: dangerColor.withValues(alpha: 0.3),
-            ),
+            borderRadius: AppRadius.borderLg,
+            border: Border.all(color: dangerColor.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -1516,13 +1689,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: dangerColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderSm,
                 ),
-                child: Icon(
-                  LucideIcons.logOut,
-                  size: 20,
-                  color: dangerColor,
-                ),
+                child: Icon(LucideIcons.logOut, size: 20, color: dangerColor),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1551,8 +1720,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: dangerColor,
                   side: BorderSide(color: dangerColor.withValues(alpha: 0.6)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(9999),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.borderPill,
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
@@ -1618,10 +1787,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
         ),
-        if (action != null) ...[
-          const SizedBox(width: 8),
-          action,
-        ],
+        if (action != null) ...[const SizedBox(width: 8), action],
         if (badgeText != null) ...[
           const SizedBox(width: 8),
           Container(
@@ -1630,7 +1796,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               color: isDark
                   ? AppColors.darkSurfaceElevated
                   : AppColors.lightSurfaceElevated,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: AppRadius.borderXs,
             ),
             child: Text(
               badgeText,
@@ -1735,14 +1901,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ref.read(localeProvider.notifier).setLanguage(lang);
                   },
                   mouseCursor: SystemMouseCursors.click,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.borderMd,
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: isDark
                           ? AppColors.darkSurface
                           : AppColors.lightSurface,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.borderMd,
                       border: Border.all(
                         color: isSelected
                             ? (isDark
@@ -1805,12 +1971,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return InkWell(
       onTap: onTap,
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadius.borderMd,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.borderMd,
           border: Border.all(
             color: isSelected
                 ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
@@ -1825,7 +1991,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               height: 48,
               decoration: BoxDecoration(
                 color: previewBg,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 border: Border.all(
                   color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
@@ -1838,7 +2004,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: accentColor,
-                    borderRadius: BorderRadius.circular(9999),
+                    borderRadius: AppRadius.borderPill,
                   ),
                   child: Text(
                     'Preview',
@@ -1956,7 +2122,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ? null
                     : () => audioNotifier.loadDevices(),
                 mouseCursor: SystemMouseCursors.click,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppRadius.borderSm,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1966,7 +2132,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: isDark
                         ? AppColors.darkSurface
                         : AppColors.lightSurface,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isDark
                           ? AppColors.darkBorder
@@ -2164,7 +2330,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: AppRadius.borderMd,
             border: Border.all(
               color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
             ),
@@ -2267,7 +2433,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -2372,7 +2538,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.borderMd,
               border: Border.all(
                 color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
               ),
@@ -2413,7 +2579,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: isDark
                         ? AppColors.darkSurfaceElevated
                         : AppColors.lightSurfaceElevated,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isDark
                           ? AppColors.darkBorderFocus
@@ -2467,12 +2633,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return InkWell(
       onTap: onTap,
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: AppRadius.borderMd,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: AppRadius.borderMd,
           border: Border.all(
             color: isSelected
                 ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
@@ -2531,7 +2697,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.borderSm,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -2555,7 +2721,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               color: isDark
                   ? AppColors.darkSurfaceElevated
                   : AppColors.lightSurfaceElevated,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: AppRadius.borderXs,
               border: Border.all(
                 color: isDark
                     ? AppColors.darkBorderFocus
@@ -2599,7 +2765,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.borderMd,
             border: Border.all(
               color: hasUpdate
                   ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
@@ -2623,7 +2789,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       ? AppColors.darkPrimary
                                       : AppColors.lightPrimary)
                                   .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppRadius.borderSm,
                         ),
                         child: Icon(
                           LucideIcons.sparkles,
@@ -2674,7 +2840,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                                     ? AppColors.darkSage
                                                     : AppColors.lightSage))
                                           .withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: AppRadius.borderXs,
                                 ),
                                 child: Text(
                                   AppConfig.isDev ? 'DEV' : 'PROD',
@@ -2719,8 +2885,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           horizontal: 14,
                           vertical: 8,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9999),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderPill,
                         ),
                       ),
                     )
@@ -2763,8 +2929,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ? AppColors.darkBorder
                               : AppColors.lightBorder,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderSm,
                         ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -2861,7 +3027,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
         ),
@@ -2872,7 +3038,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: accentColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppRadius.borderSm,
             ),
             child: Icon(icon, size: 20, color: accentColor),
           ),
@@ -2907,7 +3073,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: accentColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: AppRadius.borderSm,
             ),
             child: Text(
               status,

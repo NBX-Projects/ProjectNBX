@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
 import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
@@ -31,13 +32,13 @@ class ChatTagPill extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: AppRadius.borderSm,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color:
               isSelected ? const Color(0xFF23305A) : const Color(0xFF141520),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: AppRadius.borderSm,
           border: Border.all(
             color: isSelected
                 ? const Color(0xFF384B7E)
@@ -129,13 +130,13 @@ class FloatingChatHud extends StatelessWidget {
         effectiveChannels.isNotEmpty ? effectiveChannels : channels;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppRadius.borderLg,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
           decoration: BoxDecoration(
             color: const Color(0xFF13141F).withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppRadius.borderLg,
             border: Border.all(
               color: const Color(0xFF2E3048).withValues(alpha: 0.8),
               width: 1.2,
@@ -180,7 +181,7 @@ class FloatingChatHud extends StatelessWidget {
                       child: InkWell(
                         onTap: onClose,
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: AppRadius.borderXs,
                         child: const Padding(
                           padding: EdgeInsets.all(4),
                           child: Icon(
@@ -317,7 +318,7 @@ class FloatingChatHud extends StatelessWidget {
                                   InkWell(
                                     onTap: () => onStartEditing(msg),
                                     mouseCursor: SystemMouseCursors.click,
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: AppRadius.borderXs,
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(
                                         horizontal: 3,
@@ -332,7 +333,7 @@ class FloatingChatHud extends StatelessWidget {
                                   InkWell(
                                     onTap: () => onDeleteMessage(msg.id),
                                     mouseCursor: SystemMouseCursors.click,
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: AppRadius.borderXs,
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(
                                         horizontal: 3,
@@ -363,7 +364,7 @@ class FloatingChatHud extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F101A),
-                    borderRadius: BorderRadius.circular(9999),
+                    borderRadius: AppRadius.borderPill,
                     border: Border.all(
                       color: const Color(0xFF2B2D42),
                       width: 1,
@@ -409,7 +410,7 @@ class FloatingChatHud extends StatelessWidget {
                           messageFocusNode?.requestFocus();
                         },
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(9999),
+                        borderRadius: AppRadius.borderPill,
                         child: const Padding(
                           padding: EdgeInsets.all(4),
                           child: Icon(
@@ -441,14 +442,14 @@ class FloatingChatHud extends StatelessWidget {
                       child: InkWell(
                         onTap: () => voiceNotifier.toggleMic(),
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppRadius.borderSm,
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: voiceState.isMicMuted
                                 ? const Color(0xFFEF4444).withValues(alpha: 0.2)
                                 : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: AppRadius.borderSm,
                           ),
                           child: Icon(
                             voiceState.isMicMuted
@@ -470,14 +471,14 @@ class FloatingChatHud extends StatelessWidget {
                       child: InkWell(
                         onTap: () => voiceNotifier.toggleDeafened(),
                         mouseCursor: SystemMouseCursors.click,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppRadius.borderSm,
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: voiceState.isDeafened
                                 ? const Color(0xFFEF4444).withValues(alpha: 0.2)
                                 : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: AppRadius.borderSm,
                           ),
                           child: Icon(
                             LucideIcons.headphones,
@@ -493,13 +494,13 @@ class FloatingChatHud extends StatelessWidget {
                     InkWell(
                       onTap: onLeaveVoice,
                       mouseCursor: SystemMouseCursors.click,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppRadius.borderSm,
                       child: Container(
                         height: 32,
                         padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444),
-                          borderRadius: BorderRadius.circular(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          borderRadius: AppRadius.borderSm,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
