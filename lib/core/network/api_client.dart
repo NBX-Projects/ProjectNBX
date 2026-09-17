@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:projectnbx/core/config/app_config.dart';
+import 'package:projectnbx/core/network/api_offline_exception.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 
 class ApiClient {
@@ -58,20 +59,57 @@ class ApiClient {
     if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
+  Future<bool> checkHealth() async {
+    try {
+      final url = Uri.parse('$baseUrl/health');
+      final response =
+          await _client.get(url).timeout(const Duration(seconds: 4));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      final altUrl = Uri.parse('$baseUrl/api/health');
+      final altResp =
+          await _client.get(altUrl).timeout(const Duration(seconds: 4));
+      return altResp.statusCode >= 200 && altResp.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<AuthResponse> login(String login, String password) async {
     final url = Uri.parse('$baseUrl/auth/login');
     try {
-      final response = await _client.post(
-        url,
-        headers: _headers,
-        body: jsonEncode({
-          'login': login.trim(),
-          'email': login.trim(),
-          'password': password,
-        }),
-      );
+      final response = await _client
+          .post(
+            url,
+            headers: _headers,
+            body: jsonEncode({
+              'login': login.trim(),
+              'email': login.trim(),
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode >= 500) {
+        throw ApiOfflineException(
+          'Servidor backend offline (${response.statusCode} Bad Gateway/Erro de Servidor).',
+          response.statusCode,
+        );
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw ApiOfflineException(
+          'Servidor backend offline ou resposta inválida (${response.statusCode}).',
+          response.statusCode,
+        );
+      }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final authRes = AuthResponse.fromJson(data);
@@ -81,11 +119,14 @@ class ApiClient {
         throw Exception(data['error'] ?? 'Falha ao autenticar');
       }
     } catch (e) {
+      if (e is ApiOfflineException) rethrow;
       if (e is SocketException ||
           e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused')) {
-        throw Exception(
-          'Servidor backend offline (localhost:8080). Verifique se o backend Go está em execução.',
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('recusou a conexão') ||
+          e.toString().contains('TimeoutException')) {
+        throw const ApiOfflineException(
+          'Servidor backend offline. Não foi possível conectar ao endereço da API.',
         );
       }
       rethrow;
@@ -100,18 +141,37 @@ class ApiClient {
   }) async {
     final url = Uri.parse('$baseUrl/auth/register');
     try {
-      final response = await _client.post(
-        url,
-        headers: _headers,
-        body: jsonEncode({
-          'name': (name != null && name.trim().isNotEmpty) ? name.trim() : username.trim(),
-          'username': username.trim(),
-          'email': email.trim(),
-          'password': password,
-        }),
-      );
+      final response = await _client
+          .post(
+            url,
+            headers: _headers,
+            body: jsonEncode({
+              'name': (name != null && name.trim().isNotEmpty)
+                  ? name.trim()
+                  : username.trim(),
+              'username': username.trim(),
+              'email': email.trim(),
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode >= 500) {
+        throw ApiOfflineException(
+          'Servidor backend offline (${response.statusCode} Bad Gateway/Erro de Servidor).',
+          response.statusCode,
+        );
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw ApiOfflineException(
+          'Servidor backend offline ou resposta inválida (${response.statusCode}).',
+          response.statusCode,
+        );
+      }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final authRes = AuthResponse.fromJson(data);
@@ -121,11 +181,14 @@ class ApiClient {
         throw Exception(data['error'] ?? 'Falha ao criar conta');
       }
     } catch (e) {
+      if (e is ApiOfflineException) rethrow;
       if (e is SocketException ||
           e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused')) {
-        throw Exception(
-          'Servidor backend offline (localhost:8080). Verifique se o backend Go está em execução.',
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('recusou a conexão') ||
+          e.toString().contains('TimeoutException')) {
+        throw const ApiOfflineException(
+          'Servidor backend offline. Não foi possível conectar ao endereço da API.',
         );
       }
       rethrow;
@@ -205,14 +268,30 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> getServers() async {
     final url = Uri.parse('$baseUrl/servers');
     try {
-      final response = await _client.get(url, headers: _headers);
+      final response =
+          await _client.get(url, headers: _headers).timeout(const Duration(seconds: 6));
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as List<dynamic>? ?? [];
         return data.cast<Map<String, dynamic>>();
+      } else if (response.statusCode >= 500) {
+        throw ApiOfflineException(
+          'Servidor backend offline (Status ${response.statusCode} Bad Gateway/Erro no Servidor).',
+          response.statusCode,
+        );
       } else {
         return [];
       }
     } catch (e) {
+      if (e is ApiOfflineException) rethrow;
+      if (e is SocketException ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('recusou a conexão') ||
+          e.toString().contains('TimeoutException')) {
+        throw const ApiOfflineException(
+          'Servidor backend offline. Não foi possível carregar os servidores.',
+        );
+      }
       return [];
     }
   }

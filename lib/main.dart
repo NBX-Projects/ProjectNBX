@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/network/api_client.dart';
+import 'package:projectnbx/core/network/api_status_controller.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_theme.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
+import 'package:projectnbx/core/widgets/api_offline_screen.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/screens/login_screen.dart';
 import 'package:projectnbx/features/home/screens/home_screen.dart';
@@ -64,6 +66,7 @@ class ProjectNBXApp extends ConsumerWidget {
 
     final themeMode = ref.watch(themeModeProvider);
     final authState = ref.watch(authControllerProvider);
+    final apiStatus = ref.watch(apiStatusProvider);
 
     return MaterialApp(
       title: 'ProjectNBX',
@@ -73,9 +76,11 @@ class ProjectNBXApp extends ConsumerWidget {
       themeMode: themeMode,
       themeAnimationDuration: const Duration(milliseconds: 300),
       themeAnimationCurve: Curves.easeInOut,
-      home: authState.isAuthenticated
-          ? const HomeScreen()
-          : const LoginScreen(),
+      home: apiStatus.isOffline
+          ? const ApiOfflineScreen()
+          : (authState.isAuthenticated
+              ? const HomeScreen()
+              : const LoginScreen()),
     );
   }
 }

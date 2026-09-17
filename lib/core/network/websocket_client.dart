@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projectnbx/core/network/api_client.dart';
+import 'package:projectnbx/core/network/api_status_controller.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -28,6 +29,15 @@ final websocketClientProvider = Provider<WebSocketClient>((ref) {
       client.connect();
     } else {
       client.disconnect();
+    }
+  });
+
+  ref.listen<ApiStatusState>(apiStatusProvider, (previous, next) {
+    if (previous?.isOffline == true && !next.isOffline) {
+      final auth = ref.read(authControllerProvider);
+      if (auth.isAuthenticated) {
+        client.connect();
+      }
     }
   });
 
@@ -190,11 +200,20 @@ class WebSocketClient {
     _disconnectInternal();
     if (_isDisposed) return;
 
+    // Se o servidor estiver sabidamente offline, não agenda retry imediato para não poluir logs
+    final isOffline = _ref?.read(apiStatusProvider).isOffline ?? false;
+    if (isOffline) {
+      return;
+    }
+
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 2), () {
+    _reconnectTimer = Timer(const Duration(seconds: 4), () {
       if (!_isDisposed && _channel == null) {
-        debugPrint('[WebSocket] Tentando reconectar...');
-        connect(serverId: _currentServerId);
+        final stillOffline = _ref?.read(apiStatusProvider).isOffline ?? false;
+        if (!stillOffline) {
+          debugPrint('[WebSocket] Tentando reconectar...');
+          connect(serverId: _currentServerId);
+        }
       }
     });
   }

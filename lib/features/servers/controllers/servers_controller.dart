@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projectnbx/core/network/api_client.dart';
+import 'package:projectnbx/core/network/api_offline_exception.dart';
+import 'package:projectnbx/core/network/api_status_controller.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/servers/models/channel_model.dart';
 import 'package:projectnbx/features/servers/models/server_model.dart';
@@ -61,9 +63,11 @@ class ServersState {
 
 class ServersNotifier extends StateNotifier<ServersState> {
   final ApiClient _apiClient;
+  final Ref? _ref;
 
-  ServersNotifier(this._apiClient, {bool autoLoad = true})
-      : super(const ServersState()) {
+  ServersNotifier(this._apiClient, {Ref? ref, bool autoLoad = true})
+      : _ref = ref,
+        super(const ServersState()) {
     if (autoLoad) {
       loadServers();
     }
@@ -73,6 +77,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final rawList = await _apiClient.getServers();
+      _ref?.read(apiStatusProvider.notifier).markOnline();
       final prefs = await SharedPreferences.getInstance();
 
       final parsed = rawList.map((s) {
@@ -104,6 +109,12 @@ class ServersNotifier extends StateNotifier<ServersState> {
         isLoading: false,
       );
     } catch (e) {
+      if (e is ApiOfflineException) {
+        _ref?.read(apiStatusProvider.notifier).markOffline(
+          message: e.message,
+          statusCode: e.statusCode,
+        );
+      }
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
@@ -270,6 +281,6 @@ class ServersNotifier extends StateNotifier<ServersState> {
 final serversControllerProvider =
     StateNotifierProvider<ServersNotifier, ServersState>((ref) {
       final apiClient = ref.watch(apiClientProvider);
-      return ServersNotifier(apiClient);
+      return ServersNotifier(apiClient, ref: ref);
     });
 

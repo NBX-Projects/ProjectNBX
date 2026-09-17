@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projectnbx/core/network/api_client.dart';
+import 'package:projectnbx/core/network/api_offline_exception.dart';
+import 'package:projectnbx/core/network/api_status_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,11 +44,13 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final ApiClient _apiClient;
+  final Ref? _ref;
   static const String _keyToken = 'auth_token';
   static const String _keyUser = 'auth_user';
 
-  AuthNotifier(this._apiClient, {bool restore = true})
-      : super(const AuthState()) {
+  AuthNotifier(this._apiClient, {Ref? ref, bool restore = true})
+      : _ref = ref,
+        super(const AuthState()) {
     if (restore) {
       restoreSession();
     }
@@ -78,6 +82,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final res = await _apiClient.login(email, password);
       _apiClient.setAuthToken(res.token);
+      _ref?.read(apiStatusProvider.notifier).markOnline();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyToken, res.token);
@@ -90,6 +95,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } catch (e) {
+      if (e is ApiOfflineException) {
+        _ref?.read(apiStatusProvider.notifier).markOffline(
+          message: e.message,
+          statusCode: e.statusCode,
+        );
+      }
       final msg = e.toString().replaceFirst('Exception: ', '');
       state = state.copyWith(isLoading: false, errorMessage: msg);
       return false;
@@ -111,6 +122,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         name: name,
       );
       _apiClient.setAuthToken(res.token);
+      _ref?.read(apiStatusProvider.notifier).markOnline();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyToken, res.token);
@@ -123,6 +135,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } catch (e) {
+      if (e is ApiOfflineException) {
+        _ref?.read(apiStatusProvider.notifier).markOffline(
+          message: e.message,
+          statusCode: e.statusCode,
+        );
+      }
       final msg = e.toString().replaceFirst('Exception: ', '');
       state = state.copyWith(isLoading: false, errorMessage: msg);
       return false;
@@ -191,5 +209,5 @@ final authControllerProvider = StateNotifierProvider<AuthNotifier, AuthState>((
   ref,
 ) {
   final apiClient = ref.watch(apiClientProvider);
-  return AuthNotifier(apiClient);
+  return AuthNotifier(apiClient, ref: ref);
 });
