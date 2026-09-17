@@ -133,6 +133,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
   final VoiceParticipantInfo? remoteParticipant;
   final ScreenShareConfig? activeScreenShareConfig;
   final LocalVideoTrack? localScreenShareTrack;
+  final VideoTrack? remoteVideoTrack;
   final rtc.MediaStream? webRTCStream;
   final Color accentColor;
   final double streamVolume;
@@ -145,6 +146,7 @@ class ImmersiveStreamPlayer extends StatelessWidget {
     this.remoteParticipant,
     this.activeScreenShareConfig,
     this.localScreenShareTrack,
+    this.remoteVideoTrack,
     this.webRTCStream,
     this.accentColor = const Color(0xFFF5CBA7),
     this.streamVolume = 0.75,
@@ -425,6 +427,21 @@ class ImmersiveStreamPlayer extends StatelessWidget {
     required String title,
     String? remoteThumbnail,
   }) {
+    if (remoteVideoTrack != null) {
+      return Container(
+        color: const Color(0xFF090A10),
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: VideoTrackRenderer(
+              remoteVideoTrack!,
+              fit: VideoViewFit.contain,
+            ),
+          ),
+        ),
+      );
+    }
+
     if (webRTCStream != null) {
       return Container(
         color: const Color(0xFF090A10),

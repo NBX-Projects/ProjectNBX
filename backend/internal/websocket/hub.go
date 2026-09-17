@@ -256,18 +256,13 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 
 			st.IsInVoice = clientState.IsInVoice
 			st.IsConnecting = clientState.IsConnecting
+			st.IsTransmitting = clientState.IsTransmitting
 			st.IsMuted = clientState.IsMuted
 			st.IsDeafened = clientState.IsDeafened
 			st.IsSpeaking = clientState.IsSpeaking
-			if clientState.StreamTitle != "" {
-				st.StreamTitle = clientState.StreamTitle
-			}
-			if clientState.PreviewType != "" {
-				st.PreviewType = clientState.PreviewType
-			}
-			if clientState.Thumbnail != "" {
-				st.Thumbnail = clientState.Thumbnail
-			}
+			st.StreamTitle = clientState.StreamTitle
+			st.PreviewType = clientState.PreviewType
+			st.Thumbnail = clientState.Thumbnail
 			if clientState.Device != "" {
 				st.Device = clientState.Device
 			}

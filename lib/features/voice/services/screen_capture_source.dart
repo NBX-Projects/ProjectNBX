@@ -105,7 +105,7 @@ class DesktopScreenCaptureSource implements ScreenCaptureSource {
   @override
   Future<MediaStream> capture(ScreenSource source, ScreenQualityProfile profile) async {
     final Map<String, dynamic> mediaConstraints = {
-      'audio': false,
+      'audio': true,
       'video': {
         'mandatory': {
           'chromeMediaSource': source.isWindow ? 'window' : 'desktop',
@@ -128,7 +128,7 @@ class DesktopScreenCaptureSource implements ScreenCaptureSource {
           'height': profile.height,
           'frameRate': profile.maxFps,
         },
-        'audio': false,
+        'audio': true,
       });
     }
   }
