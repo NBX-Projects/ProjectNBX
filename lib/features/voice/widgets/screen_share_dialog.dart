@@ -15,6 +15,7 @@ class ScreenShareConfig {
   final String resolution; // '720p' | '1080p' | '1440p'
   final int fps; // 15 | 30 | 60
   final bool shareAudio;
+  final bool isolateAppAudio; // Bloqueia áudio da própria chamada no compartilhamento (Anti-Eco)
   final String previewType;
   final String? thumbnail;
   final String? sourceId;
@@ -25,6 +26,7 @@ class ScreenShareConfig {
     this.resolution = '1080p',
     this.fps = 60,
     this.shareAudio = true,
+    this.isolateAppAudio = true,
     this.previewType = 'nbx',
     this.thumbnail,
     this.sourceId,
@@ -67,6 +69,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
   String _selectedResolution = '1080p';
   int _selectedFps = 60;
   bool _shareAudio = true;
+  bool _isolateAppAudio = true;
   bool _isLoading = true;
 
   final ScrollController _scrollController = ScrollController();
@@ -658,7 +661,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Transmitir áudio do sistema e aplicativo em conjunto (48kHz)',
+                                  'Transmitir áudio do sistema (jogos, vídeos e programas - 48kHz)',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: textPrimary,
@@ -677,6 +680,73 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                           ),
                         ),
                       ),
+
+                      // Anti-Echo App Audio Isolation (Quando o compartilhamento de som estiver ativo)
+                      if (_shareAudio)
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.only(top: 4, left: 24),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isolateAppAudio
+                                ? widget.accentColor.withValues(alpha: isDark ? 0.1 : 0.06)
+                                : Colors.transparent,
+                            borderRadius: AppRadius.borderSm,
+                            border: Border.all(
+                              color: _isolateAppAudio
+                                  ? widget.accentColor.withValues(alpha: 0.35)
+                                  : border.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: InkWell(
+                            onTap: () => setState(
+                                () => _isolateAppAudio = !_isolateAppAudio),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.shieldCheck,
+                                  size: 15,
+                                  color: _isolateAppAudio
+                                      ? widget.accentColor
+                                      : textMuted,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Bloquear som do próprio aplicativo na transmissão (Anti-Eco)',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Impede que as vozes dos membros que estão assistindo à live ecoem de volta para eles mesmos.',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10.5,
+                                          color: textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Checkbox(
+                                  value: _isolateAppAudio,
+                                  activeColor: widget.accentColor,
+                                  checkColor: Colors.black,
+                                  onChanged: (val) => setState(
+                                      () => _isolateAppAudio = val ?? true),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   );
                 },
@@ -728,6 +798,7 @@ class _ScreenShareDialogState extends State<ScreenShareDialog> {
                               resolution: _selectedResolution,
                               fps: _selectedFps,
                               shareAudio: _shareAudio,
+                              isolateAppAudio: _isolateAppAudio,
                               previewType: previewType,
                               thumbnail: selectedItem['thumbnail'] as String?,
                               sourceId: selectedItem['id'] as String?,
