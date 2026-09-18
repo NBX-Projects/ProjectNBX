@@ -400,6 +400,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           if (isDeafened && event.track is RemoteAudioTrack) {
             event.track.disable();
             event.track.mediaStreamTrack.enabled = false;
+          } else if (event.track is RemoteAudioTrack &&
+              event.publication.source == TrackSource.screenShareAudio) {
+            if (_streamVolume == 0) {
+              event.track.disable();
+              event.track.mediaStreamTrack.enabled = false;
+            } else {
+              event.track.enable();
+              event.track.mediaStreamTrack.enabled = true;
+            }
           }
           setState(() {});
         } else if (event is TrackUnsubscribedEvent) {
@@ -593,6 +602,31 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   double _streamVolume = 0.75;
   bool _isChatVisible = false;
   bool _isFullscreen = false;
+
+  void _applyStreamVolume(double volume) {
+    setState(() => _streamVolume = volume);
+    if (_liveKitRoom == null) return;
+    try {
+      for (final remote in _liveKitRoom!.remoteParticipants.values) {
+        for (final pub in remote.audioTrackPublications) {
+          if (pub.source == TrackSource.screenShareAudio) {
+            final t = pub.track;
+            if (t != null) {
+              if (volume <= 0) {
+                t.disable();
+                t.mediaStreamTrack.enabled = false;
+              } else {
+                t.enable();
+                t.mediaStreamTrack.enabled = true;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[LiveKit] Erro ao ajustar volume do stream: $e');
+    }
+  }
 
   List<Map<String, dynamic>> _serverMembers = [];
 
@@ -1502,26 +1536,48 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           debugPrint('[ScreenShare] WebRTC sources lookup notice: $e');
         }
 
-        screenTrack = await LocalVideoTrack.createScreenShareTrack(
-          ScreenShareCaptureOptions(
-            sourceId: targetSourceId,
-            params: VideoParametersPresets.screenShareH1080FPS30,
-          ),
+        final captureOptions = ScreenShareCaptureOptions(
+          sourceId: targetSourceId,
+          params: config.fps == 15
+              ? VideoParametersPresets.screenShareH1080FPS15
+              : VideoParametersPresets.screenShareH1080FPS30,
+          captureScreenAudio: config.shareAudio,
         );
+
+        if (_liveKitRoom != null && _liveKitRoom!.localParticipant != null) {
+          try {
+            await _liveKitRoom!.localParticipant!.setScreenShareEnabled(
+              true,
+              captureScreenAudio: config.shareAudio,
+              screenShareCaptureOptions: captureOptions,
+            );
+            for (final pub in _liveKitRoom!.localParticipant!.videoTrackPublications) {
+              if (pub.track is LocalVideoTrack) {
+                screenTrack = pub.track as LocalVideoTrack;
+                break;
+              }
+            }
+          } catch (e) {
+            debugPrint('[LiveKit] setScreenShareEnabled falhou no Desktop: $e, tentando createScreenShareTrack...');
+          }
+        }
+
+        if (screenTrack == null) {
+          screenTrack = await LocalVideoTrack.createScreenShareTrack(captureOptions);
+          if (_liveKitRoom != null && _liveKitRoom!.localParticipant != null) {
+            try {
+              await _liveKitRoom!.localParticipant!.publishVideoTrack(screenTrack);
+            } catch (e) {
+              debugPrint('[LiveKit] Erro ao publicar screenTrack no Desktop: $e');
+            }
+          }
+        }
       } catch (e) {
         debugPrint('[ScreenShare] Erro ao criar track WebRTC: $e');
       }
 
-        if (_liveKitRoom != null && _liveKitRoom!.localParticipant != null && screenTrack != null) {
-          try {
-            await _liveKitRoom!.localParticipant!.publishVideoTrack(screenTrack);
-          } catch (e) {
-            debugPrint('[LiveKit] Erro ao publicar screenTrack no Desktop: $e');
-          }
-        }
-
-        // Always start broadcaster loop to sync continuous live frames to remote watchers
-        _startLiveStreamBroadcaster(config);
+      // Always start broadcaster loop to sync continuous live frames to remote watchers
+      _startLiveStreamBroadcaster(config);
 
       setState(() {
         _isTransmitting = true;
@@ -1777,7 +1833,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               remoteParticipant: _watchingRemoteStream,
               activeScreenShareConfig: _activeScreenShareConfig,
               streamVolume: _streamVolume,
-              onVolumeChanged: (v) => setState(() => _streamVolume = v),
+              onVolumeChanged: _applyStreamVolume,
               isChatVisible: _isChatVisible,
               onToggleChat: () => setState(() => _isChatVisible = !_isChatVisible),
               isFullscreen: _isFullscreen,
