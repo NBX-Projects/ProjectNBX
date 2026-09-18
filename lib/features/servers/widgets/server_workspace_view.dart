@@ -396,18 +396,24 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: true);
             }
           }
-          final isDeafened = ref.read(voiceStateProvider).isDeafened;
-          if (isDeafened && event.track is RemoteAudioTrack) {
-            event.track.disable();
-            event.track.mediaStreamTrack.enabled = false;
-          } else if (event.track is RemoteAudioTrack &&
-              event.publication.source == TrackSource.screenShareAudio) {
-            if (_streamVolume == 0) {
-              event.track.disable();
-              event.track.mediaStreamTrack.enabled = false;
+          if (event.track is RemoteAudioTrack) {
+            if (event.publication.source == TrackSource.screenShareAudio) {
+              if (_streamVolume <= 0) {
+                event.track.disable();
+                event.track.mediaStreamTrack.enabled = false;
+              } else {
+                event.track.enable();
+                event.track.mediaStreamTrack.enabled = true;
+              }
             } else {
-              event.track.enable();
-              event.track.mediaStreamTrack.enabled = true;
+              final isDeafened = ref.read(voiceStateProvider).isDeafened;
+              if (isDeafened) {
+                event.track.disable();
+                event.track.mediaStreamTrack.enabled = false;
+              } else {
+                event.track.enable();
+                event.track.mediaStreamTrack.enabled = true;
+              }
             }
           }
           setState(() {});
@@ -489,10 +495,13 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
       }
 
-      // Se já estiver ensurdecido ao conectar, muta o áudio remoto imediatamente
+      // Se já estiver ensurdecido ao conectar, muta o áudio de voz remoto imediatamente (preservando stream de vídeo/tela)
       if (currentVoiceState.isDeafened) {
         for (final remote in room.remoteParticipants.values) {
           for (final pub in remote.audioTrackPublications) {
+            if (pub.source == TrackSource.screenShareAudio) {
+              continue;
+            }
             final t = pub.track;
             if (t != null) {
               await t.disable();
@@ -700,6 +709,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       if (_liveKitRoom != null) {
         for (final p in _liveKitRoom!.remoteParticipants.values) {
           for (final pub in p.audioTrackPublications) {
+            if (pub.source == TrackSource.screenShareAudio) {
+              continue;
+            }
             final t = pub.track;
             if (t != null) {
               if (isDeafened) {
