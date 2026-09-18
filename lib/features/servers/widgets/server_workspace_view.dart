@@ -370,6 +370,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
           _syncLiveKitParticipant(event.participant, channelId, true);
         } else if (event is ParticipantDisconnectedEvent) {
           _syncLiveKitParticipant(event.participant, channelId, false);
+          if (_watchingRemoteStream?.userId == event.participant.identity ||
+              _watchingRemoteStream?.sessionId == event.participant.sid) {
+            _setWatchingRemoteStream(null);
+          }
         } else if (event is TrackPublishedEvent) {
           final uid = event.participant.identity;
           if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
@@ -378,6 +382,18 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: true);
             }
           }
+          final pub = event.publication;
+          final isWatching = _watchingRemoteStream != null &&
+              (_watchingRemoteStream!.userId == uid || _watchingRemoteStream!.sessionId == event.participant.sid);
+
+          if (_isScreenShareAudio(pub, event.participant)) {
+            if (!isWatching || _streamVolume <= 0) {
+              try {
+                pub.unsubscribe();
+              } catch (_) {}
+            }
+          }
+          _syncScreenShareAudioState();
           setState(() {});
         } else if (event is TrackUnpublishedEvent) {
           final uid = event.participant.identity;
@@ -385,20 +401,33 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             if (event.publication.kind == TrackType.VIDEO) {
               _voiceParticipants[channelId]![uid] =
                   _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: false);
+              if (_watchingRemoteStream?.userId == uid) {
+                _setWatchingRemoteStream(null);
+              }
             }
           }
+          _syncScreenShareAudioState();
           setState(() {});
         } else if (event is TrackSubscribedEvent) {
+          final uid = event.participant.identity;
           if (event.track is RemoteVideoTrack) {
-            final uid = event.participant.identity;
             if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
               _voiceParticipants[channelId]![uid] =
                   _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: true);
             }
           }
+          final pub = event.publication;
+          final isWatchingThisParticipant = _watchingRemoteStream != null &&
+              (_watchingRemoteStream!.userId == uid ||
+               _watchingRemoteStream!.sessionId == event.participant.sid);
+
           if (event.track is RemoteAudioTrack) {
-            if (event.publication.source == TrackSource.screenShareAudio) {
-              if (_streamVolume <= 0) {
+            if (_isScreenShareAudio(pub, event.participant)) {
+              final shouldEnable = isWatchingThisParticipant && _streamVolume > 0;
+              if (!shouldEnable) {
+                try {
+                  pub.unsubscribe();
+                } catch (_) {}
                 event.track.disable();
                 event.track.mediaStreamTrack.enabled = false;
               } else {
@@ -425,6 +454,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   _voiceParticipants[channelId]![uid]!.copyWith(isTransmitting: false);
             }
           }
+          _syncScreenShareAudioState();
           setState(() {});
         } else if (event is TrackMutedEvent) {
           final uid = event.participant.identity;
@@ -519,6 +549,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       for (final remote in room.remoteParticipants.values) {
         _syncLiveKitParticipant(remote, channelId, true);
       }
+      _syncScreenShareAudioState();
 
       if (mounted) {
         ref.read(voiceStateProvider.notifier).connectVoice(widget.server.id, channelId);
@@ -614,27 +645,79 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   void _applyStreamVolume(double volume) {
     setState(() => _streamVolume = volume);
+    _syncScreenShareAudioState();
+  }
+
+  bool _isScreenShareAudio(TrackPublication pub, Participant participant) {
+    if (pub.kind != TrackType.AUDIO) return false;
+    if (pub.source == TrackSource.screenShareAudio) {
+      return true;
+    }
+    final name = pub.name.toLowerCase();
+    if (name.contains('screen') ||
+        name.contains('display') ||
+        name.contains('share') ||
+        name.contains('system') ||
+        name.contains('desktop')) {
+      return true;
+    }
+    if (pub.source != TrackSource.microphone && participant.audioTrackPublications.length > 1) {
+      return true;
+    }
+    return false;
+  }
+
+  void _syncScreenShareAudioState() {
     if (_liveKitRoom == null) return;
     try {
       for (final remote in _liveKitRoom!.remoteParticipants.values) {
+        final isWatchingThisParticipant = _watchingRemoteStream != null &&
+            ((_watchingRemoteStream!.userId.isNotEmpty && _watchingRemoteStream!.userId == remote.identity) ||
+             (_watchingRemoteStream!.sessionId.isNotEmpty && _watchingRemoteStream!.sessionId == remote.sid));
+        final shouldEnableAudio = isWatchingThisParticipant && _streamVolume > 0;
+
         for (final pub in remote.audioTrackPublications) {
-          if (pub.source == TrackSource.screenShareAudio) {
+          if (_isScreenShareAudio(pub, remote)) {
+            if (shouldEnableAudio) {
+              if (!pub.subscribed) {
+                try {
+                  pub.subscribe();
+                } catch (_) {}
+              }
+            } else {
+              if (pub.subscribed) {
+                try {
+                  pub.unsubscribe();
+                } catch (_) {}
+              }
+            }
             final t = pub.track;
             if (t != null) {
-              if (volume <= 0) {
-                t.disable();
-                t.mediaStreamTrack.enabled = false;
-              } else {
+              if (shouldEnableAudio) {
                 t.enable();
                 t.mediaStreamTrack.enabled = true;
+              } else {
+                t.disable();
+                t.mediaStreamTrack.enabled = false;
               }
             }
           }
         }
       }
     } catch (e) {
-      debugPrint('[LiveKit] Erro ao ajustar volume do stream: $e');
+      debugPrint('[LiveKit] Erro ao sincronizar áudio de screen share: $e');
     }
+  }
+
+  void _setWatchingRemoteStream(VoiceParticipantInfo? participant) {
+    setState(() {
+      _watchingRemoteStream = participant;
+      if (participant != null) {
+        _isChatVisible = false;
+        _isRightSidebarVisible = false;
+      }
+    });
+    _syncScreenShareAudioState();
   }
 
   List<Map<String, dynamic>> _serverMembers = [];
@@ -884,7 +967,11 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             chMap[p.userId.isNotEmpty ? p.userId : p.key] = p;
             if (_watchingRemoteStream?.sessionId == p.sessionId ||
                 _watchingRemoteStream?.userId == p.userId) {
-              _watchingRemoteStream = p;
+              if (p.isTransmitting) {
+                _watchingRemoteStream = p;
+              } else {
+                _watchingRemoteStream = null;
+              }
             }
           } else {
             if (_watchingRemoteStream?.sessionId == p.sessionId ||
@@ -893,6 +980,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             }
           }
         });
+        _syncScreenShareAudioState();
       }
       return;
     } else if (type == 'VOICE_SYNC') {
@@ -940,7 +1028,21 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             chMap[currentUserId] = localVoiceInfo;
           }
         }
+
+        // Valida se o stream que estava sendo assistido ainda está ativo
+        if (_watchingRemoteStream != null) {
+          final stillTransmitting = _voiceParticipants.values.any(
+            (m) => m.values.any((v) =>
+                (v.userId == _watchingRemoteStream!.userId || v.sessionId == _watchingRemoteStream!.sessionId) &&
+                v.isTransmitting &&
+                v.isInVoice),
+          );
+          if (!stillTransmitting) {
+            _watchingRemoteStream = null;
+          }
+        }
       });
+      _syncScreenShareAudioState();
       return;
     }
 
@@ -1327,6 +1429,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
       _removeParticipantFromAllVoiceChannels(currentUserId, _clientSessionId);
     });
+    _syncScreenShareAudioState();
   }
 
   void _startLiveStreamBroadcaster(ScreenShareConfig config) {
@@ -1698,11 +1801,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                         },
                         onWatchStream: (p) {
                           Navigator.pop(ctx);
-                          setState(() {
-                            _watchingRemoteStream = p;
-                            _isChatVisible = false;
-                            _isRightSidebarVisible = false;
-                          });
+                          _setWatchingRemoteStream(p);
                         },
                         onLeaveVoice: () {
                           Navigator.pop(ctx);
@@ -1776,11 +1875,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         ),
         onWatchLive: () {
           if (_activeBroadcaster != null) {
-            setState(() {
-              _watchingRemoteStream = _activeBroadcaster;
-              _isChatVisible = false;
-              _isRightSidebarVisible = false;
-            });
+            _setWatchingRemoteStream(_activeBroadcaster);
           }
         },
         onSendMessage: (cKey, author) => _sendMessage(cKey, author),
@@ -1827,10 +1922,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               webRTCStream: ref.watch(screenShareControllerProvider).remoteShare?.stream,
               accentColor: _selectedAccentColor,
               streamVolume: _streamVolume,
-              onBackToChat: () => setState(() {
-                _watchingRemoteStream = null;
-                _isChatVisible = true;
-              }),
+              onBackToChat: () => _setWatchingRemoteStream(null),
             ),
           ),
 
@@ -1853,7 +1945,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   setState(() => _isFullscreen = !_isFullscreen),
               onStopOrLeave: () {
                 if (_watchingRemoteStream != null) {
-                  setState(() => _watchingRemoteStream = null);
+                  _setWatchingRemoteStream(null);
                 } else {
                   _toggleTransmission();
                 }
@@ -2005,11 +2097,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             clientSessionId: _clientSessionId,
             connectedVoiceChannelId: _connectedVoiceChannelId,
             onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
-            onWatchStream: (p) => setState(() {
-              _watchingRemoteStream = p;
-              _isChatVisible = false;
-              _isRightSidebarVisible = false;
-            }),
+            onWatchStream: (p) => _setWatchingRemoteStream(p),
           )
         : _buildHybridChannelStage(
             context,
@@ -2044,10 +2132,8 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       ),
       onBackToHome: () {
         if (_viewMode == ServerViewMode.channel) {
-          setState(() {
-            _viewMode = ServerViewMode.home;
-            _watchingRemoteStream = null;
-          });
+          setState(() => _viewMode = ServerViewMode.home);
+          _setWatchingRemoteStream(null);
         } else {
           widget.onBackToHome();
         }
@@ -2107,11 +2193,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             voiceNotifier: voiceNotifier,
             isInVoice: _isInVoice,
             onChannelSelected: (c) => _openHybridChannel(c),
-            onWatchStream: (p) => setState(() {
-              _watchingRemoteStream = p;
-              _isChatVisible = false;
-              _isRightSidebarVisible = false;
-            }),
+            onWatchStream: (p) => _setWatchingRemoteStream(p),
             onLeaveVoice: _leaveVoice,
             onMembersUpdated: _loadServerMembers,
             onToggleMic: _handleMicToggle,
