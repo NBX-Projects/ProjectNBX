@@ -23,6 +23,7 @@ class ServerTopNav extends StatelessWidget {
   final bool isTransmitting;
   final bool isInVoice;
   final bool isConnectingVoice;
+  final String? connectedVoiceChannelId;
   final VoidCallback? onToggleTransmission;
   final VoidCallback? onToggleVoiceChannel;
 
@@ -43,6 +44,7 @@ class ServerTopNav extends StatelessWidget {
     this.isTransmitting = false,
     this.isInVoice = false,
     this.isConnectingVoice = false,
+    this.connectedVoiceChannelId,
     this.onToggleTransmission,
     this.onToggleVoiceChannel,
   });
@@ -51,6 +53,14 @@ class ServerTopNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+
+    final isConnectedToThisChannel =
+        isInVoice && connectedVoiceChannelId != null && activeChannel != null && connectedVoiceChannelId == activeChannel!.id;
+    final isConnectedToOtherChannel =
+        isInVoice &&
+        connectedVoiceChannelId != null &&
+        activeChannel != null &&
+        connectedVoiceChannelId != activeChannel!.id;
 
     return Container(
       height: 48,
@@ -175,51 +185,96 @@ class ServerTopNav extends StatelessWidget {
 
           if (viewMode == ServerViewMode.channel &&
               activeChannel != null &&
-              onToggleVoiceChannel != null &&
-              (!isInVoice || isConnectingVoice)) ...[
+              onToggleVoiceChannel != null) ...[
             Tooltip(
               message: isConnectingVoice
                   ? 'Conectando ao LiveKit...'
-                  : (isInVoice ? 'Desconectar da Voz' : 'Conectar Voz'),
+                  : (isConnectedToThisChannel
+                      ? 'Desconectar da voz (#${activeChannel!.name})'
+                      : (isConnectedToOtherChannel
+                          ? 'Mudar voz para #${activeChannel!.name}'
+                          : 'Conectar voz em #${activeChannel!.name}')),
               child: InkWell(
                 onTap: onToggleVoiceChannel,
                 mouseCursor: SystemMouseCursors.click,
                 borderRadius: AppRadius.borderSm,
                 child: Container(
-                  padding: const EdgeInsets.all(7),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 8 : 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: isConnectingVoice
                         ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
-                        : (isInVoice
+                        : (isConnectedToThisChannel
                             ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                            : const Color(0xFF10B981).withValues(alpha: 0.15)),
+                            : (isConnectedToOtherChannel
+                                ? const Color(0xFF3B82F6).withValues(alpha: 0.15)
+                                : const Color(0xFF10B981).withValues(alpha: 0.15))),
                     borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isConnectingVoice
                           ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
-                          : (isInVoice
+                          : (isConnectedToThisChannel
                               ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                              : const Color(0xFF10B981).withValues(alpha: 0.5)),
+                              : (isConnectedToOtherChannel
+                                  ? const Color(0xFF3B82F6).withValues(alpha: 0.5)
+                                  : const Color(0xFF10B981).withValues(alpha: 0.5))),
                     ),
                   ),
-                  child: isConnectingVoice
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isConnectingVoice)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Color(0xFFF59E0B),
                           ),
                         )
-                      : Icon(
-                          isInVoice
+                      else
+                        Icon(
+                          isConnectedToThisChannel
                               ? LucideIcons.phoneOff
-                              : LucideIcons.phoneCall,
-                          size: 16,
-                          color: isInVoice
-                              ? const Color(0xFFEF4444)
-                              : const Color(0xFF10B981),
+                              : (isConnectedToOtherChannel
+                                  ? LucideIcons.phoneForwarded
+                                  : LucideIcons.phoneCall),
+                          size: 15,
+                          color: isConnectingVoice
+                              ? const Color(0xFFF59E0B)
+                              : (isConnectedToThisChannel
+                                  ? const Color(0xFFEF4444)
+                                  : (isConnectedToOtherChannel
+                                      ? const Color(0xFF60A5FA)
+                                      : const Color(0xFF10B981))),
                         ),
+                      if (!isMobile) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          isConnectingVoice
+                              ? 'Conectando...'
+                              : (isConnectedToThisChannel
+                                  ? 'Desconectar'
+                                  : (isConnectedToOtherChannel
+                                      ? 'Mudar para cá'
+                                      : 'Conectar Voz')),
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isConnectingVoice
+                                ? const Color(0xFFF59E0B)
+                                : (isConnectedToThisChannel
+                                    ? const Color(0xFFEF4444)
+                                    : (isConnectedToOtherChannel
+                                        ? const Color(0xFF60A5FA)
+                                        : const Color(0xFF10B981))),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),

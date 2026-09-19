@@ -38,6 +38,7 @@ class ChannelChatView extends StatelessWidget {
   final void Function(String messageId) onDeleteMessage;
   final Map<String, Map<String, VoiceParticipantInfo>> voiceParticipants;
   final String? clientSessionId;
+  final String? connectedVoiceChannelId;
 
   const ChannelChatView({
     super.key,
@@ -69,6 +70,7 @@ class ChannelChatView extends StatelessWidget {
     required this.onDeleteMessage,
     this.voiceParticipants = const {},
     this.clientSessionId,
+    this.connectedVoiceChannelId,
   });
 
   List<VoiceParticipantInfo> get _channelVoiceParticipants {
@@ -81,6 +83,13 @@ class ChannelChatView extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+
+    final isConnectedToThisChannel =
+        isInVoice && connectedVoiceChannelId == channelKey;
+    final isConnectedToOtherChannel =
+        isInVoice &&
+        connectedVoiceChannelId != null &&
+        connectedVoiceChannelId != channelKey;
 
     return Container(
       color: isDark ? const Color(0xFF13141F) : const Color(0xFFFAF9F6),
@@ -221,33 +230,88 @@ class ChannelChatView extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (!isInVoice) ...[
+                  if (!isConnectedToThisChannel) ...[
                     const SizedBox(width: 8),
-                    InkWell(
-                      onTap: onToggleVoiceChannel,
-                      borderRadius: AppRadius.borderPill,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF22C55E),
-                          borderRadius: AppRadius.borderPill,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(LucideIcons.phoneCall,
-                                size: 11, color: Colors.black),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Entrar',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black,
+                    Tooltip(
+                      message: isConnectedToOtherChannel
+                          ? 'Mudar voz para #$activeChannelName'
+                          : 'Entrar na chamada de voz',
+                      child: InkWell(
+                        onTap: onToggleVoiceChannel,
+                        borderRadius: AppRadius.borderPill,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isConnectedToOtherChannel
+                                ? const Color(0xFF3B82F6)
+                                : const Color(0xFF22C55E),
+                            borderRadius: AppRadius.borderPill,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isConnectedToOtherChannel
+                                    ? LucideIcons.phoneForwarded
+                                    : LucideIcons.phoneCall,
+                                size: 11,
+                                color: isConnectedToOtherChannel
+                                    ? Colors.white
+                                    : Colors.black,
                               ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isConnectedToOtherChannel
+                                    ? 'Mudar para cá'
+                                    : 'Entrar',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isConnectedToOtherChannel
+                                      ? Colors.white
+                                      : Colors.black,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: 'Sair da chamada de voz',
+                      child: InkWell(
+                        onTap: onToggleVoiceChannel,
+                        borderRadius: AppRadius.borderPill,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                            borderRadius: AppRadius.borderPill,
+                            border: Border.all(
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                              width: 0.8,
                             ),
-                          ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(LucideIcons.phoneOff,
+                                  size: 11, color: Color(0xFFEF4444)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Sair',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFFEF4444),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -344,83 +408,83 @@ class ChannelChatView extends StatelessWidget {
                       final isEditing = editingMessageId == msg.id;
                       final isMine =
                           msg.author == username || msg.author == 'Você';
-                        final initials = getAuthorInitials(msg.author);
-                        final authorColor = resolveAuthorColor(
-                          msg.author,
-                          isDark,
+                      final initials = getAuthorInitials(msg.author);
+                      final authorColor = resolveAuthorColor(
+                        msg.author,
+                        isDark,
+                      );
+
+                      if (isMine) {
+                        // MY MESSAGE (WhatsApp Style -> Aligned to the Right)
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              // Action Icons (Edit / Delete) to the left of the sent bubble
+                              if (!isEditing)
+                                ChatMessageActions(
+                                  isDark: isDark,
+                                  onEdit: () => onStartEditing(msg.id),
+                                  onDelete: () => onDeleteMessage(msg.id),
+                                ),
+
+                              // WhatsApp Message Bubble
+                              WhatsAppChatBubble(
+                                msg: msg,
+                                isMine: true,
+                                isDark: isDark,
+                                isEditing: isEditing,
+                                isMobile: isMobile,
+                                screenWidth: screenWidth,
+                                accentColor: accentColor,
+                                editController: editMessageController,
+                                onCancelEdit: onCancelEditing,
+                                onSaveEdit: onSaveEditing,
+                              ),
+                              const SizedBox(width: 8),
+
+                              // Sender Avatar on the Right with Initials
+                              ChatAvatar(
+                                initials: initials,
+                                color: authorColor,
+                                isDark: isDark,
+                              ),
+                            ],
+                          ),
                         );
+                      } else {
+                        // RECEIVED MESSAGE (From others -> Aligned to the Left)
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              // Author Avatar on the Left with Initials
+                              ChatAvatar(
+                                initials: initials,
+                                color: authorColor,
+                                isDark: isDark,
+                              ),
+                              const SizedBox(width: 8),
 
-                        if (isMine) {
-                          // MY MESSAGE (WhatsApp Style -> Aligned to the Right)
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                // Action Icons (Edit / Delete) to the left of the sent bubble
-                                if (!isEditing)
-                                  ChatMessageActions(
-                                    isDark: isDark,
-                                    onEdit: () => onStartEditing(msg.id),
-                                    onDelete: () => onDeleteMessage(msg.id),
-                                  ),
-
-                                // WhatsApp Message Bubble
-                                WhatsAppChatBubble(
-                                  msg: msg,
-                                  isMine: true,
-                                  isDark: isDark,
-                                  isEditing: isEditing,
-                                  isMobile: isMobile,
-                                  screenWidth: screenWidth,
-                                  accentColor: accentColor,
-                                  editController: editMessageController,
-                                  onCancelEdit: onCancelEditing,
-                                  onSaveEdit: onSaveEditing,
-                                ),
-                                const SizedBox(width: 8),
-
-                                // Sender Avatar on the Right with Initials
-                                ChatAvatar(
-                                  initials: initials,
-                                  color: authorColor,
-                                  isDark: isDark,
-                                ),
-                              ],
-                            ),
-                          );
-                        } else {
-                          // RECEIVED MESSAGE (From others -> Aligned to the Left)
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                // Author Avatar on the Left with Initials
-                                ChatAvatar(
-                                  initials: initials,
-                                  color: authorColor,
-                                  isDark: isDark,
-                                ),
-                                const SizedBox(width: 8),
-
-                                // WhatsApp Message Bubble
-                                WhatsAppChatBubble(
-                                  msg: msg,
-                                  isMine: false,
-                                  isDark: isDark,
-                                  isMobile: isMobile,
-                                  screenWidth: screenWidth,
-                                  authorColor: authorColor,
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                      },
-                    ),
+                              // WhatsApp Message Bubble
+                              WhatsAppChatBubble(
+                                msg: msg,
+                                isMine: false,
+                                isDark: isDark,
+                                isMobile: isMobile,
+                                screenWidth: screenWidth,
+                                authorColor: authorColor,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    },
+                  ),
           ),
 
           // 4. Message Input Bar
