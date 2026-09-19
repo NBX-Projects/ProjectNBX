@@ -140,7 +140,10 @@ class ServerTopNav extends StatelessWidget {
           const SizedBox(width: 8),
 
           // Minimalist Transmit & Voice Channel Controls
-          if (viewMode == ServerViewMode.channel &&
+          // (só aparecem quando a sidebar direita está retraída, já que ela
+          // mesma oferece esses controles quando visível)
+          if (!isRightSidebarVisible &&
+              viewMode == ServerViewMode.channel &&
               activeChannel != null &&
               onToggleTransmission != null) ...[
             Tooltip(
@@ -183,7 +186,8 @@ class ServerTopNav extends StatelessWidget {
             const SizedBox(width: 6),
           ],
 
-          if (viewMode == ServerViewMode.channel &&
+          if (!isRightSidebarVisible &&
+              viewMode == ServerViewMode.channel &&
               activeChannel != null &&
               onToggleVoiceChannel != null) ...[
             Tooltip(
