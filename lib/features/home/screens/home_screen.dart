@@ -44,6 +44,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final GlobalKey _topHeadphonesKey = GlobalKey();
   List<PublicServerModel> _publicServers = [];
   bool _isLoadingPublicServers = false;
+  bool _isServerRightSidebarVisible = true;
 
   @override
   void initState() {
@@ -112,6 +113,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ? ServerWorkspaceView(
                 server: selectedServer,
                 onBackToHome: () => setState(() => _activeTab = 'home'),
+                onRightSidebarVisibilityChanged: (visible) =>
+                    setState(() => _isServerRightSidebarVisible = visible),
               )
             : Row(
                 children: [
@@ -141,6 +144,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           strings,
                           voiceState,
                           voiceNotifier,
+                          hideVoiceControls:
+                              selectedServer != null &&
+                              _isServerRightSidebarVisible,
                         ),
 
                         // Notification banner se houver atualização disponível
@@ -153,6 +159,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   server: selectedServer,
                                   onBackToHome: () =>
                                       setState(() => _activeTab = 'home'),
+                                  onRightSidebarVisibilityChanged: (visible) =>
+                                      setState(
+                                        () => _isServerRightSidebarVisible =
+                                            visible,
+                                      ),
                                 )
                               : Row(
                                   crossAxisAlignment:
@@ -203,21 +214,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                               // Public Servers Discovery Section (não listar servidores que o usuário já participa)
                                               () {
-                                                final myServerIds = servers.map((s) => s.id).toSet();
-                                                final availablePublicServers = _publicServers.where((pub) {
-                                                  return !pub.isMember && !myServerIds.contains(pub.server.id);
-                                                }).toList();
+                                                final myServerIds = servers
+                                                    .map((s) => s.id)
+                                                    .toSet();
+                                                final availablePublicServers =
+                                                    _publicServers.where((pub) {
+                                                      return !pub.isMember &&
+                                                          !myServerIds.contains(
+                                                            pub.server.id,
+                                                          );
+                                                    }).toList();
 
                                                 return Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     _buildSectionTitle(
                                                       isDark,
                                                       'EXPLORAR SERVIDORES PÚBLICOS',
-                                                      count: availablePublicServers.length,
+                                                      count:
+                                                          availablePublicServers
+                                                              .length,
                                                     ),
                                                     const SizedBox(height: 12),
-                                                    _buildPublicServersGrid(availablePublicServers),
+                                                    _buildPublicServersGrid(
+                                                      availablePublicServers,
+                                                    ),
                                                   ],
                                                 );
                                               }(),
@@ -253,8 +275,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     int voiceCount,
     AppStrings strings,
     VoiceState voiceState,
-    VoiceStateNotifier voiceNotifier,
-  ) {
+    VoiceStateNotifier voiceNotifier, {
+    bool hideVoiceControls = false,
+  }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
     final isDesktopPlatform =
@@ -273,239 +296,277 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          if (isMobile) ...[
-            Text(
-              'ProjectNBX',
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-              ),
-            ),
-          ] else ...[
-            // Search Box (ampliado)
-            Flexible(
-              child: Container(
-                height: 40,
-                constraints: const BoxConstraints(maxWidth: 540),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkInput : AppColors.lightSurface,
-                  borderRadius: AppRadius.borderMd,
-                  border: Border.all(
-                    color: isDark
-                        ? AppColors.darkBorder
-                        : AppColors.lightBorder,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.search,
-                      size: 16,
+          // GRUPO ESQUERDO: busca + badge de chamadas (único participante flex da Row)
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isMobile) ...[
+                  Text(
+                    'ProjectNBX',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                       color: isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted,
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        strings.searchPlaceholder,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppColors.darkTextMuted
-                              : AppColors.lightTextMuted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2.5,
-                      ),
+                  ),
+                ] else ...[
+                  // Search Box (ampliado)
+                  Flexible(
+                    child: Container(
+                      height: 40,
+                      constraints: const BoxConstraints(maxWidth: 540),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? AppColors.darkSurfaceElevated
-                            : const Color(0xFFF1F5F9),
-                        borderRadius: AppRadius.borderXs,
-                      ),
-                      child: Text(
-                        'Ctrl K',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                            ? AppColors.darkInput
+                            : AppColors.lightSurface,
+                        borderRadius: AppRadius.borderMd,
+                        border: Border.all(
                           color: isDark
-                              ? AppColors.darkTextMuted
-                              : AppColors.lightTextMuted,
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 16),
-
-            // Voice Activity Pill Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: (isDark ? AppColors.darkSage : AppColors.lightSage)
-                    .withValues(alpha: 0.12),
-                borderRadius: AppRadius.borderPill,
-                border: Border.all(
-                  color: (isDark ? AppColors.darkSage : AppColors.lightSage)
-                      .withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSage : AppColors.lightSage,
-                      shape: BoxShape.circle,
+                      child: Row(
+                        children: [
+                          Icon(
+                            LucideIcons.search,
+                            size: 16,
+                            color: isDark
+                                ? AppColors.darkTextMuted
+                                : AppColors.lightTextMuted,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              strings.searchPlaceholder,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: isDark
+                                    ? AppColors.darkTextMuted
+                                    : AppColors.lightTextMuted,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppColors.darkSurfaceElevated
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: AppRadius.borderXs,
+                            ),
+                            child: Text(
+                              'Ctrl K',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? AppColors.darkTextMuted
+                                    : AppColors.lightTextMuted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 7),
-                  Text(
-                    '$voiceCount ${strings.inCallsBadge}',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? AppColors.darkSage : AppColors.lightSage,
+
+                  const SizedBox(width: 16),
+
+                  // Voice Activity Pill Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.darkSage : AppColors.lightSage)
+                          .withValues(alpha: 0.12),
+                      borderRadius: AppRadius.borderPill,
+                      border: Border.all(
+                        color:
+                            (isDark ? AppColors.darkSage : AppColors.lightSage)
+                                .withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkSage
+                                : AppColors.lightSage,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          '$voiceCount ${strings.inCallsBadge}',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? AppColors.darkSage
+                                : AppColors.lightSage,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
-
-          const Spacer(),
-
-          if (!isMobile) ...[
-            // Minimalist Audio Controls
-            GestureDetector(
-              onSecondaryTap: () => QuickAudioDeviceMenu.show(
-                context,
-                anchorKey: _topMicKey,
-                isInput: true,
-              ),
-              child: IconButton(
-                key: _topMicKey,
-                icon: Icon(
-                  voiceState.isMicMuted ? LucideIcons.micOff : LucideIcons.mic,
-                  size: 18,
-                  color: voiceState.isMicMuted
-                      ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
-                      : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
-                ),
-                tooltip: voiceState.isMicMuted ? 'Desmutar' : 'Mutar',
-                onPressed: () => voiceNotifier.toggleMic(),
-              ),
-            ),
-            GestureDetector(
-              onSecondaryTap: () => QuickAudioDeviceMenu.show(
-                context,
-                anchorKey: _topHeadphonesKey,
-                isInput: false,
-              ),
-              child: IconButton(
-                key: _topHeadphonesKey,
-                icon: Icon(
-                  voiceState.isDeafened
-                      ? LucideIcons.headphones
-                      : LucideIcons.headphones,
-                  size: 18,
-                  color: voiceState.isDeafened
-                      ? (isDark ? AppColors.darkDanger : AppColors.lightDanger)
-                      : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
-                ),
-                tooltip: voiceState.isDeafened
-                    ? 'Ativar Áudio'
-                    : 'Desativar Áudio',
-                onPressed: () => voiceNotifier.toggleDeafened(),
-              ),
-            ),
-          ],
-
-          IconButton(
-            icon: Icon(
-              isDark ? LucideIcons.sun : LucideIcons.moon,
-              size: 18,
-              color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
-            ),
-            tooltip: isDark ? 'Modo Claro' : 'Modo Escuro',
-            onPressed: () {
-              ref.read(themeModeProvider.notifier).toggleTheme();
-            },
           ),
 
-          if (!isMobile) ...[
-            const SizedBox(width: 4),
-            // AFK / Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                borderRadius: AppRadius.borderSm,
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          // GRUPO DIREITO: ícones de voz/tema/config (tamanho fixo, sempre encostado na borda)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!isMobile && !hideVoiceControls) ...[
+                // Minimalist Audio Controls
+                GestureDetector(
+                  onSecondaryTap: () => QuickAudioDeviceMenu.show(
+                    context,
+                    anchorKey: _topMicKey,
+                    isInput: true,
+                  ),
+                  child: IconButton(
+                    key: _topMicKey,
+                    icon: Icon(
+                      voiceState.isMicMuted
+                          ? LucideIcons.micOff
+                          : LucideIcons.mic,
+                      size: 18,
+                      color: voiceState.isMicMuted
+                          ? (isDark
+                                ? AppColors.darkDanger
+                                : AppColors.lightDanger)
+                          : (isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary),
+                    ),
+                    tooltip: voiceState.isMicMuted ? 'Desmutar' : 'Mutar',
+                    onPressed: () => voiceNotifier.toggleMic(),
+                  ),
                 ),
+                GestureDetector(
+                  onSecondaryTap: () => QuickAudioDeviceMenu.show(
+                    context,
+                    anchorKey: _topHeadphonesKey,
+                    isInput: false,
+                  ),
+                  child: IconButton(
+                    key: _topHeadphonesKey,
+                    icon: Icon(
+                      voiceState.isDeafened
+                          ? LucideIcons.headphones
+                          : LucideIcons.headphones,
+                      size: 18,
+                      color: voiceState.isDeafened
+                          ? (isDark
+                                ? AppColors.darkDanger
+                                : AppColors.lightDanger)
+                          : (isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary),
+                    ),
+                    tooltip: voiceState.isDeafened
+                        ? 'Ativar Áudio'
+                        : 'Desativar Áudio',
+                    onPressed: () => voiceNotifier.toggleDeafened(),
+                  ),
+                ),
+              ],
+
+              IconButton(
+                icon: Icon(
+                  isDark ? LucideIcons.sun : LucideIcons.moon,
+                  size: 18,
+                  color: isDark
+                      ? AppColors.darkPrimary
+                      : AppColors.lightPrimary,
+                ),
+                tooltip: isDark ? 'Modo Claro' : 'Modo Escuro',
+                onPressed: () {
+                  ref.read(themeModeProvider.notifier).toggleTheme();
+                },
               ),
-              child: Text(
-                strings.afk,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+
+              if (!isMobile) ...[
+                const SizedBox(width: 4),
+                // AFK / Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.darkSurface
+                        : AppColors.lightSurface,
+                    borderRadius: AppRadius.borderSm,
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                    ),
+                  ),
+                  child: Text(
+                    strings.afk,
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(width: 4),
+
+              // Settings Button (Configurações)
+              IconButton(
+                icon: Icon(
+                  LucideIcons.settings,
+                  size: 18,
                   color: isDark
                       ? AppColors.darkTextSecondary
                       : AppColors.lightTextSecondary,
                 ),
+                tooltip: strings.navSettings,
+                onPressed: () => SettingsScreen.show(context),
               ),
-            ),
-          ],
+              const SizedBox(width: 4),
 
-          const SizedBox(width: 4),
-
-          // Settings Button (Configurações)
-          IconButton(
-            icon: Icon(
-              LucideIcons.settings,
-              size: 18,
-              color: isDark
-                  ? AppColors.darkTextSecondary
-                  : AppColors.lightTextSecondary,
-            ),
-            tooltip: strings.navSettings,
-            onPressed: () => SettingsScreen.show(context),
+              if (isDesktopPlatform) ...[
+                const SizedBox(width: 10),
+                // Vertical Divider separating app bar and window buttons
+                Container(
+                  height: 24,
+                  width: 1,
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+                const SizedBox(width: 4),
+                // Integrated Windows Window Controls
+                const WindowControls(height: 56, buttonWidth: 46),
+              ],
+            ],
           ),
-          const SizedBox(width: 4),
-
-          if (isDesktopPlatform) ...[
-            const SizedBox(width: 10),
-            // Vertical Divider separating app bar and window buttons
-            Container(
-              height: 24,
-              width: 1,
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-            ),
-            const SizedBox(width: 4),
-            // Integrated Windows Window Controls
-            const WindowControls(height: 56, buttonWidth: 46),
-          ],
         ],
       ),
     );

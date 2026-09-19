@@ -31,8 +31,37 @@
 
   <title>projectnbx</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
 </head>
 <body>
+  <script>
+    // O ResizeObserver do engine do Flutter Web às vezes não dispara a tempo em
+    // transições bruscas de tamanho da janela (F11, maximizar/restaurar),
+    // deixando o layout calculado para o tamanho antigo até alguma outra
+    // interação forçar o recálculo. Forçamos um resize manual nesses casos.
+    let isSyntheticResize = false;
+    const nudgeFlutterResize = () => {
+      if (isSyntheticResize) return;
+      isSyntheticResize = true;
+      window.dispatchEvent(new Event('resize'));
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+        isSyntheticResize = false;
+      }, 150);
+    };
+    document.addEventListener('fullscreenchange', nudgeFlutterResize);
+    window.addEventListener('resize', nudgeFlutterResize);
+  </script>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
