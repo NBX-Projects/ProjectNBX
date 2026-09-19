@@ -26,6 +26,7 @@ class ServerRightSidebar extends StatefulWidget {
   final VoiceState voiceState;
   final VoiceStateNotifier voiceNotifier;
   final ValueChanged<ChannelModel> onChannelSelected;
+  final ValueChanged<ChannelModel>? onJoinVoiceChannel;
   final ValueChanged<VoiceParticipantInfo>? onWatchStream;
   final VoidCallback onLeaveVoice;
   final VoidCallback? onMembersUpdated;
@@ -52,6 +53,7 @@ class ServerRightSidebar extends StatefulWidget {
     required this.voiceState,
     required this.voiceNotifier,
     required this.onChannelSelected,
+    this.onJoinVoiceChannel,
     this.onWatchStream,
     required this.onLeaveVoice,
     this.onMembersUpdated,
@@ -248,6 +250,13 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
         final activeParticipants = activeCh != null
             ? _getChannelVoiceParticipants(activeCh.id)
             : <VoiceParticipantInfo>[];
+
+        final isConnectedToActiveVoice = activeCh != null &&
+            widget.isInVoice &&
+            (widget.connectedVoiceChannelId == activeCh.id ||
+                (widget.connectedVoiceChannelId == null &&
+                    widget.voiceState.connectedChannelId == activeCh.id));
+
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           children: [
@@ -279,59 +288,124 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Channel Header
-                    InkWell(
-                      onTap: () => widget.onChannelSelected(activeCh),
-                      mouseCursor: SystemMouseCursors.click,
-                      borderRadius: AppRadius.topMd,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              LucideIcons.volume2,
-                              size: 15,
-                              color: Color(0xFF22C55E),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                activeCh.name,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
+                    // Channel Header (Split Row: Clicar no texto abre chat; clicar no ícone de voz conecta/muda áudio)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => widget.onChannelSelected(activeCh),
+                              mouseCursor: SystemMouseCursors.click,
+                              borderRadius: AppRadius.borderSm,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isConnectedToActiveVoice || activeParticipants.isNotEmpty
+                                          ? LucideIcons.volume2
+                                          : LucideIcons.hash,
+                                      size: 15,
+                                      color: isConnectedToActiveVoice || activeParticipants.isNotEmpty
+                                          ? const Color(0xFF22C55E)
+                                          : (isDark
+                                              ? Colors.white70
+                                              : const Color(0xFF0F172A)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        activeCh.name,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF0F172A),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (activeParticipants.isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 1.5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFF14532D,
+                                          ).withValues(alpha: isDark ? 0.6 : 0.15),
+                                          borderRadius: AppRadius.borderPill,
+                                        ),
+                                        child: Text(
+                                          activeParticipants.length.toString(),
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF22C55E),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
-                            if (activeParticipants.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 1.5,
-                                ),
+                          ),
+                          // Botão direto para entrar / mudar chamada
+                          Tooltip(
+                            message: isConnectedToActiveVoice
+                                ? 'Você está nesta chamada (clique para sair)'
+                                : (widget.isInVoice
+                                    ? 'Mudar voz para #${activeCh.name}'
+                                    : 'Entrar na chamada de #${activeCh.name}'),
+                            child: InkWell(
+                              onTap: () {
+                                if (isConnectedToActiveVoice) {
+                                  widget.onLeaveVoice();
+                                } else {
+                                  widget.onJoinVoiceChannel?.call(activeCh);
+                                }
+                              },
+                              borderRadius: AppRadius.borderSm,
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 4),
+                                padding: const EdgeInsets.all(5),
                                 decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF14532D,
-                                  ).withValues(alpha: isDark ? 0.6 : 0.15),
-                                  borderRadius: AppRadius.borderPill,
-                                ),
-                                child: Text(
-                                  activeParticipants.length.toString(),
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF22C55E),
+                                  color: isConnectedToActiveVoice
+                                      ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                                      : const Color(0xFF22C55E).withValues(alpha: 0.12),
+                                  borderRadius: AppRadius.borderSm,
+                                  border: Border.all(
+                                    color: isConnectedToActiveVoice
+                                        ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                                        : const Color(0xFF22C55E).withValues(alpha: 0.3),
+                                    width: 0.8,
                                   ),
                                 ),
+                                child: Icon(
+                                  isConnectedToActiveVoice
+                                      ? LucideIcons.phoneOff
+                                      : (widget.isInVoice
+                                          ? LucideIcons.phoneForwarded
+                                          : LucideIcons.phoneCall),
+                                  size: 13,
+                                  color: isConnectedToActiveVoice
+                                      ? const Color(0xFFEF4444)
+                                      : const Color(0xFF22C55E),
+                                ),
                               ),
-                          ],
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
@@ -387,68 +461,137 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
             // 2. Real Other Channels from Server
             ...otherChannels.map((c) {
               final chParticipants = _getChannelVoiceParticipants(c.id);
+              final isConnectedToThisChannel = widget.isInVoice &&
+                  (widget.connectedVoiceChannelId == c.id ||
+                      (widget.connectedVoiceChannelId == null &&
+                          widget.voiceState.connectedChannelId == c.id));
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 2),
                 child: Column(
                   children: [
-                    InkWell(
-                      onTap: () => widget.onChannelSelected(c),
-                      mouseCursor: SystemMouseCursors.click,
-                      borderRadius: AppRadius.borderSm,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 7,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              chParticipants.isNotEmpty
-                                  ? LucideIcons.volume2
-                                  : LucideIcons.hash,
-                              size: 14,
-                              color: chParticipants.isNotEmpty
-                                  ? const Color(0xFF22C55E)
-                                  : (isDark
-                                      ? Colors.white54
-                                      : const Color(0xFF64748B)),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                c.name,
-                                style: GoogleFonts.inter(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : const Color(0xFF334155),
-                                ),
+                    Row(
+                      children: [
+                        // Lado esquerdo: Clicar abre o chat do canal
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => widget.onChannelSelected(c),
+                            mouseCursor: SystemMouseCursors.click,
+                            borderRadius: AppRadius.borderSm,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 7,
                               ),
-                            ),
-                            if (chParticipants.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF14532D)
-                                      .withValues(alpha: isDark ? 0.6 : 0.15),
-                                  borderRadius: AppRadius.borderPill,
-                                ),
-                                child: Text(
-                                  chParticipants.length.toString(),
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF22C55E),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isConnectedToThisChannel || chParticipants.isNotEmpty
+                                        ? LucideIcons.volume2
+                                        : LucideIcons.hash,
+                                    size: 14,
+                                    color: isConnectedToThisChannel || chParticipants.isNotEmpty
+                                        ? const Color(0xFF22C55E)
+                                        : (isDark
+                                            ? Colors.white54
+                                            : const Color(0xFF64748B)),
                                   ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      c.name,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12.5,
+                                        fontWeight: isConnectedToThisChannel
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: isConnectedToThisChannel
+                                            ? const Color(0xFF22C55E)
+                                            : (isDark
+                                                ? Colors.white70
+                                                : const Color(0xFF334155)),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (chParticipants.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF14532D)
+                                            .withValues(alpha: isDark ? 0.6 : 0.15),
+                                        borderRadius: AppRadius.borderPill,
+                                      ),
+                                      child: Text(
+                                        chParticipants.length.toString(),
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF22C55E),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Lado direito: Botão rápido para conectar/mudar voz
+                        Tooltip(
+                          message: isConnectedToThisChannel
+                              ? 'Você está nesta chamada (clique para sair)'
+                              : (widget.isInVoice
+                                  ? 'Mudar voz para #${c.name}'
+                                  : 'Entrar na chamada de #${c.name}'),
+                          child: InkWell(
+                            onTap: () {
+                              if (isConnectedToThisChannel) {
+                                widget.onLeaveVoice();
+                              } else {
+                                widget.onJoinVoiceChannel?.call(c);
+                              }
+                            },
+                            borderRadius: AppRadius.borderSm,
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: isConnectedToThisChannel
+                                    ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                                    : (chParticipants.isNotEmpty
+                                        ? const Color(0xFF22C55E).withValues(alpha: 0.12)
+                                        : Colors.transparent),
+                                borderRadius: AppRadius.borderSm,
+                                border: Border.all(
+                                  color: isConnectedToThisChannel
+                                      ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                                      : (chParticipants.isNotEmpty
+                                          ? const Color(0xFF22C55E).withValues(alpha: 0.3)
+                                          : Colors.transparent),
+                                  width: 0.8,
                                 ),
                               ),
-                          ],
+                              child: Icon(
+                                isConnectedToThisChannel
+                                    ? LucideIcons.phoneOff
+                                    : (widget.isInVoice
+                                        ? LucideIcons.phoneForwarded
+                                        : LucideIcons.phoneCall),
+                                size: 13,
+                                color: isConnectedToThisChannel
+                                    ? const Color(0xFFEF4444)
+                                    : (chParticipants.isNotEmpty
+                                        ? const Color(0xFF22C55E)
+                                        : (isDark ? Colors.white38 : const Color(0xFF94A3B8))),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                     if (chParticipants.isNotEmpty)
                       Padding(
@@ -646,6 +789,26 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: isDark ? Colors.white70 : const Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Visão Geral',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Todos os canais possuem suporte integrado a mensagens em tempo real e chamadas de voz LiveKit com áudio ultrarrápido.',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                  height: 1.4,
                 ),
               ),
             ],

@@ -1341,7 +1341,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   }
 
   void _openHybridChannel(ChannelModel channel, {bool joinVoice = false}) {
-    final shouldJoin = joinVoice || channel.type == ChannelType.voice;
+    final shouldJoin = joinVoice;
     final prevChannelId = _connectedVoiceChannelId;
     if (shouldJoin && prevChannelId != null && prevChannelId != channel.id) {
       _disconnectFromLiveKitVoice();
@@ -1799,6 +1799,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                           Navigator.pop(ctx);
                           _openHybridChannel(c);
                         },
+                        onJoinVoiceChannel: (c) {
+                          Navigator.pop(ctx);
+                          _openHybridChannel(c, joinVoice: true);
+                        },
                         onWatchStream: (p) {
                           Navigator.pop(ctx);
                           _setWatchingRemoteStream(p);
@@ -1862,12 +1866,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         activeBroadcaster: _activeBroadcaster,
         voiceParticipants: _voiceParticipants,
         clientSessionId: _clientSessionId,
+        connectedVoiceChannelId: _connectedVoiceChannelId,
         onToggleTransmission: _toggleTransmission,
         onToggleVoiceChannel: () {
-          if (_isInVoice) {
+          if (_activeChannel == null) return;
+          if (_isInVoice && _connectedVoiceChannelId == _activeChannel!.id) {
             _leaveVoice();
-          } else if (_activeChannel != null) {
-            _connectToLiveKitVoice(_activeChannel!.id);
+          } else {
+            _openHybridChannel(_activeChannel!, joinVoice: true);
           }
         },
         onToggleRightSidebar: () => setState(
@@ -2096,7 +2102,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             voiceParticipants: _voiceParticipants,
             clientSessionId: _clientSessionId,
             connectedVoiceChannelId: _connectedVoiceChannelId,
-            onJoinVoice: (c) => _connectToLiveKitVoice(c.id),
+            onJoinVoice: (c) => _openHybridChannel(c, joinVoice: true),
             onWatchStream: (p) => _setWatchingRemoteStream(p),
           )
         : _buildHybridChannelStage(
@@ -2118,12 +2124,14 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       isTransmitting: _isTransmitting,
       isInVoice: _isInVoice,
       isConnectingVoice: _isConnectingLiveKit,
+      connectedVoiceChannelId: _connectedVoiceChannelId,
       onToggleTransmission: _toggleTransmission,
       onToggleVoiceChannel: () {
-        if (_isInVoice) {
+        if (_activeChannel == null) return;
+        if (_isInVoice && _connectedVoiceChannelId == _activeChannel!.id) {
           _leaveVoice();
-        } else if (_activeChannel != null) {
-          _connectToLiveKitVoice(_activeChannel!.id);
+        } else {
+          _openHybridChannel(_activeChannel!, joinVoice: true);
         }
       },
       totalInVoice: _voiceParticipants.values.fold<int>(
@@ -2193,6 +2201,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             voiceNotifier: voiceNotifier,
             isInVoice: _isInVoice,
             onChannelSelected: (c) => _openHybridChannel(c),
+            onJoinVoiceChannel: (c) => _openHybridChannel(c, joinVoice: true),
             onWatchStream: (p) => _setWatchingRemoteStream(p),
             onLeaveVoice: _leaveVoice,
             onMembersUpdated: _loadServerMembers,

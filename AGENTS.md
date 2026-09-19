@@ -66,7 +66,7 @@ backend/
 
 O projeto adota uma identidade visual única e moderna inspirada em estética de terminal/desenvolvedor e materiais táteis (Pastel Tech + Forest Slate), evitando designs genéricos:
 
-### 🌑 Modo Escuro (*Pastel Tech Aesthetic*)
+### 🌘 Modo Escuro (*Pastel Tech Aesthetic*)
 - **Canvas Base:** `#181926` (*Deep Matte Charcoal*)
 - **Painéis e Cards:** `#1E2030` com bordas estruturais de 1px em `#313244`
 - **Campos Inset:** `#141520`
@@ -109,7 +109,7 @@ O projeto adota uma identidade visual única e moderna inspirada em estética de
    - Habilitar **DTX** (*Discontinuous Transmission*) e **VAD** (*Voice Activity Detection*) para economizar largura de banda.
    - Taxa padrão de áudio recomendada: **Opus a 32–48 kbps**.
 3. **Push-to-Talk (PTT):**
-   - No Desktop, gerenciar teclas com `hotkey_manager` garantindo `HotKeyScope.system`.
+   - No Desktop, gerenciar teclas com `hotkey_manager` garantindo `HotKeyScope.system``.
    - Manter fallback para detecção de atividade de voz quando PTT estiver desativado.
 
 ---
@@ -212,6 +212,29 @@ O ProjectNBX implementa uma arquitetura híbrida e modular para transmissão de 
 - **Go Linter:** Regras do GolangCI-Lint definidas em [backend/.golangci.yml](file:///d:/Github/My/projectNBX/backend/.golangci.yml).
 - **VS Code:** Auto-format e auto-organize imports configurados em [.vscode/settings.json](file:///d:/Github/My/projectNBX/.vscode/settings.json).
 
+### 📝 Padrão de Mensagens de Commit
+Todas as mensagens de commit devem seguir estritamente a seguinte estrutura:
+
+```text
+FIX | FEAT | CHORE: mensagem do commit
+
+Descrição detalhada explicando o que foi implementado ou corrigido.
+
+Closes #123
+```
+
+- **Linha de Título (Subject):**
+  - Deve ser concisa e iniciar obrigatoriamente com o tipo em caixa alta seguido de dois-pontos: `FIX: `, `FEAT: ` ou `CHORE: `.
+  - **FIX:** Correções de bugs, falhas ou comportamentos inconsistentes.
+  - **FEAT:** Desenvolvimento e entrega de novas funcionalidades ou telas.
+  - **CHORE:** Tarefas de manutenção, documentação, dependências, linters ou refatorações estruturais.
+  - **NUNCA incluir `closes #123` no título da mensagem.**
+- **Corpo do Commit (Descrição Obrigatória):**
+  - Separado do título por uma linha em branco.
+  - Deve conter um resumo claro e explicativo dos pontos alterados.
+- **Referência à Issue (`Closes #123`):**
+  - Deve estar **obrigatoriamente no corpo/descrição do commit** (ao final), e **nunca no título**.
+
 ---
 
 ## 🔍 8. Qualidade de Código e SonarQube / SonarCloud
@@ -237,7 +260,7 @@ O ProjectNBX implementa uma arquitetura híbrida e modular para transmissão de 
 ## 🛠️ 10. Diretrizes de Execução do Agente e Uso de Ferramentas
 
 ### 🚫 Restrição Estrita de Edição via Shell / Terminal
-- **PROIBIDO usar comandos de terminal/shell (`cmd.exe`, PowerShell, bash, `sed`, `awk`, `echo`, `patch`, scripts Python/Node ou redirecionamentos)** para criar, sobrescrever ou alterar arquivos do projeto.
+- **PROIBIDO usar comandos de terminal/shell (`cmd.exe`, PowerShell, bash, `sed`, `awk`, `echo`, `patch`, `Write-Output`, scripts Python/Node ou redirecionamentos)** para criar, sobrescrever ou alterar arquivos do projeto.
 - **SEMPRE utilizar as ferramentas nativas de edição de arquivo da IDE / Agent (`apply_diff`, `edit_file`, `write_file`)**, garantindo que as alterações passem pelo visualizador de *diff* do GoLand e do AndroidStudio para aprovação granular (pedaço por pedaço) pelo desenvolvedor.
 - O terminal só deve ser utilizado para **leitura/diagnóstico e execução de ferramentas de compilação/teste**, como:
   - `go test ./...`, `go vet ./...`, `golangci-lint run`
