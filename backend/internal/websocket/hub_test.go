@@ -416,3 +416,92 @@ func TestHub_VoiceStateChannelSwitchAndDeduplication(t *testing.T) {
 		t.Fatalf("Esperado 0 participantes após saída, obtido %d", len(emptyList))
 	}
 }
+
+func TestHub_CrossServerVoiceLeave(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	hub := NewHub(repo)
+	go hub.Run()
+
+	// Cliente 1 em Server A
+	clientA := &Client{
+		Hub:      hub,
+		Send:     make(chan []byte, 32),
+		UserID:   "usr_cross",
+		Username: "CrossUser",
+		ServerID: "srv_A",
+	}
+	// Cliente 2 ouvindo Server A
+	clientObserverA := &Client{
+		Hub:      hub,
+		Send:     make(chan []byte, 32),
+		UserID:   "usr_observer_a",
+		Username: "ObserverA",
+		ServerID: "srv_A",
+	}
+
+	hub.Register <- clientA
+	hub.Register <- clientObserverA
+	time.Sleep(30 * time.Millisecond)
+
+	for len(clientA.Send) > 0 {
+		<-clientA.Send
+	}
+	for len(clientObserverA.Send) > 0 {
+		<-clientObserverA.Send
+	}
+
+	// 1. usr_cross entra na voz em srv_A
+	joinPayloadA, _ := json.Marshal(models.VoiceParticipantState{
+		SessionID: "sess_cross_1",
+		UserID:    "usr_cross",
+		Username:  "CrossUser",
+		ServerID:  "srv_A",
+		ChannelID: "chn_A",
+		IsInVoice: true,
+	})
+	hub.HandleClientEvent(clientA, &models.WSEvent{
+		Type:     models.EventVoiceState,
+		ServerID: "srv_A",
+		Payload:  joinPayloadA,
+	})
+	expectEvent(t, clientObserverA.Send, models.EventVoiceState, 200*time.Millisecond)
+
+	// 2. Agora o mesmo usuário (usr_cross) entra na voz em srv_B
+	joinPayloadB, _ := json.Marshal(models.VoiceParticipantState{
+		SessionID: "sess_cross_2",
+		UserID:    "usr_cross",
+		Username:  "CrossUser",
+		ServerID:  "srv_B",
+		ChannelID: "chn_B",
+		IsInVoice: true,
+	})
+	hub.HandleClientEvent(clientA, &models.WSEvent{
+		Type:     models.EventVoiceState,
+		ServerID: "srv_B",
+		Payload:  joinPayloadB,
+	})
+
+	// clientObserverA (que está em srv_A) DEVE receber um evento de VOICE_STATE indicando saída (IsInVoice = false) de usr_cross em srv_A!
+	leaveEvA := expectEvent(t, clientObserverA.Send, models.EventVoiceState, 200*time.Millisecond)
+	var leaveStateA models.VoiceParticipantState
+	if err := json.Unmarshal(leaveEvA.Payload, &leaveStateA); err != nil {
+		t.Fatalf("Erro ao deserializar evento de saída de srv_A: %v", err)
+	}
+	if leaveStateA.ServerID != "srv_A" || leaveStateA.ChannelID != "chn_A" || leaveStateA.IsInVoice {
+		t.Fatalf("Esperava saída do canal chn_A no servidor srv_A, obtido: %+v", leaveStateA)
+	}
+
+	// 3. VOICE_SYNC em srv_A não deve mais conter usr_cross
+	hub.HandleClientEvent(clientObserverA, &models.WSEvent{
+		Type:     models.EventVoiceSync,
+		ServerID: "srv_A",
+	})
+	syncEvA := expectEvent(t, clientObserverA.Send, models.EventVoiceSync, 200*time.Millisecond)
+	var syncListA []*models.VoiceParticipantState
+	_ = json.Unmarshal(syncEvA.Payload, &syncListA)
+	for _, st := range syncListA {
+		if st.UserID == "usr_cross" {
+			t.Fatalf("usr_cross ainda consta no sync de srv_A!")
+		}
+	}
+}

@@ -17,7 +17,7 @@ import (
 type Hub struct {
 	mu                 sync.RWMutex
 	clients            map[*Client]bool
-	userConns          map[string][]*Client                               // userID -> lista de conexões ativas
+	userConns          map[string][]*Client                                // userID -> lista de conexões ativas
 	voiceStates        map[string]map[string]*models.VoiceParticipantState // serverID -> (sessionID -> state)
 	Register           chan *Client
 	Unregister         chan *Client
@@ -231,6 +231,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			}
 
 			var oldLeaveEvent *models.WSEvent
+			var crossServerLeaveEvents []*models.WSEvent
 
 			h.mu.Lock()
 			sMap, serverExists := h.voiceStates[targetServerID]
@@ -239,7 +240,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 				h.voiceStates[targetServerID] = sMap
 			}
 
-			// Localiza qualquer estado pré-existente deste usuário no servidor
+			// Localiza qualquer estado pré-existente deste usuário no servidor de destino
 			var existingKey string
 			var st *models.VoiceParticipantState
 			for k, v := range sMap {
@@ -284,7 +285,32 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			}
 
 			// Usuário está conectado/conectando na voz
-			// Se estava em outro canal de voz, prepara saída do canal anterior para emitir fora do lock
+			// Se o usuário está entrando em voz neste servidor, remove-o de QUALQUER outro servidor onde estivesse em chamada
+			for sID, otherSMap := range h.voiceStates {
+				if sID == targetServerID {
+					continue
+				}
+				for k, existingSt := range otherSMap {
+					if existingSt.UserID == userID || k == userID || k == sessionID {
+						otherLeaveState := *existingSt
+						otherLeaveState.IsInVoice = false
+						otherLeaveState.IsTransmitting = false
+						if otherLeaveBytes, err := json.Marshal(otherLeaveState); err == nil {
+							crossServerLeaveEvents = append(crossServerLeaveEvents, &models.WSEvent{
+								Type:      models.EventVoiceState,
+								Payload:   otherLeaveBytes,
+								ChannelID: otherLeaveState.ChannelID,
+								ServerID:  sID,
+							})
+						}
+						delete(otherSMap, k)
+						delete(otherSMap, userID)
+						delete(otherSMap, sessionID)
+					}
+				}
+			}
+
+			// Se estava em outro canal de voz no mesmo servidor, prepara saída do canal anterior
 			if oldChannelID != "" && clientState.ChannelID != "" && oldChannelID != clientState.ChannelID {
 				oldLeave := models.VoiceParticipantState{
 					SessionID:      sessionID,
@@ -356,6 +382,9 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			// Emite eventos FORA do lock para evitar qualquer deadlock
 			if oldLeaveEvent != nil {
 				h.BroadcastEvent(oldLeaveEvent)
+			}
+			for _, crossLeave := range crossServerLeaveEvents {
+				h.BroadcastEvent(crossLeave)
 			}
 
 			updatedBytes, _ := json.Marshal(copyState)
@@ -529,15 +558,43 @@ func (h *Hub) broadcastPresence(userID, status string) {
 
 // SetLiveKitParticipantState atualiza a presença do participante com base nos webhooks autoritativos do LiveKit SFU
 func (h *Hub) SetLiveKitParticipantState(serverID, channelID, userID, username string, isInVoice bool, isTransmitting bool) {
+	var crossServerLeaveEvents []*models.WSEvent
+
 	h.mu.Lock()
 	if _, ok := h.voiceStates[serverID]; !ok {
 		h.voiceStates[serverID] = make(map[string]*models.VoiceParticipantState)
 	}
 
-	// Limpa qualquer chave residual/duplicada do mesmo usuário
+	// Limpa qualquer chave residual/duplicada do mesmo usuário neste servidor
 	for k, v := range h.voiceStates[serverID] {
 		if v.UserID == userID && k != userID {
 			delete(h.voiceStates[serverID], k)
+		}
+	}
+
+	// Se o usuário está entrando em voz via LiveKit, remove-o de QUALQUER outro servidor onde estivesse em chamada
+	if isInVoice {
+		for sID, otherSMap := range h.voiceStates {
+			if sID == serverID {
+				continue
+			}
+			for k, existingSt := range otherSMap {
+				if existingSt.UserID == userID || k == userID {
+					otherLeaveState := *existingSt
+					otherLeaveState.IsInVoice = false
+					otherLeaveState.IsTransmitting = false
+					if otherLeaveBytes, err := json.Marshal(otherLeaveState); err == nil {
+						crossServerLeaveEvents = append(crossServerLeaveEvents, &models.WSEvent{
+							Type:      models.EventVoiceState,
+							Payload:   otherLeaveBytes,
+							ChannelID: otherLeaveState.ChannelID,
+							ServerID:  sID,
+						})
+					}
+					delete(otherSMap, k)
+					delete(otherSMap, userID)
+				}
+			}
 		}
 	}
 
@@ -585,6 +642,10 @@ func (h *Hub) SetLiveKitParticipantState(serverID, channelID, userID, username s
 		}
 	}
 	h.mu.Unlock()
+
+	for _, crossLeave := range crossServerLeaveEvents {
+		h.BroadcastEvent(crossLeave)
+	}
 
 	payloadBytes, err := json.Marshal(outState)
 	if err == nil {

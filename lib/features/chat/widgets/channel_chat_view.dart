@@ -78,11 +78,246 @@ class ChannelChatView extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
 
+    final channelVoiceParticipants =
+        voiceParticipants[channelKey]?.values.toList() ?? <VoiceParticipantInfo>[];
+
+    final isConnectedToThisChannel =
+        isInVoice && connectedVoiceChannelId == channelKey;
+    final isConnectedToOtherChannel =
+        isInVoice &&
+        connectedVoiceChannelId != null &&
+        connectedVoiceChannelId != channelKey;
+
     return Container(
       color: isDark ? const Color(0xFF13141F) : const Color(0xFFFAF9F6),
       child: Column(
         children: [
-          // Banner de Transmissão Ativa no Canal
+          // 1. Barra de Participantes em Voz no Canal
+          if (channelVoiceParticipants.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0F261B) : const Color(0xFFE6F9EE),
+                border: Border(
+                  bottom: BorderSide(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF22C55E),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${channelVoiceParticipants.length} em call:',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF22C55E),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: channelVoiceParticipants.map((p) {
+                          final isMe = clientSessionId != null
+                              ? p.sessionId == clientSessionId
+                              : p.username == username;
+                          final devLabel = p.device == 'mobile'
+                              ? ' (Celular)'
+                              : p.device == 'desktop'
+                                  ? ' (Desktop)'
+                                  : '';
+                          final pColor = resolveAuthorColor(p.username, isDark);
+                          return Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1B3828)
+                                  : Colors.white,
+                              borderRadius: AppRadius.borderPill,
+                              border: Border.all(
+                                color: const Color(0xFF22C55E)
+                                    .withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: pColor.withValues(alpha: 0.3),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      getAuthorInitials(p.username),
+                                      style: TextStyle(
+                                        fontSize: 7.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: pColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${p.username}$devLabel${isMe ? " (Você)" : ""}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                if (p.isDeafened) ...[
+                                  const SizedBox(width: 4),
+                                  Tooltip(
+                                    message: 'Áudio desativado',
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                        borderRadius: AppRadius.borderXs,
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.headphones,
+                                        size: 10,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ),
+                                ] else if (p.isMuted) ...[
+                                  const SizedBox(width: 4),
+                                  Tooltip(
+                                    message: 'Microfone mutado',
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                        borderRadius: AppRadius.borderXs,
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.micOff,
+                                        size: 10,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  if (!isConnectedToThisChannel) ...[
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: isConnectedToOtherChannel
+                          ? 'Mudar voz para #$activeChannelName'
+                          : 'Entrar na chamada de voz',
+                      child: InkWell(
+                        onTap: onToggleVoiceChannel,
+                        borderRadius: AppRadius.borderPill,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isConnectedToOtherChannel
+                                ? const Color(0xFF3B82F6)
+                                : const Color(0xFF22C55E),
+                            borderRadius: AppRadius.borderPill,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isConnectedToOtherChannel
+                                    ? LucideIcons.phoneForwarded
+                                    : LucideIcons.phoneCall,
+                                size: 11,
+                                color: isConnectedToOtherChannel
+                                    ? Colors.white
+                                    : Colors.black,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isConnectedToOtherChannel
+                                    ? 'Mudar para cá'
+                                    : 'Entrar',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isConnectedToOtherChannel
+                                      ? Colors.white
+                                      : Colors.black,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: 'Sair da chamada de voz',
+                      child: InkWell(
+                        onTap: onToggleVoiceChannel,
+                        borderRadius: AppRadius.borderPill,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                            borderRadius: AppRadius.borderPill,
+                            border: Border.all(
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(LucideIcons.phoneOff,
+                                  size: 11, color: Color(0xFFEF4444)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Sair',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFFEF4444),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          // 2. Banner de Transmissão Ativa no Canal
           if (activeBroadcaster != null)
             ActiveLiveStreamBanner(
               isDark: isDark,
