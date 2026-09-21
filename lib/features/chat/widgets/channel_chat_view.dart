@@ -78,6 +78,9 @@ class ChannelChatView extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
 
+    final channelVoiceParticipants =
+        voiceParticipants[channelKey]?.values.toList() ?? <VoiceParticipantInfo>[];
+
     final isConnectedToThisChannel =
         isInVoice && connectedVoiceChannelId == channelKey;
     final isConnectedToOtherChannel =
@@ -90,7 +93,7 @@ class ChannelChatView extends StatelessWidget {
       child: Column(
         children: [
           // 1. Barra de Participantes em Voz no Canal
-          if (_channelVoiceParticipants.isNotEmpty)
+          if (channelVoiceParticipants.isNotEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -114,7 +117,7 @@ class ChannelChatView extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${_channelVoiceParticipants.length} em call:',
+                    '${channelVoiceParticipants.length} em call:',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -126,7 +129,7 @@ class ChannelChatView extends StatelessWidget {
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
-                        children: _channelVoiceParticipants.map((p) {
+                        children: channelVoiceParticipants.map((p) {
                           final isMe = clientSessionId != null
                               ? p.sessionId == clientSessionId
                               : p.username == username;
