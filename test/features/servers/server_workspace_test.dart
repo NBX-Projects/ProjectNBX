@@ -129,7 +129,7 @@ void main() {
               viewMode: ServerViewMode.channel,
               activeChannel: testChannels.first,
               accentColor: Colors.blue,
-              isRightSidebarVisible: true,
+              isRightSidebarVisible: false,
               isTransmitting: false,
               isInVoice: false,
               isConnectingVoice: false,
@@ -788,4 +788,3 @@ class FakeWorkspaceApiClient extends ApiClient {
     return [];
   }
 }
-
