@@ -73,12 +73,6 @@ class ChannelChatView extends StatelessWidget {
     this.connectedVoiceChannelId,
   });
 
-  List<VoiceParticipantInfo> get _channelVoiceParticipants {
-    final map = voiceParticipants[channelKey];
-    if (map == null) return [];
-    return map.values.where((p) => p.isInVoice).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;

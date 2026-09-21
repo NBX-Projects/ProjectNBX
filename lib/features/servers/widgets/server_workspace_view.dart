@@ -42,11 +42,13 @@ export 'package:projectnbx/features/servers/models/server_workspace_enums.dart';
 class ServerWorkspaceView extends ConsumerStatefulWidget {
   final ServerModel server;
   final VoidCallback onBackToHome;
+  final ValueChanged<bool>? onRightSidebarVisibilityChanged;
 
   const ServerWorkspaceView({
     super.key,
     required this.server,
     required this.onBackToHome,
+    this.onRightSidebarVisibilityChanged,
   });
 
   @override
@@ -72,6 +74,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   bool _isCustomizingBanner = false;
 
   bool _isRightSidebarVisible = true;
+  bool? _lastReportedRightSidebarVisible;
   bool _isInVoice = false;
   bool _isConnectingLiveKit = false;
   bool _isLiveKitConnected = false;
@@ -2099,6 +2102,13 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_lastReportedRightSidebarVisible != _isRightSidebarVisible) {
+      _lastReportedRightSidebarVisible = _isRightSidebarVisible;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onRightSidebarVisibilityChanged?.call(_isRightSidebarVisible);
+      });
+    }
+
     ref.listen<AudioSettings>(audioSettingsProvider, (previous, next) {
       if (previous != next) {
         _updateLiveKitAudioProcessing(next);
