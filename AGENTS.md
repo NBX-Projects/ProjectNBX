@@ -260,7 +260,7 @@ Closes #123
 ## 🛠️ 10. Diretrizes de Execução do Agente e Uso de Ferramentas
 
 ### 🚫 Restrição Estrita de Edição via Shell / Terminal
-- **PROIBIDO usar comandos de terminal/shell (`cmd.exe`, PowerShell, bash, `sed`, `awk`, `echo`, `patch`, `Write-Output`, scripts Python/Node ou redirecionamentos)** para criar, sobrescrever ou alterar arquivos do projeto.
+- **PROIBIDO usar comandos de terminal/shell (`cmd.exe`, PowerShell, bash, `sed`, `awk`, `echo`, `patch`, `Write-Output`, `[System.IO.File]::WriteAllText`, scripts Python/Node ou redirecionamentos)** para criar, sobrescrever ou alterar arquivos do projeto.
 - **SEMPRE utilizar as ferramentas nativas de edição de arquivo da IDE / Agent (`apply_diff`, `edit_file`, `write_file`)**, garantindo que as alterações passem pelo visualizador de *diff* do GoLand e do AndroidStudio para aprovação granular (pedaço por pedaço) pelo desenvolvedor.
 - O terminal só deve ser utilizado para **leitura/diagnóstico e execução de ferramentas de compilação/teste**, como:
   - `go test ./...`, `go vet ./...`, `golangci-lint run`
