@@ -6,6 +6,7 @@ class VoiceState {
   final bool isConnected;
   final String? connectedChannelId;
   final String? connectedServerId;
+  final bool isPttPressed;
 
   const VoiceState({
     this.isMicMuted = false,
@@ -13,6 +14,7 @@ class VoiceState {
     this.isConnected = false,
     this.connectedChannelId,
     this.connectedServerId,
+    this.isPttPressed = false,
   });
 
   VoiceState copyWith({
@@ -21,6 +23,7 @@ class VoiceState {
     bool? isConnected,
     String? connectedChannelId,
     String? connectedServerId,
+    bool? isPttPressed,
     bool clearChannel = false,
   }) {
     return VoiceState(
@@ -31,6 +34,7 @@ class VoiceState {
           clearChannel ? null : (connectedChannelId ?? this.connectedChannelId),
       connectedServerId:
           clearChannel ? null : (connectedServerId ?? this.connectedServerId),
+      isPttPressed: isPttPressed ?? this.isPttPressed,
     );
   }
 }
@@ -75,6 +79,18 @@ class VoiceStateNotifier extends StateNotifier<VoiceState> {
     }
   }
 
+  /// Acionado durante o modo Push-to-Talk:
+  /// Quando pressionado (pressed == true), desmuta o microfone se não estiver ensurdecido.
+  /// Quando liberado (pressed == false), muta novamente o microfone.
+  void setPttPressed(bool pressed) {
+    if (state.isPttPressed == pressed) return;
+    final micMuted = state.isDeafened ? true : !pressed;
+    state = state.copyWith(
+      isPttPressed: pressed,
+      isMicMuted: micMuted,
+    );
+  }
+
   void connectVoice(String serverId, String channelId) {
     state = state.copyWith(
       isConnected: true,
@@ -86,6 +102,7 @@ class VoiceStateNotifier extends StateNotifier<VoiceState> {
   void disconnectVoice() {
     state = state.copyWith(
       isConnected: false,
+      isPttPressed: false,
       clearChannel: true,
     );
   }

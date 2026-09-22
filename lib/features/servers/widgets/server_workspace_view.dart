@@ -142,8 +142,19 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final audioSettings = ref.read(audioSettingsProvider);
     final voiceState = ref.read(voiceStateProvider);
 
-    // If auto noise gate is on or mic is muted/deafened, keep standard transmission open
-    if (audioSettings.autoNoiseGate || voiceState.isMicMuted || voiceState.isDeafened) {
+    // Se o microfone estiver mutado ou ensurdecido, fecha o gate e garante o track desabilitado
+    if (voiceState.isMicMuted || voiceState.isDeafened) {
+      if (_isGateOpen) {
+        _noiseGateReleaseTimer?.cancel();
+        _noiseGateReleaseTimer = null;
+        _setLocalAudioTrackEnabled(false);
+        _isGateOpen = false;
+      }
+      return;
+    }
+
+    // Se o auto noise gate estiver ativo, mantém a transmissão aberta
+    if (audioSettings.autoNoiseGate) {
       if (!_isGateOpen) {
         _setLocalAudioTrackEnabled(true);
         _isGateOpen = true;
@@ -529,7 +540,16 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
 
       final currentVoiceState = ref.read(voiceStateProvider);
-      final shouldMuteMic = currentVoiceState.isMicMuted || currentVoiceState.isDeafened;
+      final audioSettings = ref.read(audioSettingsProvider);
+      final shouldMuteMic = currentVoiceState.isMicMuted ||
+          currentVoiceState.isDeafened ||
+          (audioSettings.isPushToTalk && !currentVoiceState.isPttPressed);
+
+      if (audioSettings.isPushToTalk &&
+          !currentVoiceState.isPttPressed &&
+          !currentVoiceState.isMicMuted) {
+        ref.read(voiceStateProvider.notifier).setMicMuted(true);
+      }
       try {
         await room.localParticipant?.setMicrophoneEnabled(
           !shouldMuteMic,
@@ -789,11 +809,23 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         !shouldMute,
         audioCaptureOptions: captureOptions,
       );
+      _setLocalAudioTrackEnabled(!shouldMute);
+      _isGateOpen = !shouldMute;
+      if (shouldMute) {
+        _noiseGateReleaseTimer?.cancel();
+        _noiseGateReleaseTimer = null;
+      }
       debugPrint('[LiveKit] Microfone alterado: isMuted=$isMuted, shouldMute=$shouldMute');
     } catch (e) {
       debugPrint('[LiveKit] Erro ao alterar microfone com opções: $e, tentando fallback...');
       try {
         await _liveKitRoom?.localParticipant?.setMicrophoneEnabled(!shouldMute);
+        _setLocalAudioTrackEnabled(!shouldMute);
+        _isGateOpen = !shouldMute;
+        if (shouldMute) {
+          _noiseGateReleaseTimer?.cancel();
+          _noiseGateReleaseTimer = null;
+        }
       } catch (e2) {
         debugPrint('[LiveKit] Falha no fallback de microfone: $e2');
       }
@@ -2130,6 +2162,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
       if (previous?.isDeafened != next.isDeafened) {
         _applyDeafenState(next.isDeafened);
+      }
+    });
+
+    ref.listen<AudioSettings>(audioSettingsProvider, (previous, next) {
+      if (previous?.isPushToTalk != next.isPushToTalk) {
+        if (next.isPushToTalk) {
+          final currentVoice = ref.read(voiceStateProvider);
+          if (!currentVoice.isPttPressed && !currentVoice.isMicMuted) {
+            ref.read(voiceStateProvider.notifier).setMicMuted(true);
+          }
+        }
       }
     });
 

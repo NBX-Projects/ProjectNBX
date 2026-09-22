@@ -1,6 +1,8 @@
 // ignore_for_file: experimental_member_use
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AudioSettings {
@@ -19,6 +21,11 @@ class AudioSettings {
   final double inputVolume; // 0.0 to 1.0
   final String inputProfile; // 'padrao', 'estudio', 'isolamento'
 
+  // Push to Talk (PTT)
+  final bool isPushToTalk;
+  final int pttKeyId;
+  final String pttKeyLabel;
+
   const AudioSettings({
     this.echoCancellation = true,
     this.noiseSuppression = true,
@@ -31,6 +38,9 @@ class AudioSettings {
     this.noiseGateReleaseMs = 300,
     this.inputVolume = 0.85,
     this.inputProfile = 'padrao',
+    this.isPushToTalk = false,
+    this.pttKeyId = 0x100000104, // LogicalKeyboardKey.capsLock.keyId
+    this.pttKeyLabel = 'Caps Lock',
   });
 
   AudioSettings copyWith({
@@ -45,6 +55,9 @@ class AudioSettings {
     int? noiseGateReleaseMs,
     double? inputVolume,
     String? inputProfile,
+    bool? isPushToTalk,
+    int? pttKeyId,
+    String? pttKeyLabel,
   }) {
     return AudioSettings(
       echoCancellation: echoCancellation ?? this.echoCancellation,
@@ -58,46 +71,49 @@ class AudioSettings {
       noiseGateReleaseMs: noiseGateReleaseMs ?? this.noiseGateReleaseMs,
       inputVolume: inputVolume ?? this.inputVolume,
       inputProfile: inputProfile ?? this.inputProfile,
+      isPushToTalk: isPushToTalk ?? this.isPushToTalk,
+      pttKeyId: pttKeyId ?? this.pttKeyId,
+      pttKeyLabel: pttKeyLabel ?? this.pttKeyLabel,
     );
   }
 
+  /// Converte as preferências do usuário no modelo oficial de captura de áudio do LiveKit
   AudioCaptureOptions toAudioCaptureOptions({String? deviceId}) {
-    var effectiveDeviceId = (deviceId != null && deviceId != 'default' && deviceId.isNotEmpty)
-        ? deviceId
-        : null;
-
-    if (effectiveDeviceId != null) {
-      if (effectiveDeviceId.startsWith(r'SWD\MMDEVAPI\')) {
-        effectiveDeviceId = effectiveDeviceId.substring(r'SWD\MMDEVAPI\'.length);
+    // Normaliza deviceId do Windows (ex: SWD\MMDEVAPI\{...}) para o formato esperado pelo WebRTC nativo
+    String? normalizedDeviceId = deviceId;
+    if (normalizedDeviceId != null) {
+      if (normalizedDeviceId.startsWith(r'SWD\MMDEVAPI\')) {
+        normalizedDeviceId =
+            normalizedDeviceId.substring(r'SWD\MMDEVAPI\'.length);
       }
-      if (effectiveDeviceId.startsWith(r'\')) {
-        effectiveDeviceId = effectiveDeviceId.replaceFirst(RegExp(r'^\\+'), '');
-      }
-      effectiveDeviceId = effectiveDeviceId.trim().toLowerCase();
+      normalizedDeviceId = normalizedDeviceId.toLowerCase();
     }
 
     return AudioCaptureOptions(
-      deviceId: effectiveDeviceId,
+      deviceId: normalizedDeviceId == 'default' ? null : normalizedDeviceId,
       echoCancellation: echoCancellation,
       noiseSuppression: noiseSuppression,
       autoGainControl: compressorEnabled,
       highPassFilter: highPassFilter,
       typingNoiseDetection: typingNoiseDetection,
-      voiceIsolation: noiseSuppression,
+      voiceIsolation: vadOptimization,
     );
   }
 
+  /// Opções granulares de processamento WebRTC nativo
   AudioProcessingOptions toAudioProcessingOptions() {
     return AudioProcessingOptions(
       echoCancellation: echoCancellation,
       noiseSuppression: noiseSuppression,
-      autoGainControl: compressorEnabled,
+      autoGainControl: false,
       highPassFilter: highPassFilter,
     );
   }
 }
 
 class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
+  final Ref? _ref;
+
   static const String _keyEchoCancellation = 'audio_echo_cancellation';
   static const String _keyNoiseSuppression = 'audio_noise_suppression';
   static const String _keyCompressor = 'audio_compressor_enabled';
@@ -107,14 +123,23 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
   static const String _keyAutoNoiseGate = 'audio_auto_noise_gate';
   static const String _keyNoiseGateThreshold = 'audio_noise_gate_threshold';
   static const String _keyNoiseGateReleaseMs = 'audio_noise_gate_release_ms';
+  static const String _keyIsPushToTalk = 'audio_is_push_to_talk';
+  static const String _keyPttKeyId = 'audio_ptt_key_id';
+  static const String _keyPttKeyLabel = 'audio_ptt_key_label';
 
-  AudioSettingsNotifier() : super(const AudioSettings()) {
+  AudioSettingsNotifier([this._ref]) : super(const AudioSettings()) {
     loadSettings();
   }
 
   Future<void> loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final savedKeyId = prefs.getInt(_keyPttKeyId);
+      final pttKeyId = (savedKeyId == null || savedKeyId == 0x00100000014)
+          ? 0x100000104
+          : savedKeyId;
+      final isPushToTalk = prefs.getBool(_keyIsPushToTalk) ?? false;
+
       state = state.copyWith(
         echoCancellation: prefs.getBool(_keyEchoCancellation) ?? true,
         noiseSuppression: prefs.getBool(_keyNoiseSuppression) ?? true,
@@ -125,7 +150,44 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
         autoNoiseGate: prefs.getBool(_keyAutoNoiseGate) ?? true,
         noiseGateThreshold: prefs.getDouble(_keyNoiseGateThreshold) ?? 0.15,
         noiseGateReleaseMs: prefs.getInt(_keyNoiseGateReleaseMs) ?? 300,
+        isPushToTalk: isPushToTalk,
+        pttKeyId: pttKeyId,
+        pttKeyLabel: prefs.getString(_keyPttKeyLabel) ?? 'Caps Lock',
       );
+
+      if (isPushToTalk && _ref != null) {
+        _ref.read(voiceStateProvider.notifier).setMicMuted(true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setIsPushToTalk(bool enabled) async {
+    state = state.copyWith(isPushToTalk: enabled);
+    await _persistBool(_keyIsPushToTalk, enabled);
+    if (_ref != null) {
+      if (enabled) {
+        _ref.read(voiceStateProvider.notifier).setMicMuted(true);
+      } else {
+        _ref.read(voiceStateProvider.notifier).setMicMuted(false);
+      }
+    }
+  }
+
+  Future<void> setPttKey(LogicalKeyboardKey key) async {
+    final rawLabel = key.keyLabel.trim();
+    final label = key == LogicalKeyboardKey.space
+        ? 'Space'
+        : (rawLabel.isNotEmpty
+            ? rawLabel
+            : 'Key 0x${key.keyId.toRadixString(16)}');
+    state = state.copyWith(
+      pttKeyId: key.keyId,
+      pttKeyLabel: label,
+    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_keyPttKeyId, key.keyId);
+      await prefs.setString(_keyPttKeyLabel, label);
     } catch (_) {}
   }
 
@@ -249,5 +311,5 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
 
 final audioSettingsProvider =
     StateNotifierProvider<AudioSettingsNotifier, AudioSettings>((ref) {
-  return AudioSettingsNotifier();
+  return AudioSettingsNotifier(ref);
 });
