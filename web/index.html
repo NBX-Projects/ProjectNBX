@@ -60,6 +60,116 @@
     };
     document.addEventListener('fullscreenchange', nudgeFlutterResize);
     window.addEventListener('resize', nudgeFlutterResize);
+
+    // Prioridade Máxima de Atalhos no Web:
+    // Captura os eventos de teclado na fase de 'capture' do DOM antes que o navegador
+    // execute suas ações padrão nativas (como Ctrl+K focar na barra de endereços,
+    // Ctrl+H abrir histórico, Ctrl+B barra de favoritos, Ctrl+S salvar página, etc).
+    // Ao chamar preventDefault() sem stopPropagation(), o navegador não rouba o foco
+    // e o evento continua descendo na árvore até a camada do Flutter/Canvas.
+    window.addEventListener('keydown', function(event) {
+      const isCtrl = event.ctrlKey || event.metaKey;
+      const isAlt = event.altKey;
+      const isShift = event.shiftKey;
+      const key = event.key ? event.key.toLowerCase() : '';
+      const code = event.code ? event.code.toLowerCase() : '';
+      const charFromCode = code.startsWith('key') ? code.substring(3) : '';
+
+      const target = event.target;
+      const isInput = target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable ||
+        (target.getAttribute && target.getAttribute('role') === 'textbox')
+      );
+
+      // 1. Atalhos com Ctrl / Cmd que colidem com atalhos nativos do navegador
+      if (isCtrl) {
+        const browserCollidingKeys = [
+          'k', // Busca Rápida (Chrome rouba foco para barra de URLs)
+          'h', // Home Hub / Chat HUD (Chrome abre histórico)
+          'b', // Barra Lateral (Chrome abre/fecha barra de favoritos)
+          'd', // Ensurdecer (Chrome abre diálogo de adicionar favorito)
+          's', // Compartilhar Tela (Chrome abre salvar página HTML)
+          'p', // Atualizações (Chrome abre imprimir página)
+          'u', // Silenciar live (Chrome abre código-fonte da página)
+          'i', // Convidar amigos (Chrome abre inspecionar / info da página)
+          'o', // Outros (Chrome abre arquivo)
+          'm', // Mutar microfone
+          'e', // Desconectar voz / Emojis (Chrome busca na barra)
+          'a', // Menu rápido de áudio
+          'c', // Overlay / Chat
+          'l', // Logout
+          'j', // Solicitações de entrada (Chrome abre Downloads)
+          'f', // Anexar arquivo (Chrome abre localizar)
+          't', // Alternar tema (Chrome reabre aba fechada com Shift+T)
+          'n', // Criar novo servidor (Chrome abre anônima com Shift+N)
+          'r', // Gerenciar cargos (Chrome recarrega a página com Shift+R)
+          ',', // Configurações
+          '/'  // Focar chat
+        ];
+
+        if (browserCollidingKeys.indexOf(key) !== -1 ||
+            (charFromCode && browserCollidingKeys.indexOf(charFromCode) !== -1)) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      // Atalhos com Alt (ex: Alt + C para focar campo de texto)
+      if (isAlt && !isCtrl) {
+        if (key === 'c' || charFromCode === 'c') {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      // 2. Atalhos customizados salvos pelo usuário no SharedPreferences do Flutter Web
+      try {
+        const raw = window.localStorage.getItem('flutter.user_keyboard_shortcuts_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          for (const actionId in parsed) {
+            const sc = parsed[actionId];
+            if (sc && sc.ctrl === isCtrl && sc.alt === isAlt && sc.shift === isShift) {
+              const expectedLabel = sc.keyLabel ? sc.keyLabel.toLowerCase() : '';
+              if (expectedLabel === key || expectedLabel === charFromCode) {
+                event.preventDefault();
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 3. Push-to-Talk (PTT) no Web: suprime comportamentos nativos da tecla enquanto segura
+      try {
+        const isPtt = window.localStorage.getItem('flutter.audio_is_push_to_talk') === 'true';
+        const pttLabel = window.localStorage.getItem('flutter.audio_ptt_key_label');
+        if (isPtt && pttLabel) {
+          const pttLower = pttLabel.toLowerCase();
+          if (pttLower === key || (pttLower === 'caps lock' && key === 'capslock') || (pttLower === 'space' && key === ' ')) {
+            if (!isInput) {
+              event.preventDefault();
+            }
+          }
+        }
+      } catch (e) {}
+    }, { capture: true, passive: false });
+
+    window.addEventListener('keyup', function(event) {
+      try {
+        const isPtt = window.localStorage.getItem('flutter.audio_is_push_to_talk') === 'true';
+        const pttLabel = window.localStorage.getItem('flutter.audio_ptt_key_label');
+        const key = event.key ? event.key.toLowerCase() : '';
+        if (isPtt && pttLabel) {
+          const pttLower = pttLabel.toLowerCase();
+          if (pttLower === key || (pttLower === 'caps lock' && key === 'capslock') || (pttLower === 'space' && key === ' ')) {
+            event.preventDefault();
+          }
+        }
+      } catch (e) {}
+    }, { capture: true, passive: false });
   </script>
 
   <!--

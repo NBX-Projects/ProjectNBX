@@ -7,7 +7,6 @@ import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/settings/screens/settings_screen.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
 import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
-
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 
 class QuickAudioDeviceMenu extends ConsumerStatefulWidget {
@@ -20,42 +19,47 @@ class QuickAudioDeviceMenu extends ConsumerStatefulWidget {
 
   static Future<void> show(
     BuildContext context, {
-    required GlobalKey anchorKey,
+    GlobalKey? anchorKey,
     bool isInput = true,
   }) async {
-    final renderBox = anchorKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-
-    final offset = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
+    final renderBox = anchorKey?.currentContext?.findRenderObject() as RenderBox?;
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
     const menuWidth = 310.0;
     const menuHeight = 440.0;
 
-    // Garante que o menu não transborde lateralmente
-    double left = offset.dx;
-    if (left + menuWidth > screenWidth - 12) {
-      left = screenWidth - menuWidth - 12;
-    }
-    if (left < 12) left = 12;
-
-    // Detecta se o elemento âncora está no topo ou na base da tela
-    final openUpward = offset.dy > screenHeight / 2;
+    double left;
     double? top;
     double? bottom;
+    bool openUpward = false;
 
-    if (openUpward) {
-      bottom = screenHeight - offset.dy + 8;
-      if (bottom + menuHeight > screenHeight - 20) {
-        bottom = 20;
+    if (renderBox != null) {
+      final offset = renderBox.localToGlobal(Offset.zero);
+      final size = renderBox.size;
+
+      left = offset.dx;
+      if (left + menuWidth > screenWidth - 12) {
+        left = screenWidth - menuWidth - 12;
+      }
+      if (left < 12) left = 12;
+
+      openUpward = offset.dy > screenHeight / 2;
+      if (openUpward) {
+        bottom = screenHeight - offset.dy + 8;
+        if (bottom + menuHeight > screenHeight - 20) {
+          bottom = 20;
+        }
+      } else {
+        top = offset.dy + size.height + 8;
+        if (top + menuHeight > screenHeight - 20) {
+          top = screenHeight - menuHeight - 20;
+        }
       }
     } else {
-      top = offset.dy + size.height + 8;
-      if (top + menuHeight > screenHeight - 20) {
-        top = screenHeight - menuHeight - 20;
-      }
+      // Fallback: canto superior direito da tela
+      left = (screenWidth - menuWidth - 20).clamp(12.0, screenWidth - menuWidth);
+      top = 60.0;
     }
 
     await showGeneralDialog<void>(

@@ -209,27 +209,33 @@ class _DockedVoiceFooterState extends State<DockedVoiceFooter> {
                 key: _micKey,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: voiceState.isMicMuted
-                      ? const Color(0xFFEF4444).withValues(alpha: 0.18)
-                      : (isDark
-                          ? const Color(0xFF1E2030)
-                          : const Color(0xFFF1F5F9)),
+                  color: voiceState.isPttPressed
+                      ? const Color(0xFF10B981).withValues(alpha: 0.22)
+                      : (voiceState.isMicMuted
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.18)
+                          : (isDark
+                              ? const Color(0xFF1E2030)
+                              : const Color(0xFFF1F5F9))),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: voiceState.isMicMuted
-                        ? const Color(0xFFEF4444).withValues(alpha: 0.45)
-                        : (isDark
-                            ? const Color(0xFF313244)
-                            : const Color(0xFFE2E8F0)),
+                    color: voiceState.isPttPressed
+                        ? const Color(0xFF10B981)
+                        : (voiceState.isMicMuted
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.45)
+                            : (isDark
+                                ? const Color(0xFF313244)
+                                : const Color(0xFFE2E8F0))),
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Tooltip(
-                      message: voiceState.isMicMuted
-                          ? 'Desmutar Microfone'
-                          : 'Mutar Microfone',
+                      message: voiceState.isPttPressed
+                          ? 'Push-to-Talk (Transmitindo)'
+                          : (voiceState.isMicMuted
+                              ? 'Desmutar Microfone'
+                              : 'Mutar Microfone'),
                       child: InkWell(
                         onTap: () {
                           voiceNotifier.toggleMic();
@@ -248,11 +254,13 @@ class _DockedVoiceFooterState extends State<DockedVoiceFooter> {
                                 ? LucideIcons.micOff
                                 : LucideIcons.mic,
                             size: 15,
-                            color: voiceState.isMicMuted
-                                ? const Color(0xFFEF4444)
-                                : (isDark
-                                    ? const Color(0xFFCAD3F5)
-                                    : const Color(0xFF334155)),
+                            color: voiceState.isPttPressed
+                                ? const Color(0xFF10B981)
+                                : (voiceState.isMicMuted
+                                    ? const Color(0xFFEF4444)
+                                    : (isDark
+                                        ? const Color(0xFFCAD3F5)
+                                        : const Color(0xFF334155))),
                           ),
                         ),
                       ),

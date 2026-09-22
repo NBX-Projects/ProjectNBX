@@ -8,6 +8,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
+import 'package:projectnbx/core/shortcuts/controllers/shortcuts_controller.dart';
+import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:projectnbx/core/shortcuts/services/keyboard_shortcuts_service.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
@@ -42,6 +45,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'home';
   final GlobalKey _topMicKey = GlobalKey();
   final GlobalKey _topHeadphonesKey = GlobalKey();
+  final FocusNode _searchFocusNode = FocusNode();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   List<PublicServerModel> _publicServers = [];
   bool _isLoadingPublicServers = false;
   bool _isServerRightSidebarVisible = true;
@@ -59,6 +65,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             .checkForUpdates(silent: true);
       }
     });
+
+    final shortcuts = KeyboardShortcutsService.instance;
+    shortcuts.registerHandler(AppShortcutAction.navigateHome, _handleNavigateHome);
+    shortcuts.registerHandler(AppShortcutAction.quickSearch, _handleQuickSearch);
+    shortcuts.registerHandler(AppShortcutAction.toggleRightSidebar, _handleToggleSidebar);
+    shortcuts.registerHandler(AppShortcutAction.openCreateServer, _handleOpenCreateServer);
+    shortcuts.registerHandler(AppShortcutAction.quickAudioDevices, _handleQuickAudioDevices);
+  }
+
+  @override
+  void dispose() {
+    final shortcuts = KeyboardShortcutsService.instance;
+    shortcuts.unregisterHandler(AppShortcutAction.navigateHome, _handleNavigateHome);
+    shortcuts.unregisterHandler(AppShortcutAction.quickSearch, _handleQuickSearch);
+    shortcuts.unregisterHandler(AppShortcutAction.toggleRightSidebar, _handleToggleSidebar);
+    shortcuts.unregisterHandler(AppShortcutAction.openCreateServer, _handleOpenCreateServer);
+    shortcuts.unregisterHandler(AppShortcutAction.quickAudioDevices, _handleQuickAudioDevices);
+    _searchFocusNode.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _handleNavigateHome() {
+    if (mounted && _activeTab != 'home') {
+      setState(() => _activeTab = 'home');
+    }
+  }
+
+  void _handleQuickSearch() {
+    if (mounted) {
+      if (_activeTab != 'home') {
+        setState(() => _activeTab = 'home');
+      }
+      _searchFocusNode.requestFocus();
+      _searchController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _searchController.text.length,
+      );
+    }
+  }
+
+  void _handleToggleSidebar() {
+    if (mounted && _activeTab == 'home') {
+      setState(() => _isServerRightSidebarVisible = !_isServerRightSidebarVisible);
+    }
+  }
+
+  void _handleOpenCreateServer() {
+    if (mounted) {
+      CreateServerDialog.show(context);
+    }
+  }
+
+  void _handleQuickAudioDevices() {
+    if (mounted) {
+      QuickAudioDeviceMenu.show(context, anchorKey: _topMicKey, isInput: true);
+    }
   }
 
   Future<void> _loadPublicServers() async {
@@ -90,11 +153,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final serversState = ref.watch(serversControllerProvider);
     final strings = ref.watch(stringsProvider);
     final user = authState.user;
-    final servers = serversState.servers;
+    final allServers = serversState.servers;
+
+    final servers = _searchQuery.trim().isEmpty
+        ? allServers
+        : allServers
+            .where((s) => s.name.toLowerCase().contains(_searchQuery.trim().toLowerCase()))
+            .toList();
 
     const totalVoiceCount = 0;
 
-    final selectedServer = servers.cast<ServerModel?>().firstWhere(
+    final selectedServer = allServers.cast<ServerModel?>().firstWhere(
       (s) => s?.id == _activeTab,
       orElse: () => null,
     );
@@ -118,7 +187,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               )
             : Row(
                 children: [
-                  // 1. LEFT RAIL (Server Icons & Navigation)
                   HubLeftRail(
                     activeTab: _activeTab,
                     onTabChanged: (tab) {
@@ -214,12 +282,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                               // Public Servers Discovery Section (não listar servidores que o usuário já participa)
                                               () {
-                                                final myServerIds = servers
+                                                final myServerIds = allServers
                                                     .map((s) => s.id)
                                                     .toSet();
                                                 final availablePublicServers =
                                                     _publicServers.where((pub) {
-                                                      return !pub.isMember &&
+                                                      final matchesFilter = _searchQuery.trim().isEmpty ||
+                                                          pub.server.name.toLowerCase().contains(_searchQuery.trim().toLowerCase());
+                                                      return matchesFilter &&
+                                                          !pub.isMember &&
                                                           !myServerIds.contains(
                                                             pub.server.id,
                                                           );
@@ -283,6 +354,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isDesktopPlatform =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
+    final shortcutsState = ref.watch(shortcutsProvider);
+    final searchShortcut =
+        shortcutsState.getCombination(AppShortcutAction.quickSearch)?.toReadableString() ??
+            'Ctrl K';
+
     final content = Container(
       width: double.infinity,
       height: 56,
@@ -315,7 +391,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ] else ...[
-                  // Search Box (ampliado)
+                  // Search Box (interativo com atalho dinâmico)
                   Flexible(
                     child: Container(
                       height: 40,
@@ -327,9 +403,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             : AppColors.lightSurface,
                         borderRadius: AppRadius.borderMd,
                         border: Border.all(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
+                          color: _searchFocusNode.hasFocus
+                              ? (isDark
+                                  ? AppColors.darkBorderFocus
+                                  : AppColors.lightBorderFocus)
+                              : (isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder),
+                          width: _searchFocusNode.hasFocus ? 1.5 : 1.0,
                         ),
                       ),
                       child: Row(
@@ -343,17 +424,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              strings.searchPlaceholder,
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              onChanged: (val) =>
+                                  setState(() => _searchQuery = val),
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 color: isDark
-                                    ? AppColors.darkTextMuted
-                                    : AppColors.lightTextMuted,
+                                    ? AppColors.darkTextPrimary
+                                    : AppColors.lightTextPrimary,
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              decoration: InputDecoration(
+                                hintText: strings.searchPlaceholder,
+                                hintStyle: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: isDark
+                                      ? AppColors.darkTextMuted
+                                      : AppColors.lightTextMuted,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
                             ),
                           ),
+                          if (_searchQuery.isNotEmpty)
+                            GestureDetector(
+                              onTap: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: Icon(
+                                  LucideIcons.x,
+                                  size: 14,
+                                  color: isDark
+                                      ? AppColors.darkTextMuted
+                                      : AppColors.lightTextMuted,
+                                ),
+                              ),
+                            ),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 7,
@@ -366,7 +478,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               borderRadius: AppRadius.borderXs,
                             ),
                             child: Text(
-                              'Ctrl K',
+                              searchShortcut,
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,

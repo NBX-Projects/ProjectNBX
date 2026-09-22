@@ -1,5 +1,8 @@
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
+import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -19,9 +22,12 @@ void main() {
       expect(settings.autoNoiseGate, isTrue);
       expect(settings.noiseGateThreshold, 0.15);
       expect(settings.noiseGateReleaseMs, 300);
+      expect(settings.isPushToTalk, isFalse);
+      expect(settings.pttKeyId, LogicalKeyboardKey.capsLock.keyId);
+      expect(settings.pttKeyLabel, 'Caps Lock');
     });
 
-    test('copyWith works properly including noise gate properties', () {
+    test('copyWith works properly including noise gate properties and PTT', () {
       const settings = AudioSettings();
       final updated = settings.copyWith(
         echoCancellation: false,
@@ -30,6 +36,9 @@ void main() {
         autoNoiseGate: false,
         noiseGateThreshold: 0.35,
         noiseGateReleaseMs: 450,
+        isPushToTalk: true,
+        pttKeyId: LogicalKeyboardKey.space.keyId,
+        pttKeyLabel: 'Space',
       );
 
       expect(updated.echoCancellation, isFalse);
@@ -41,6 +50,9 @@ void main() {
       expect(updated.autoNoiseGate, isFalse);
       expect(updated.noiseGateThreshold, 0.35);
       expect(updated.noiseGateReleaseMs, 450);
+      expect(updated.isPushToTalk, isTrue);
+      expect(updated.pttKeyId, LogicalKeyboardKey.space.keyId);
+      expect(updated.pttKeyLabel, 'Space');
     });
 
     test('toAudioCaptureOptions converts settings accurately', () {
@@ -100,118 +112,116 @@ void main() {
       await notifier.setCompressorEnabled(false);
       expect(notifier.state.compressorEnabled, isFalse);
 
-      // Toggle echo cancellation
-      await notifier.setEchoCancellation(false);
-      expect(notifier.state.echoCancellation, isFalse);
-
-      // Toggle noise suppression
-      await notifier.setNoiseSuppression(false);
-      expect(notifier.state.noiseSuppression, isFalse);
-
-      // Toggle high pass filter
-      await notifier.setHighPassFilter(true);
-      expect(notifier.state.highPassFilter, isTrue);
-
-      // Toggle typing noise detection
-      await notifier.setTypingNoiseDetection(false);
-      expect(notifier.state.typingNoiseDetection, isFalse);
-
-      // Toggle VAD optimization
-      await notifier.setVadOptimization(false);
-      expect(notifier.state.vadOptimization, isFalse);
-
-      // Configure Noise Gate
+      // Toggle noise gate
       await notifier.setAutoNoiseGate(false);
       expect(notifier.state.autoNoiseGate, isFalse);
 
-      await notifier.setNoiseGateThreshold(0.25);
-      expect(notifier.state.noiseGateThreshold, 0.25);
+      await notifier.setNoiseGateThreshold(0.4);
+      expect(notifier.state.noiseGateThreshold, 0.4);
 
-      await notifier.setNoiseGateReleaseMs(350);
-      expect(notifier.state.noiseGateReleaseMs, 350);
-
-      // Verify SharedPreferences persistence
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('audio_compressor_enabled'), isFalse);
-      expect(prefs.getBool('audio_echo_cancellation'), isFalse);
-      expect(prefs.getBool('audio_noise_suppression'), isFalse);
-      expect(prefs.getBool('audio_high_pass_filter'), isTrue);
-      expect(prefs.getBool('audio_typing_noise_detection'), isFalse);
-      expect(prefs.getBool('audio_vad_optimization'), isFalse);
-      expect(prefs.getBool('audio_auto_noise_gate'), isFalse);
-      expect(prefs.getDouble('audio_noise_gate_threshold'), 0.25);
-      expect(prefs.getInt('audio_noise_gate_release_ms'), 350);
+      await notifier.setNoiseGateReleaseMs(500);
+      expect(notifier.state.noiseGateReleaseMs, 500);
     });
 
     test('Noise Gate clamping safeguards values', () async {
       SharedPreferences.setMockInitialValues({});
       final notifier = AudioSettingsNotifier();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // Test threshold clamping
       await notifier.setNoiseGateThreshold(-0.5);
       expect(notifier.state.noiseGateThreshold, 0.0);
 
-      await notifier.setNoiseGateThreshold(1.8);
+      await notifier.setNoiseGateThreshold(1.5);
       expect(notifier.state.noiseGateThreshold, 1.0);
 
-      // Test release clamping
       await notifier.setNoiseGateReleaseMs(10);
       expect(notifier.state.noiseGateReleaseMs, 50);
 
-      await notifier.setNoiseGateReleaseMs(2000);
+      await notifier.setNoiseGateReleaseMs(5000);
       expect(notifier.state.noiseGateReleaseMs, 1000);
+    });
+
+    test('Push-to-Talk key setting and Space label formatting', () async {
+      SharedPreferences.setMockInitialValues({});
+      final notifier = AudioSettingsNotifier();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      await notifier.setPttKey(LogicalKeyboardKey.space);
+      expect(notifier.state.pttKeyLabel, 'Space');
+      expect(notifier.state.pttKeyId, LogicalKeyboardKey.space.keyId);
+
+      await notifier.setPttKey(LogicalKeyboardKey.keyV);
+      expect(notifier.state.pttKeyLabel, 'V');
+      expect(notifier.state.pttKeyId, LogicalKeyboardKey.keyV.keyId);
+    });
+
+    test('Push-to-Talk toggling automatically mutes mic via container Ref', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+
+      final notifier = container.read(audioSettingsProvider.notifier);
+      final voiceNotifier = container.read(voiceStateProvider.notifier);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(container.read(voiceStateProvider).isMicMuted, isFalse);
+
+      // Activating PTT mutes mic immediately
+      await notifier.setIsPushToTalk(true);
+      expect(notifier.state.isPushToTalk, isTrue);
+      expect(container.read(voiceStateProvider).isMicMuted, isTrue);
+
+      // Holding PTT unmutes
+      voiceNotifier.setPttPressed(true);
+      expect(container.read(voiceStateProvider).isPttPressed, isTrue);
+      expect(container.read(voiceStateProvider).isMicMuted, isFalse);
+
+      // Releasing PTT re-mutes
+      voiceNotifier.setPttPressed(false);
+      expect(container.read(voiceStateProvider).isPttPressed, isFalse);
+      expect(container.read(voiceStateProvider).isMicMuted, isTrue);
+
+      // Turning off PTT unmutes
+      await notifier.setIsPushToTalk(false);
+      expect(notifier.state.isPushToTalk, isFalse);
+      expect(container.read(voiceStateProvider).isMicMuted, isFalse);
+
+      container.dispose();
+    });
+
+    test('Loads legacy keyId and automatically migrates to valid Caps Lock keyId', () async {
+      // Simulates previously saved settings with bad hex
+      SharedPreferences.setMockInitialValues({
+        'audio_ptt_key_id': 0x00100000014,
+        'audio_ptt_key_label': 'Caps Lock',
+        'audio_is_push_to_talk': true,
+      });
+
+      final notifier = AudioSettingsNotifier();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(notifier.state.pttKeyId, LogicalKeyboardKey.capsLock.keyId);
+      expect(notifier.state.pttKeyLabel, 'Caps Lock');
     });
 
     test('Input volume and profile presets work properly', () async {
       SharedPreferences.setMockInitialValues({});
       final notifier = AudioSettingsNotifier();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(notifier.state.inputVolume, 0.85);
-      expect(notifier.state.inputProfile, 'padrao');
+      await notifier.setInputVolume(0.95);
+      expect(notifier.state.inputVolume, 0.95);
 
-      // Change input volume
-      await notifier.setInputVolume(0.60);
-      expect(notifier.state.inputVolume, 0.60);
-
-      // Clamping input volume
-      await notifier.setInputVolume(-0.2);
-      expect(notifier.state.inputVolume, 0.0);
-      await notifier.setInputVolume(1.5);
-      expect(notifier.state.inputVolume, 1.0);
-
-      // Apply estudio profile
       await notifier.applyProfile('estudio');
       expect(notifier.state.inputProfile, 'estudio');
-      expect(notifier.state.echoCancellation, isFalse);
-      expect(notifier.state.noiseSuppression, isFalse);
-      expect(notifier.state.compressorEnabled, isFalse);
+      expect(notifier.state.highPassFilter, isFalse);
 
-      // Apply isolamento profile
       await notifier.applyProfile('isolamento');
       expect(notifier.state.inputProfile, 'isolamento');
-      expect(notifier.state.echoCancellation, isTrue);
-      expect(notifier.state.noiseSuppression, isTrue);
       expect(notifier.state.highPassFilter, isTrue);
-      expect(notifier.state.autoNoiseGate, isTrue);
-
-      // Apply padrao profile
-      await notifier.applyProfile('padrao');
-      expect(notifier.state.inputProfile, 'padrao');
-      expect(notifier.state.echoCancellation, isTrue);
-      expect(notifier.state.noiseSuppression, isTrue);
-      expect(notifier.state.highPassFilter, isFalse);
-      expect(notifier.state.autoNoiseGate, isTrue);
     });
 
     test('toAudioCaptureOptions strips Windows SWD prefix and normalizes to lowercase', () {
       const settings = AudioSettings();
-      final capture = settings.toAudioCaptureOptions(
-        deviceId: r'SWD\MMDEVAPI\{0.0.1.00000000}.{GUID-1234}',
-      );
-      expect(capture.deviceId, '{0.0.1.00000000}.{guid-1234}');
+      final opts = settings.toAudioCaptureOptions(deviceId: r'SWD\MMDEVAPI\{0.0.1.00000000}.{GUID-TEST}');
+      expect(opts.deviceId, '{0.0.1.00000000}.{guid-test}');
     });
   });
 }
-

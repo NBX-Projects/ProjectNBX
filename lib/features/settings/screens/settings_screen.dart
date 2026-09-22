@@ -10,6 +10,10 @@ import 'package:projectnbx/core/config/app_config.dart';
 import 'package:projectnbx/core/localization/app_language.dart';
 import 'package:projectnbx/core/localization/app_strings.dart';
 import 'package:projectnbx/core/localization/locale_controller.dart';
+import 'package:projectnbx/core/shortcuts/controllers/shortcuts_controller.dart';
+import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:projectnbx/core/shortcuts/services/keyboard_shortcuts_service.dart';
+import 'package:projectnbx/core/shortcuts/widgets/shortcut_record_dialog.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
@@ -21,13 +25,18 @@ import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/auth/models/user_model.dart';
 import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
 import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
+import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:window_manager/window_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final String initialSection;
+
   const SettingsScreen({super.key, this.initialSection = 'account'});
 
-  static Future<void> show(BuildContext context, {String initialSection = 'account'}) {
+  static Future<void> show(
+    BuildContext context, {
+    String initialSection = 'account',
+  }) {
     return Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
@@ -66,8 +75,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Voice Settings State
   double _inputVolume = 0.85;
   double _outputVolume = 0.90;
-  bool _isPushToTalk = false;
-  final String _pttKey = 'CAPS LOCK';
 
   // Account Status & Profile Edit State
   String _userStatus = 'online';
@@ -2491,13 +2498,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // 4. ATALHOS & PTT
   Widget _buildHotkeysSection(bool isDark, AppStrings strings) {
+    final shortcutsState = ref.watch(shortcutsProvider);
+    final shortcutsNotifier = ref.read(shortcutsProvider.notifier);
+    final audioSettings = ref.watch(audioSettingsProvider);
+    final audioSettingsNotifier = ref.read(audioSettingsProvider.notifier);
+    final voiceNotifier = ref.read(voiceStateProvider.notifier);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeaderTitle(
-          isDark,
-          strings.hotkeysAndPTT,
-          strings.hotkeysDescription,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: _buildSectionHeaderTitle(
+                isDark,
+                strings.hotkeysAndPTT,
+                strings.hotkeysDescription,
+              ),
+            ),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isDark
+                    ? AppColors.darkDanger
+                    : AppColors.lightDanger,
+                side: BorderSide(
+                  color: (isDark ? AppColors.darkDanger : AppColors.lightDanger)
+                      .withValues(alpha: 0.4),
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: AppRadius.borderSm,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+              ),
+              onPressed: () => _confirmResetAllShortcuts(context, isDark),
+              icon: const Icon(LucideIcons.rotateCcw, size: 14),
+              label: Text(
+                'Restaurar Padrões',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
 
@@ -2518,10 +2566,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: _buildInputModeCard(
                 title: strings.voiceActivity,
                 description: strings.voiceActivityDesc,
-                isSelected: !_isPushToTalk,
+                isSelected: !audioSettings.isPushToTalk,
                 icon: LucideIcons.mic,
                 isDark: isDark,
-                onTap: () => setState(() => _isPushToTalk = false),
+                onTap: () {
+                  audioSettingsNotifier.setIsPushToTalk(false);
+                  voiceNotifier.setMicMuted(false);
+                },
               ),
             ),
             const SizedBox(width: 12),
@@ -2529,10 +2580,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: _buildInputModeCard(
                 title: strings.pushToTalk,
                 description: strings.pushToTalkDesc,
-                isSelected: _isPushToTalk,
+                isSelected: audioSettings.isPushToTalk,
                 icon: LucideIcons.radio,
                 isDark: isDark,
-                onTap: () => setState(() => _isPushToTalk = true),
+                onTap: () {
+                  audioSettingsNotifier.setIsPushToTalk(true);
+                  voiceNotifier.setMicMuted(true);
+                },
               ),
             ),
           ],
@@ -2540,7 +2594,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         const SizedBox(height: 24),
 
-        if (_isPushToTalk) ...[
+        if (audioSettings.isPushToTalk) ...[
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -2577,30 +2631,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
+                InkWell(
+                  onTap: () => _showPttKeyRecordDialog(
+                    context,
+                    isDark,
+                    audioSettingsNotifier,
+                    audioSettings.pttKeyLabel,
                   ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.darkSurfaceElevated
-                        : AppColors.lightSurfaceElevated,
-                    borderRadius: AppRadius.borderSm,
-                    border: Border.all(
-                      color: isDark
-                          ? AppColors.darkBorderFocus
-                          : AppColors.lightBorderFocus,
+                  borderRadius: AppRadius.borderSm,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
                     ),
-                  ),
-                  child: Text(
-                    _pttKey,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                    decoration: BoxDecoration(
                       color: isDark
-                          ? AppColors.darkPrimary
-                          : AppColors.lightPrimary,
+                          ? AppColors.darkSurfaceElevated
+                          : AppColors.lightSurfaceElevated,
+                      borderRadius: AppRadius.borderSm,
+                      border: Border.all(
+                        color: isDark
+                            ? AppColors.darkBorderFocus
+                            : AppColors.lightBorderFocus,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          audioSettings.pttKeyLabel,
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: isDark
+                                ? AppColors.darkPrimary
+                                : AppColors.lightPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          LucideIcons.pencil,
+                          size: 12,
+                          color: isDark
+                              ? AppColors.darkPrimary
+                              : AppColors.lightPrimary,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -2610,23 +2686,328 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 20),
         ],
 
-        // Global Shortcuts List
-        Text(
-          strings.globalShortcuts,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
-        ),
-        const SizedBox(height: 10),
+        // Categorized Shortcuts
+        ...ShortcutCategory.values.map((category) {
+          final actions = AppShortcutAction.values
+              .where((a) => a.category == category)
+              .toList();
+          if (actions.isEmpty) return const SizedBox.shrink();
 
-        _buildHotkeyRow(isDark, strings.muteUnmuteAction, 'Ctrl + Shift + M'),
-        _buildHotkeyRow(isDark, strings.deafenAction, 'Ctrl + Shift + D'),
-        _buildHotkeyRow(isDark, strings.searchShortcut, 'Ctrl + K'),
-        _buildHotkeyRow(isDark, strings.toggleThemeShortcut, 'Ctrl + T'),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 14, bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      category.icon,
+                      size: 14,
+                      color: isDark
+                          ? AppColors.darkPrimary
+                          : AppColors.lightPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      category.label.toUpperCase(),
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: isDark
+                            ? AppColors.darkPrimary
+                            : AppColors.lightPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkSurface
+                      : AppColors.lightSurface,
+                  borderRadius: AppRadius.borderMd,
+                  border: Border.all(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
+                  ),
+                ),
+                child: Column(
+                  children: List.generate(actions.length, (index) {
+                    final action = actions[index];
+                    final combo = shortcutsState.getCombination(action);
+                    final isCustomized = shortcutsState.isCustomized(action);
+                    final isLast = index == actions.length - 1;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: isLast
+                            ? null
+                            : Border(
+                                bottom: BorderSide(
+                                  color: isDark
+                                      ? AppColors.darkBorder.withValues(
+                                          alpha: 0.5,
+                                        )
+                                      : AppColors.lightBorder.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                ),
+                              ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppColors.darkSurfaceElevated
+                                  : AppColors.lightSurfaceElevated,
+                              borderRadius: AppRadius.borderSm,
+                            ),
+                            child: Icon(
+                              action.icon,
+                              size: 15,
+                              color: isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        action.title,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? AppColors.darkTextPrimary
+                                              : AppColors.lightTextPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isCustomized) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1.5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              (isDark
+                                                      ? AppColors.darkPrimary
+                                                      : AppColors.lightPrimary)
+                                                  .withValues(alpha: 0.15),
+                                          borderRadius: AppRadius.borderXs,
+                                        ),
+                                        child: Text(
+                                          'Editado',
+                                          style: GoogleFonts.jetBrainsMono(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark
+                                                ? AppColors.darkPrimary
+                                                : AppColors.lightPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  action.description,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Badge de atalho clicável
+                          InkWell(
+                            onTap: () => ShortcutRecordDialog.show(
+                              context,
+                              action: action,
+                              currentCombination: combo,
+                            ),
+                            mouseCursor: SystemMouseCursors.click,
+                            borderRadius: AppRadius.borderSm,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: combo != null
+                                    ? (isDark
+                                          ? AppColors.darkSurfaceElevated
+                                          : AppColors.lightSurfaceElevated)
+                                    : Colors.transparent,
+                                borderRadius: AppRadius.borderSm,
+                                border: Border.all(
+                                  color: combo != null
+                                      ? (isDark
+                                            ? AppColors.darkBorderFocus
+                                            : AppColors.lightBorderFocus)
+                                      : (isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder),
+                                ),
+                              ),
+                              child: Text(
+                                combo?.toReadableString() ?? 'Nenhum atalho',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 11,
+                                  fontWeight: combo != null
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: combo != null
+                                      ? (isDark
+                                            ? AppColors.darkTextPrimary
+                                            : AppColors.lightTextPrimary)
+                                      : (isDark
+                                            ? AppColors.darkTextMuted
+                                            : AppColors.lightTextMuted),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          // Botão Editar
+                          IconButton(
+                            icon: const Icon(LucideIcons.pencil, size: 14),
+                            tooltip: 'Editar atalho',
+                            color: isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                            onPressed: () => ShortcutRecordDialog.show(
+                              context,
+                              action: action,
+                              currentCombination: combo,
+                            ),
+                          ),
+                          // Botão Restaurar Padrão
+                          if (isCustomized)
+                            IconButton(
+                              icon: const Icon(LucideIcons.rotateCcw, size: 14),
+                              tooltip:
+                                  'Restaurar padrão (${action.defaultCombination?.toReadableString() ?? "Nenhum"})',
+                              color: isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary,
+                              onPressed: () =>
+                                  shortcutsNotifier.resetShortcut(action),
+                            ),
+                          // Botão Limpar / Remover
+                          if (combo != null)
+                            IconButton(
+                              icon: const Icon(LucideIcons.trash2, size: 14),
+                              tooltip: 'Remover atalho',
+                              color: isDark
+                                  ? AppColors.darkDanger
+                                  : AppColors.lightDanger,
+                              onPressed: () =>
+                                  shortcutsNotifier.setShortcut(action, null),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          );
+        }),
       ],
     );
+  }
+
+  Future<void> _showPttKeyRecordDialog(
+    BuildContext context,
+    bool isDark,
+    AudioSettingsNotifier notifier,
+    String currentKeyLabel,
+  ) {
+    return showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _PttKeyRecordDialog(
+        isDark: isDark,
+        notifier: notifier,
+        currentKeyLabel: currentKeyLabel,
+      ),
+    );
+  }
+
+  Future<void> _confirmResetAllShortcuts(
+    BuildContext context,
+    bool isDark,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark
+            ? AppColors.darkSurface
+            : AppColors.lightSurface,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
+        title: Text(
+          'Restaurar Todos os Atalhos?',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.lightTextPrimary,
+          ),
+        ),
+        content: Text(
+          'Todas as suas combinações de teclas personalizadas serão restauradas para os padrões de fábrica.',
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.darkDanger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Restaurar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(shortcutsProvider.notifier).resetAllToDefault();
+    }
   }
 
   Widget _buildInputModeCard({
@@ -2642,7 +3023,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       mouseCursor: SystemMouseCursors.click,
       borderRadius: AppRadius.borderMd,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
           borderRadius: AppRadius.borderMd,
@@ -2653,109 +3034,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isSelected
-                      ? (isDark
-                            ? AppColors.darkPrimary
-                            : AppColors.lightPrimary)
-                      : (isDark
-                            ? AppColors.darkTextMuted
-                            : AppColors.lightTextMuted),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              description,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                color: isDark
-                    ? AppColors.darkTextMuted
-                    : AppColors.lightTextMuted,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color:
+                    (isSelected
+                            ? (isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
+                            : (isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary))
+                        .withValues(alpha: 0.12),
+                borderRadius: AppRadius.borderSm,
+              ),
+              child: Icon(
+                icon,
+                size: 16,
+                color: isSelected
+                    ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                    : (isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary),
               ),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: isDark
+                          ? AppColors.darkTextMuted
+                          : AppColors.lightTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                LucideIcons.check,
+                size: 16,
+                color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHotkeyRow(bool isDark, String action, String shortcut) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: AppRadius.borderSm,
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            action,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkSurfaceElevated
-                  : AppColors.lightSurfaceElevated,
-              borderRadius: AppRadius.borderXs,
-              border: Border.all(
-                color: isDark
-                    ? AppColors.darkBorderFocus
-                    : AppColors.lightBorderFocus,
-              ),
-            ),
-            child: Text(
-              shortcut,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 5. STATUS DOS SERVIÇOS & REDE
+  // 5. STATUS DO SISTEMA & ATUALIZAÇÃO
   Widget _buildSystemSection(bool isDark, AppStrings strings) {
     final updateState = ref.watch(updateControllerProvider);
     final isChecking = updateState.status == UpdateStatus.checking;
-    final hasUpdate = updateState.isUpdateAvailable;
+    final hasUpdate = updateState.status == UpdateStatus.available;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2767,17 +3116,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Cartão de Versão e Atualizações do Aplicativo
+        // Versão & Atualizações Card
         Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
             borderRadius: AppRadius.borderMd,
             border: Border.all(
-              color: hasUpdate
-                  ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-              width: hasUpdate ? 1.5 : 1.0,
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
             ),
           ),
           child: Column(
@@ -2789,7 +3135,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color:
                               (isDark
@@ -2800,42 +3146,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         child: Icon(
                           LucideIcons.sparkles,
-                          size: 18,
+                          size: 20,
                           color: isDark
                               ? AppColors.darkPrimary
                               : AppColors.lightPrimary,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'ProjectNBX Desktop',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
+                            AppConfig.appName,
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: isDark
                                   ? AppColors.darkTextPrimary
                                   : AppColors.lightTextPrimary,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Row(
                             children: [
                               Text(
-                                'Versão v${AppConfig.version}',
+                                'v${AppConfig.version}',
                                 style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   color: isDark
-                                      ? AppColors.darkTextMuted
-                                      : AppColors.lightTextMuted,
+                                      ? AppColors.darkTextSecondary
+                                      : AppColors.lightTextSecondary,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
-                                  vertical: 1,
+                                  vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
                                   color:
@@ -3123,6 +3470,163 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PttKeyRecordDialog extends StatefulWidget {
+  final bool isDark;
+  final AudioSettingsNotifier notifier;
+  final String currentKeyLabel;
+
+  const _PttKeyRecordDialog({
+    required this.isDark,
+    required this.notifier,
+    required this.currentKeyLabel,
+  });
+
+  @override
+  State<_PttKeyRecordDialog> createState() => _PttKeyRecordDialogState();
+}
+
+class _PttKeyRecordDialogState extends State<_PttKeyRecordDialog> {
+  LogicalKeyboardKey? _recordedKey;
+
+  @override
+  void initState() {
+    super.initState();
+    KeyboardShortcutsService.instance.isRecording = true;
+    HardwareKeyboard.instance.addHandler(_onKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKeyEvent);
+    KeyboardShortcutsService.instance.isRecording = false;
+    super.dispose();
+  }
+
+  bool _onKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent && mounted) {
+      setState(() {
+        _recordedKey = event.logicalKey;
+      });
+      widget.notifier.setPttKey(event.logicalKey);
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      });
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = widget.isDark
+        ? AppColors.darkSurfaceElevated
+        : AppColors.lightSurfaceElevated;
+    final primaryColor = widget.isDark
+        ? AppColors.darkPrimary
+        : AppColors.lightPrimary;
+    final textPrimary = widget.isDark
+        ? AppColors.darkTextPrimary
+        : AppColors.lightTextPrimary;
+    final textMuted = widget.isDark
+        ? AppColors.darkTextMuted
+        : AppColors.lightTextMuted;
+
+    final displayLabel = _recordedKey != null
+        ? (_recordedKey! == LogicalKeyboardKey.space
+            ? 'Space'
+            : (_recordedKey!.keyLabel.trim().isNotEmpty
+                ? _recordedKey!.keyLabel
+                : 'Tecla 0x${_recordedKey!.keyId.toRadixString(16)}'))
+        : widget.currentKeyLabel;
+
+    return Dialog(
+      backgroundColor: cardBg,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(LucideIcons.radio, size: 28, color: primaryColor),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Definir Tecla Push-to-Talk (PTT)',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Pressione qualquer tecla do teclado (ex: Caps Lock, Espaço, V, etc.) para atribuir como botão de fala.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 12, color: textMuted),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: widget.isDark
+                      ? AppColors.darkSurface
+                      : AppColors.lightSurface,
+                  borderRadius: AppRadius.borderSm,
+                  border: Border.all(
+                    color: _recordedKey != null
+                        ? primaryColor
+                        : (widget.isDark
+                              ? AppColors.darkBorderFocus
+                              : AppColors.lightBorderFocus),
+                    width: 1.5,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    _recordedKey != null
+                        ? 'Tecla Registrada: $displayLabel'
+                        : 'Aguardando tecla... (Atual: $displayLabel)',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  'Cancelar',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12,
+                    color: textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
