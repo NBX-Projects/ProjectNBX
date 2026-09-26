@@ -5,6 +5,8 @@ class ChatMessage {
   final String author;
   final Color authorColor;
   final String content;
+  final String? mediaUrl;
+  final String? mediaType;
   final bool isEdited;
   final DateTime? timestamp;
 
@@ -13,6 +15,8 @@ class ChatMessage {
     required this.author,
     required this.authorColor,
     required this.content,
+    this.mediaUrl,
+    this.mediaType,
     this.isEdited = false,
     this.timestamp,
   });
@@ -51,6 +55,8 @@ class ChatMessage {
     String? author,
     Color? authorColor,
     String? content,
+    String? mediaUrl,
+    String? mediaType,
     bool? isEdited,
     DateTime? timestamp,
   }) {
@@ -59,29 +65,36 @@ class ChatMessage {
       author: author ?? this.author,
       authorColor: authorColor ?? this.authorColor,
       content: content ?? this.content,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaType: mediaType ?? this.mediaType,
       isEdited: isEdited ?? this.isEdited,
       timestamp: timestamp ?? this.timestamp,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'author': author,
-        'authorColor': authorColor.toARGB32(),
-        'content': content,
-        'is_edited': isEdited,
-        'timestamp': timestamp?.toUtc().toIso8601String(),
-      };
+    'id': id,
+    'author': author,
+    'authorColor': authorColor.toARGB32(),
+    'content': content,
+    'media_url': mediaUrl,
+    'media_type': mediaType,
+    'is_edited': isEdited,
+    'timestamp': timestamp?.toUtc().toIso8601String(),
+  };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-        id: json['id'] as String? ??
-            'msg_${json['timestamp'] ?? DateTime.now().microsecondsSinceEpoch}',
-        author: json['author'] as String? ?? 'Usuário',
-        authorColor: Color(json['authorColor'] as int? ?? 0xFFF5CBA7),
-        content: json['content'] as String? ?? '',
-        isEdited: json['is_edited'] as bool? ?? false,
-        timestamp: parseDateTime(json['timestamp']),
-      );
+    id:
+        json['id'] as String? ??
+        'msg_${json['timestamp'] ?? DateTime.now().microsecondsSinceEpoch}',
+    author: json['author'] as String? ?? 'Usuário',
+    authorColor: Color(json['authorColor'] as int? ?? 0xFFF5CBA7),
+    content: json['content'] as String? ?? '',
+    mediaUrl: json['media_url'] as String?,
+    mediaType: json['media_type'] as String?,
+    isEdited: json['is_edited'] as bool? ?? false,
+    timestamp: parseDateTime(json['timestamp']),
+  );
 
   factory ChatMessage.fromApi(Map<String, dynamic> m, Color defaultColor) {
     var authorName = 'Usuário';
@@ -97,10 +110,13 @@ class ChatMessage {
     }
 
     return ChatMessage(
-      id: (m['id'] ?? 'msg_${DateTime.now().microsecondsSinceEpoch}').toString(),
+      id: (m['id'] ?? 'msg_${DateTime.now().microsecondsSinceEpoch}')
+          .toString(),
       author: authorName,
       authorColor: defaultColor,
       content: (m['content'] ?? '').toString(),
+      mediaUrl: m['media_url']?.toString(),
+      mediaType: m['media_type']?.toString(),
       isEdited: m['is_edited'] == true,
       timestamp: parseDateTime(m['created_at'] ?? m['timestamp']),
     );

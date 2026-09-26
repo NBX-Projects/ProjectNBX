@@ -1,3 +1,4 @@
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -43,10 +44,7 @@ void main() {
         content: 'Initial text',
       );
 
-      final updated = msg.copyWith(
-        content: 'New text',
-        isEdited: true,
-      );
+      final updated = msg.copyWith(content: 'New text', isEdited: true);
 
       expect(updated.id, 'msg-2');
       expect(updated.author, 'Bob');
@@ -100,17 +98,20 @@ void main() {
       expect(getAuthorInitials('J'), 'J');
     });
 
-    test('resolveAuthorColor returns stable colors for dark and light themes', () {
-      final colorDark1 = resolveAuthorColor('Alice', true);
-      final colorDark2 = resolveAuthorColor('Alice', true);
-      expect(colorDark1, colorDark2);
+    test(
+      'resolveAuthorColor returns stable colors for dark and light themes',
+      () {
+        final colorDark1 = resolveAuthorColor('Alice', true);
+        final colorDark2 = resolveAuthorColor('Alice', true);
+        expect(colorDark1, colorDark2);
 
-      final colorLight = resolveAuthorColor('Alice', false);
-      expect(colorLight, isNotNull);
+        final colorLight = resolveAuthorColor('Alice', false);
+        expect(colorLight, isNotNull);
 
-      final defaultColor = resolveAuthorColor('', true);
-      expect(defaultColor, isNotNull);
-    });
+        final defaultColor = resolveAuthorColor('', true);
+        expect(defaultColor, isNotNull);
+      },
+    );
 
     testWidgets('ChatAvatar renders initials and styling', (tester) async {
       await tester.pumpWidget(
@@ -131,85 +132,93 @@ void main() {
   });
 
   group('Chat Widgets tests', () {
-    testWidgets('ChannelChatView renders messages and handles sending and editing', (tester) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'ChannelChatView renders messages and handles sending and editing',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      final messageController = TextEditingController();
-      final editController = TextEditingController();
-      final scrollController = ScrollController();
+        final messageController = TextEditingController();
+        final editController = TextEditingController();
+        final scrollController = ScrollController();
 
-      var sentMessage = false;
+        var sentMessage = false;
 
-      final sampleMessages = [
-        ChatMessage(
-          id: 'm1',
-          author: 'DevUser',
-          authorColor: Colors.green,
-          content: 'First message',
-          timestamp: DateTime.now(),
-        ),
-        ChatMessage(
-          id: 'm2',
-          author: 'Alice',
-          authorColor: Colors.blue,
-          content: 'Second message',
-          isEdited: true,
-          timestamp: DateTime.now(),
-        ),
-      ];
+        final sampleMessages = [
+          ChatMessage(
+            id: 'm1',
+            author: 'DevUser',
+            authorColor: Colors.green,
+            content: 'First message',
+            timestamp: DateTime.now(),
+          ),
+          ChatMessage(
+            id: 'm2',
+            author: 'Alice',
+            authorColor: Colors.blue,
+            content: 'Second message',
+            isEdited: true,
+            timestamp: DateTime.now(),
+          ),
+        ];
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ChannelChatView(
-              isDark: true,
-              activeChannelName: 'geral',
-              channelKey: '1_geral',
-              username: 'DevUser',
-              messages: sampleMessages,
-              messageController: messageController,
-              editMessageController: editController,
-              scrollController: scrollController,
-              isTransmitting: false,
-              isInVoice: false,
-              isRightSidebarVisible: true,
-              onToggleTransmission: () {},
-              onToggleVoiceChannel: () {},
-              onToggleRightSidebar: () {},
-              onWatchLive: () {},
-              onSendMessage: (key, author) {
-                sentMessage = true;
-              },
-              onStartEditing: (_) {},
-              onCancelEditing: () {},
-              onSaveEditing: (_) {},
-              onDeleteMessage: (_) {},
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ChannelChatView(
+                isDark: true,
+                activeChannelName: 'geral',
+                channelKey: '1_geral',
+                username: 'DevUser',
+                messages: sampleMessages,
+                messageController: messageController,
+                editMessageController: editController,
+                scrollController: scrollController,
+                isTransmitting: false,
+                isInVoice: false,
+                isRightSidebarVisible: true,
+                onToggleTransmission: () {},
+                onToggleVoiceChannel: () {},
+                onToggleRightSidebar: () {},
+                onWatchLive: () {},
+                onSendMessage: (key, author) {
+                  sentMessage = true;
+                },
+                onStartEditing: (_) {},
+                onCancelEditing: () {},
+                onSaveEditing: (_) {},
+                onDeleteMessage: (_) {},
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      expect(find.text('First message'), findsOneWidget);
-      expect(find.text('Second message'), findsOneWidget);
-      expect(find.text('Mensagem em #geral'), findsOneWidget);
+        expect(find.text('First message'), findsOneWidget);
+        expect(find.text('Second message'), findsOneWidget);
+        expect(find.text('Mensagem em #geral'), findsOneWidget);
+        expect(find.byType(DropTarget), findsOneWidget);
+        expect(find.byIcon(LucideIcons.plusCircle), findsOneWidget);
 
-      // Type and send a message via send icon
-      await tester.enterText(find.byType(TextField).first, 'New chat message');
-      final sendFinder = find.byIcon(LucideIcons.send);
-      expect(sendFinder, findsOneWidget);
-      await tester.tap(sendFinder);
-      await tester.pumpAndSettle();
+        // Type and send a message via send icon
+        await tester.enterText(
+          find.byType(TextField).first,
+          'New chat message',
+        );
+        final sendFinder = find.byIcon(LucideIcons.send);
+        expect(sendFinder, findsOneWidget);
+        await tester.tap(sendFinder);
+        await tester.pumpAndSettle();
 
-      expect(sentMessage, isTrue);
+        expect(sentMessage, isTrue);
 
-      // Verify timestamp component
-      expect(find.byType(ChatTimestampText), findsAtLeastNWidgets(1));
-    });
+        // Verify timestamp component
+        expect(find.byType(ChatTimestampText), findsAtLeastNWidgets(1));
+      },
+    );
 
     testWidgets('FloatingChatHud renders HUD and channel tags', (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
@@ -222,8 +231,18 @@ void main() {
       final voiceNotifier = VoiceStateNotifier();
 
       const testChannels = [
-        ChannelModel(id: 'c1', serverId: '1', name: 'geral', type: ChannelType.text),
-        ChannelModel(id: 'c2', serverId: '1', name: 'anuncios', type: ChannelType.text),
+        ChannelModel(
+          id: 'c1',
+          serverId: '1',
+          name: 'geral',
+          type: ChannelType.text,
+        ),
+        ChannelModel(
+          id: 'c2',
+          serverId: '1',
+          name: 'anuncios',
+          type: ChannelType.text,
+        ),
       ];
 
       var closed = false;
@@ -268,7 +287,9 @@ void main() {
       expect(closed, isTrue);
     });
 
-    testWidgets('ChatMessageActions triggers onEdit and onDelete callbacks', (tester) async {
+    testWidgets('ChatMessageActions triggers onEdit and onDelete callbacks', (
+      tester,
+    ) async {
       var edited = false;
       var deleted = false;
 
@@ -292,139 +313,158 @@ void main() {
       expect(deleted, isTrue);
     });
 
-    testWidgets('WhatsAppChatBubble renders normal and editing state with save and cancel', (tester) async {
-      final msg = ChatMessage(
-        id: 'msg-test',
-        author: 'Tester',
-        authorColor: Colors.blue,
-        content: 'Conteúdo original',
-        timestamp: DateTime.now(),
-      );
+    testWidgets(
+      'WhatsAppChatBubble renders normal and editing state with save and cancel',
+      (tester) async {
+        final msg = ChatMessage(
+          id: 'msg-test',
+          author: 'Tester',
+          authorColor: Colors.blue,
+          content: 'Conteúdo original',
+          timestamp: DateTime.now(),
+        );
 
-      final editController = TextEditingController(text: 'Conteúdo editado');
-      var savedId = '';
-      var cancelled = false;
+        final editController = TextEditingController(text: 'Conteúdo editado');
+        var savedId = '';
+        var cancelled = false;
 
-      // 1. Normal state
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Row(
-              children: [
-                WhatsAppChatBubble(
-                  msg: msg,
-                  isMine: true,
-                  isDark: true,
-                  isMobile: false,
-                  screenWidth: 1000,
-                  isEditing: false,
+        // 1. Normal state
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Row(
+                children: [
+                  WhatsAppChatBubble(
+                    msg: msg,
+                    isMine: true,
+                    isDark: true,
+                    isMobile: false,
+                    screenWidth: 1000,
+                    isEditing: false,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Conteúdo original'), findsOneWidget);
+
+        // 2. Editing state
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Row(
+                children: [
+                  WhatsAppChatBubble(
+                    msg: msg,
+                    isMine: true,
+                    isDark: true,
+                    isMobile: false,
+                    screenWidth: 1000,
+                    isEditing: true,
+                    editController: editController,
+                    onCancelEdit: () => cancelled = true,
+                    onSaveEdit: (id) => savedId = id,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('cancelar'), findsOneWidget);
+        expect(find.text('Salvar'), findsOneWidget);
+
+        await tester.tap(find.text('cancelar'));
+        expect(cancelled, isTrue);
+
+        await tester.tap(find.text('Salvar'));
+        expect(savedId, 'msg-test');
+      },
+    );
+
+    testWidgets(
+      'FloatingChatHud switches channels, sends message, and leaves voice',
+      (tester) async {
+        final messageController = TextEditingController();
+        final scrollController = ScrollController();
+        final voiceNotifier = VoiceStateNotifier();
+
+        const testChannels = [
+          ChannelModel(
+            id: 'c1',
+            serverId: '1',
+            name: 'geral',
+            type: ChannelType.text,
+          ),
+          ChannelModel(
+            id: 'c2',
+            serverId: '1',
+            name: 'anuncios',
+            type: ChannelType.text,
+          ),
+        ];
+
+        var sentKey = '';
+        var selectedChannelId = '';
+        var leftVoice = false;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: FloatingChatHud(
+                activeChannelName: 'geral',
+                channelKey: '1_geral',
+                username: 'Tester',
+                messages: const [],
+                channels: testChannels,
+                activeChannel: testChannels.first,
+                messageController: messageController,
+                scrollController: scrollController,
+                voiceState: const VoiceState(
+                  isConnected: true,
+                  connectedChannelId: 'c1',
                 ),
-              ],
+                voiceNotifier: voiceNotifier,
+                onClose: () {},
+                onSelectChannel: (c) => selectedChannelId = c.id,
+                onSendMessage: (k, a) => sentKey = k,
+                onStartEditing: (m) {},
+                onDeleteMessage: (id) {},
+                onLeaveVoice: () => leftVoice = true,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Conteúdo original'), findsOneWidget);
+        );
+        await tester.pumpAndSettle();
 
-      // 2. Editing state
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Row(
-              children: [
-                WhatsAppChatBubble(
-                  msg: msg,
-                  isMine: true,
-                  isDark: true,
-                  isMobile: false,
-                  screenWidth: 1000,
-                  isEditing: true,
-                  editController: editController,
-                  onCancelEdit: () => cancelled = true,
-                  onSaveEdit: (id) => savedId = id,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('cancelar'), findsOneWidget);
-      expect(find.text('Salvar'), findsOneWidget);
-
-      await tester.tap(find.text('cancelar'));
-      expect(cancelled, isTrue);
-
-      await tester.tap(find.text('Salvar'));
-      expect(savedId, 'msg-test');
-    });
-
-    testWidgets('FloatingChatHud switches channels, sends message, and leaves voice', (tester) async {
-      final messageController = TextEditingController();
-      final scrollController = ScrollController();
-      final voiceNotifier = VoiceStateNotifier();
-
-      const testChannels = [
-        ChannelModel(id: 'c1', serverId: '1', name: 'geral', type: ChannelType.text),
-        ChannelModel(id: 'c2', serverId: '1', name: 'anuncios', type: ChannelType.text),
-      ];
-
-      var sentKey = '';
-      var selectedChannelId = '';
-      var leftVoice = false;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: FloatingChatHud(
-              activeChannelName: 'geral',
-              channelKey: '1_geral',
-              username: 'Tester',
-              messages: const [],
-              channels: testChannels,
-              activeChannel: testChannels.first,
-              messageController: messageController,
-              scrollController: scrollController,
-              voiceState: const VoiceState(isConnected: true, connectedChannelId: 'c1'),
-              voiceNotifier: voiceNotifier,
-              onClose: () {},
-              onSelectChannel: (c) => selectedChannelId = c.id,
-              onSendMessage: (k, a) => sentKey = k,
-              onStartEditing: (m) {},
-              onDeleteMessage: (id) {},
-              onLeaveVoice: () => leftVoice = true,
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Tap channel tag # anuncios
-      final anunciosTag = find.text('# anuncios');
-      if (anunciosTag.evaluate().isNotEmpty) {
-        await tester.tap(anunciosTag.first);
-        expect(selectedChannelId, 'c2');
-      }
-
-      // Enter message and tap send
-      final inputFinder = find.byType(TextField);
-      if (inputFinder.evaluate().isNotEmpty) {
-        await tester.enterText(inputFinder.first, 'Olá HUD');
-        final sendBtn = find.byIcon(LucideIcons.send);
-        if (sendBtn.evaluate().isNotEmpty) {
-          await tester.tap(sendBtn.first);
-          expect(sentKey, '1_geral');
+        // Tap channel tag # anuncios
+        final anunciosTag = find.text('# anuncios');
+        if (anunciosTag.evaluate().isNotEmpty) {
+          await tester.tap(anunciosTag.first);
+          expect(selectedChannelId, 'c2');
         }
-      }
 
-      // Leave voice button
-      final leaveBtn = find.byIcon(LucideIcons.phoneOff);
-      if (leaveBtn.evaluate().isNotEmpty) {
-        await tester.tap(leaveBtn.first);
-        expect(leftVoice, isTrue);
-      }
-    });
+        // Enter message and tap send
+        final inputFinder = find.byType(TextField);
+        if (inputFinder.evaluate().isNotEmpty) {
+          await tester.enterText(inputFinder.first, 'Olá HUD');
+          final sendBtn = find.byIcon(LucideIcons.send);
+          if (sendBtn.evaluate().isNotEmpty) {
+            await tester.tap(sendBtn.first);
+            expect(sentKey, '1_geral');
+          }
+        }
+
+        // Leave voice button
+        final leaveBtn = find.byIcon(LucideIcons.phoneOff);
+        if (leaveBtn.evaluate().isNotEmpty) {
+          await tester.tap(leaveBtn.first);
+          expect(leftVoice, isTrue);
+        }
+      },
+    );
   });
 }

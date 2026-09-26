@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
+import 'package:projectnbx/features/chat/widgets/components/image_lightbox_dialog.dart';
 
 class ChatTimestampText extends StatelessWidget {
   final DateTime? timestamp;
@@ -198,7 +199,7 @@ class WhatsAppChatBubble extends StatelessWidget {
         ),
         child: isEditing && editController != null
             ? _buildEditingForm()
-            : _buildMessageContent(textColor, timestampColor),
+            : _buildMessageContent(context, textColor, timestampColor),
       ),
     );
   }
@@ -291,7 +292,14 @@ class WhatsAppChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildMessageContent(Color textColor, Color timestampColor) {
+  Widget _buildMessageContent(
+    BuildContext context,
+    Color textColor,
+    Color timestampColor,
+  ) {
+    final hasMedia = msg.mediaUrl != null && msg.mediaUrl!.trim().isNotEmpty;
+    final hasText = msg.content.trim().isNotEmpty;
+
     return Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
@@ -307,16 +315,92 @@ class WhatsAppChatBubble extends StatelessWidget {
               color: authorColor,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
         ],
-        Text(
-          msg.content,
-          style: GoogleFonts.inter(
-            fontSize: 13.5,
-            color: textColor,
-            height: 1.35,
+        if (hasMedia) ...[
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              ImageLightboxDialog.show(
+                context,
+                imageUrl: msg.mediaUrl!,
+                caption: hasText ? msg.content : null,
+                isDark: isDark,
+              );
+            },
+            child: ClipRRect(
+              borderRadius: AppRadius.borderMd,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: isMobile ? screenWidth * 0.68 : 340,
+                  maxHeight: 260,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF141520)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: AppRadius.borderMd,
+                ),
+                child: Image.network(
+                  msg.mediaUrl!,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 160,
+                      width: 220,
+                      alignment: Alignment.center,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accentColor,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 120,
+                      width: 200,
+                      padding: const EdgeInsets.all(12),
+                      color: isDark
+                          ? const Color(0xFF1E2030)
+                          : const Color(0xFFE2E8F0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.imageOff,
+                            size: 24,
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Erro ao carregar imagem',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
-        ),
+          if (hasText) const SizedBox(height: 6),
+        ],
+        if (hasText)
+          Text(
+            msg.content,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              color: textColor,
+              height: 1.35,
+            ),
+          ),
         const SizedBox(height: 3),
         Row(
           mainAxisSize: MainAxisSize.min,

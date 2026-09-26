@@ -16,6 +16,7 @@ import (
 	"github.com/projectnbx/backend/internal/handlers"
 	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
+	"github.com/projectnbx/backend/internal/storage"
 	"github.com/projectnbx/backend/internal/swagger"
 	"github.com/projectnbx/backend/internal/websocket"
 )
@@ -56,9 +57,14 @@ func (r *Router) SetupRoutes() http.Handler {
 	liveKitService := auth.NewLiveKitService(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret)
 	liveKitHandler := handlers.NewLiveKitHandler(liveKitService, r.repo, r.cfg)
 	liveKitWebhookHandler := handlers.NewLiveKitWebhookHandler(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret, r.repo, r.hub)
-	serverHandler := handlers.NewServerHandler(r.repo, r.hub)
+	storageService := storage.NewStorageService(r.cfg)
+	serverHandler := handlers.NewServerHandler(r.repo, r.hub, storageService)
 	wsHandler := handlers.NewWSHandler(r.hub, r.jwtService, r.repo)
 	webrtcHandler := handlers.NewWebRTCHandler(r.hub.ScreenShareService.GetTURNService())
+	mediaHandler := handlers.NewMediaHandler(storageService, r.repo)
+
+	// Servidor de Arquivos Estáticos para Uploads Locais
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(r.cfg.UploadsDir))))
 
 	// Endpoint Raiz Público
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
@@ -163,6 +169,9 @@ func (r *Router) SetupRoutes() http.Handler {
 
 	// Busca de Usuários
 	protected.HandleFunc("/users/search", authHandler.SearchUsers).Methods("GET", "OPTIONS")
+
+	// Upload de Mídia (Imagens)
+	protected.HandleFunc("/media/upload", mediaHandler.UploadMedia).Methods("POST", "OPTIONS")
 
 
 	// Auditoria
