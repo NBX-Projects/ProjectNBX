@@ -67,21 +67,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
 
     final shortcuts = KeyboardShortcutsService.instance;
-    shortcuts.registerHandler(AppShortcutAction.navigateHome, _handleNavigateHome);
-    shortcuts.registerHandler(AppShortcutAction.quickSearch, _handleQuickSearch);
-    shortcuts.registerHandler(AppShortcutAction.toggleRightSidebar, _handleToggleSidebar);
-    shortcuts.registerHandler(AppShortcutAction.openCreateServer, _handleOpenCreateServer);
-    shortcuts.registerHandler(AppShortcutAction.quickAudioDevices, _handleQuickAudioDevices);
+    shortcuts.registerHandler(
+      AppShortcutAction.navigateHome,
+      _handleNavigateHome,
+    );
+    shortcuts.registerHandler(
+      AppShortcutAction.quickSearch,
+      _handleQuickSearch,
+    );
+    shortcuts.registerHandler(
+      AppShortcutAction.toggleRightSidebar,
+      _handleToggleSidebar,
+    );
+    shortcuts.registerHandler(
+      AppShortcutAction.openCreateServer,
+      _handleOpenCreateServer,
+    );
+    shortcuts.registerHandler(
+      AppShortcutAction.quickAudioDevices,
+      _handleQuickAudioDevices,
+    );
   }
 
   @override
   void dispose() {
     final shortcuts = KeyboardShortcutsService.instance;
-    shortcuts.unregisterHandler(AppShortcutAction.navigateHome, _handleNavigateHome);
-    shortcuts.unregisterHandler(AppShortcutAction.quickSearch, _handleQuickSearch);
-    shortcuts.unregisterHandler(AppShortcutAction.toggleRightSidebar, _handleToggleSidebar);
-    shortcuts.unregisterHandler(AppShortcutAction.openCreateServer, _handleOpenCreateServer);
-    shortcuts.unregisterHandler(AppShortcutAction.quickAudioDevices, _handleQuickAudioDevices);
+    shortcuts.unregisterHandler(
+      AppShortcutAction.navigateHome,
+      _handleNavigateHome,
+    );
+    shortcuts.unregisterHandler(
+      AppShortcutAction.quickSearch,
+      _handleQuickSearch,
+    );
+    shortcuts.unregisterHandler(
+      AppShortcutAction.toggleRightSidebar,
+      _handleToggleSidebar,
+    );
+    shortcuts.unregisterHandler(
+      AppShortcutAction.openCreateServer,
+      _handleOpenCreateServer,
+    );
+    shortcuts.unregisterHandler(
+      AppShortcutAction.quickAudioDevices,
+      _handleQuickAudioDevices,
+    );
     _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
@@ -108,7 +138,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _handleToggleSidebar() {
     if (mounted && _activeTab == 'home') {
-      setState(() => _isServerRightSidebarVisible = !_isServerRightSidebarVisible);
+      setState(
+        () => _isServerRightSidebarVisible = !_isServerRightSidebarVisible,
+      );
     }
   }
 
@@ -158,8 +190,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final servers = _searchQuery.trim().isEmpty
         ? allServers
         : allServers
-            .where((s) => s.name.toLowerCase().contains(_searchQuery.trim().toLowerCase()))
-            .toList();
+              .where(
+                (s) => s.name.toLowerCase().contains(
+                  _searchQuery.trim().toLowerCase(),
+                ),
+              )
+              .toList();
 
     const totalVoiceCount = 0;
 
@@ -287,8 +323,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                     .toSet();
                                                 final availablePublicServers =
                                                     _publicServers.where((pub) {
-                                                      final matchesFilter = _searchQuery.trim().isEmpty ||
-                                                          pub.server.name.toLowerCase().contains(_searchQuery.trim().toLowerCase());
+                                                      final matchesFilter =
+                                                          _searchQuery
+                                                              .trim()
+                                                              .isEmpty ||
+                                                          pub.server.name
+                                                              .toLowerCase()
+                                                              .contains(
+                                                                _searchQuery
+                                                                    .trim()
+                                                                    .toLowerCase(),
+                                                              );
                                                       return matchesFilter &&
                                                           !pub.isMember &&
                                                           !myServerIds.contains(
@@ -356,8 +401,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final shortcutsState = ref.watch(shortcutsProvider);
     final searchShortcut =
-        shortcutsState.getCombination(AppShortcutAction.quickSearch)?.toReadableString() ??
-            'Ctrl K';
+        shortcutsState
+            .getCombination(AppShortcutAction.quickSearch)
+            ?.toReadableString() ??
+        'Ctrl K';
 
     final content = Container(
       width: double.infinity,
@@ -405,11 +452,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         border: Border.all(
                           color: _searchFocusNode.hasFocus
                               ? (isDark
-                                  ? AppColors.darkBorderFocus
-                                  : AppColors.lightBorderFocus)
+                                    ? AppColors.darkBorderFocus
+                                    : AppColors.lightBorderFocus)
                               : (isDark
-                                  ? AppColors.darkBorder
-                                  : AppColors.lightBorder),
+                                    ? AppColors.darkBorder
+                                    : AppColors.lightBorder),
                           width: _searchFocusNode.hasFocus ? 1.5 : 1.0,
                         ),
                       ),

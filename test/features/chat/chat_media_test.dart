@@ -253,6 +253,13 @@ void main() {
     testWidgets('opens ImageLightboxDialog when clicking image attachment', (
       tester,
     ) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
       final msg = ChatMessage(
         id: 'msg_click_test',
         author: 'Dev',
@@ -266,17 +273,21 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: Row(
-              children: [
-                WhatsAppChatBubble(
-                  msg: msg,
-                  isMine: true,
-                  isDark: true,
-                  isMobile: false,
-                  screenWidth: 1024,
-                  authorColor: const Color(0xFFF5CBA7),
-                ),
-              ],
+            body: SizedBox(
+              width: 800,
+              height: 600,
+              child: Row(
+                children: [
+                  WhatsAppChatBubble(
+                    msg: msg,
+                    isMine: true,
+                    isDark: true,
+                    isMobile: false,
+                    screenWidth: 1024,
+                    authorColor: const Color(0xFFF5CBA7),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -284,8 +295,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Clica na imagem anexada
-      await tester.tap(find.byType(ClipRRect).first);
-      await tester.pump(const Duration(milliseconds: 500));
+      final imageFinder = find.byType(Image);
+      expect(imageFinder, findsOneWidget);
+      await tester.tap(imageFinder, warnIfMissed: false);
+      await tester.pumpAndSettle();
 
       // Confirma abertura do Lightbox
       expect(find.byType(ImageLightboxDialog), findsOneWidget);
@@ -293,8 +306,8 @@ void main() {
       expect(find.byIcon(LucideIcons.x), findsOneWidget);
 
       // Fecha o Lightbox
-      await tester.tap(find.byIcon(LucideIcons.x));
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byIcon(LucideIcons.x), warnIfMissed: false);
+      await tester.pumpAndSettle();
 
       expect(find.byType(ImageLightboxDialog), findsNothing);
     });
