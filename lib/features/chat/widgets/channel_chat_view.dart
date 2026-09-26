@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -168,7 +168,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
         name: compressed.filename,
         size: compressed.compressedSize,
         bytes: compressed.bytes,
-        path: path,
+        path: kIsWeb ? null : path,
       );
 
       if (mounted) {
@@ -265,7 +265,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
       await _processAndAttachImage(
         bytes: bytes,
         filename: filename,
-        path: dropFile.path,
+        path: kIsWeb ? null : dropFile.path,
       );
     } catch (e) {
       if (mounted) {
@@ -320,7 +320,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
         }
 
         List<int>? rawBytes = file.bytes;
-        if (rawBytes == null && file.path != null) {
+        if (rawBytes == null && !kIsWeb && file.path != null) {
           rawBytes = await File(file.path!).readAsBytes();
         }
         if (rawBytes == null) return;
@@ -354,7 +354,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
         await _processAndAttachImage(
           bytes: Uint8List.fromList(rawBytes),
           filename: file.name,
-          path: file.path,
+          path: kIsWeb ? null : file.path,
         );
       }
     } catch (e) {
@@ -386,7 +386,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
         setState(() => _isUploading = true);
         try {
           List<int>? bytes = _attachedFile!.bytes;
-          if (bytes == null && _attachedFile!.path != null) {
+          if (bytes == null && !kIsWeb && _attachedFile!.path != null) {
             bytes = await File(_attachedFile!.path!).readAsBytes();
           }
           if (bytes != null) {
