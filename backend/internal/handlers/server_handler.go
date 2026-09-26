@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"math/big"
@@ -14,6 +15,7 @@ import (
 	"github.com/projectnbx/backend/internal/auth"
 	"github.com/projectnbx/backend/internal/models"
 	"github.com/projectnbx/backend/internal/repository"
+	"github.com/projectnbx/backend/internal/storage"
 	"github.com/projectnbx/backend/internal/websocket"
 )
 
@@ -33,14 +35,20 @@ func generateShortCode(length int) string {
 }
 
 type ServerHandler struct {
-	repo repository.Repository
-	hub  *websocket.Hub
+	repo    repository.Repository
+	hub     *websocket.Hub
+	storage storage.StorageService
 }
 
-func NewServerHandler(repo repository.Repository, hub *websocket.Hub) *ServerHandler {
+func NewServerHandler(repo repository.Repository, hub *websocket.Hub, stor ...storage.StorageService) *ServerHandler {
+	var s storage.StorageService
+	if len(stor) > 0 {
+		s = stor[0]
+	}
 	return &ServerHandler{
-		repo: repo,
-		hub:  hub,
+		repo:    repo,
+		hub:     hub,
+		storage: s,
 	}
 }
 
@@ -310,11 +318,22 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
 	existing, err := h.repo.GetMessageByID(messageID)
-	if err == nil && existing != nil && existing.AuthorID != "" && userID != "" && existing.AuthorID != userID {
-		server, errS := h.repo.GetServerByID(serverID)
-		if errS != nil || server == nil || server.OwnerID != userID {
-			http.Error(w, `{"error":"Sem permissão para excluir esta mensagem"}`, http.StatusForbidden)
-			return
+	if err == nil && existing != nil {
+		if existing.AuthorID != "" && userID != "" && existing.AuthorID != userID {
+			server, errS := h.repo.GetServerByID(serverID)
+			if errS != nil || server == nil || server.OwnerID != userID {
+				http.Error(w, `{"error":"Sem permissão para excluir esta mensagem"}`, http.StatusForbidden)
+				return
+			}
+		}
+
+		// Se a mensagem possuía anexo de mídia, remove do Cloudinary ou armazenamento local
+		if existing.MediaURL != "" && h.storage != nil {
+			go func(mediaURL string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
+				_ = h.storage.Delete(ctx, mediaURL)
+			}(existing.MediaURL)
 		}
 	}
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
@@ -9,10 +8,7 @@ import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 class CreateServerCard extends StatefulWidget {
   final VoidCallback? onCreated;
 
-  const CreateServerCard({
-    super.key,
-    this.onCreated,
-  });
+  const CreateServerCard({super.key, this.onCreated});
 
   @override
   State<CreateServerCard> createState() => _CreateServerCardState();
@@ -43,19 +39,18 @@ class _CreateServerCardState extends State<CreateServerCard> {
             borderRadius: AppRadius.borderLg,
             border: Border.all(
               color: _isHovered
-                  ? (isDark
-                      ? AppColors.darkPrimary
-                      : AppColors.lightPrimary)
+                  ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
                   : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
               width: _isHovered ? 1.5 : 1,
             ),
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: (isDark
-                              ? AppColors.darkPrimary
-                              : AppColors.lightPrimary)
-                          .withValues(alpha: 0.15),
+                      color:
+                          (isDark
+                                  ? AppColors.darkPrimary
+                                  : AppColors.lightPrimary)
+                              .withValues(alpha: 0.15),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -68,7 +63,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
             children: [
               // 1. Top Banner / Thumbnail in same proportion
               Container(
-                height: 100,
+                height: 88,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.topLg,
@@ -97,10 +92,11 @@ class _CreateServerCardState extends State<CreateServerCard> {
                       child: Icon(
                         LucideIcons.plus,
                         size: 80,
-                        color: (isDark
-                                ? AppColors.darkPrimary
-                                : AppColors.lightPrimary)
-                            .withValues(alpha: 0.08),
+                        color:
+                            (isDark
+                                    ? AppColors.darkPrimary
+                                    : AppColors.lightPrimary)
+                                .withValues(alpha: 0.08),
                       ),
                     ),
 
@@ -114,16 +110,18 @@ class _CreateServerCardState extends State<CreateServerCard> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: (isDark
-                                  ? AppColors.darkPrimary
-                                  : AppColors.lightPrimary)
-                              .withValues(alpha: 0.15),
+                          color:
+                              (isDark
+                                      ? AppColors.darkPrimary
+                                      : AppColors.lightPrimary)
+                                  .withValues(alpha: 0.15),
                           borderRadius: AppRadius.borderSm,
                           border: Border.all(
-                            color: (isDark
-                                    ? AppColors.darkPrimary
-                                    : AppColors.lightPrimary)
-                                .withValues(alpha: 0.3),
+                            color:
+                                (isDark
+                                        ? AppColors.darkPrimary
+                                        : AppColors.lightPrimary)
+                                    .withValues(alpha: 0.3),
                           ),
                         ),
                         child: Text(
@@ -146,10 +144,11 @@ class _CreateServerCardState extends State<CreateServerCard> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: (isDark
-                                  ? AppColors.darkPrimary
-                                  : AppColors.lightPrimary)
-                              .withValues(alpha: _isHovered ? 0.25 : 0.15),
+                          color:
+                              (isDark
+                                      ? AppColors.darkPrimary
+                                      : AppColors.lightPrimary)
+                                  .withValues(alpha: _isHovered ? 0.25 : 0.15),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: isDark
@@ -173,7 +172,10 @@ class _CreateServerCardState extends State<CreateServerCard> {
 
               // 2. Card Content
               Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -201,7 +203,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
 
                     // Action Pill at Bottom
                     Container(
@@ -211,16 +213,18 @@ class _CreateServerCardState extends State<CreateServerCard> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: (isDark
-                                ? AppColors.darkPrimary
-                                : AppColors.lightPrimary)
-                            .withValues(alpha: 0.1),
+                        color:
+                            (isDark
+                                    ? AppColors.darkPrimary
+                                    : AppColors.lightPrimary)
+                                .withValues(alpha: 0.1),
                         borderRadius: AppRadius.borderSm,
                         border: Border.all(
-                          color: (isDark
-                                  ? AppColors.darkPrimary
-                                  : AppColors.lightPrimary)
-                              .withValues(alpha: 0.3),
+                          color:
+                              (isDark
+                                      ? AppColors.darkPrimary
+                                      : AppColors.lightPrimary)
+                                  .withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(

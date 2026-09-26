@@ -185,9 +185,11 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 	switch event.Type {
 	case models.EventChatMessage:
 		var req struct {
-			Content string `json:"content"`
+			Content   string `json:"content"`
+			MediaURL  string `json:"media_url"`
+			MediaType string `json:"media_type"`
 		}
-		if err := json.Unmarshal(event.Payload, &req); err != nil || req.Content == "" {
+		if err := json.Unmarshal(event.Payload, &req); err != nil || (req.Content == "" && req.MediaURL == "") {
 			return
 		}
 
@@ -199,6 +201,8 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			AuthorID:  client.UserID,
 			Author:    author,
 			Content:   req.Content,
+			MediaURL:  req.MediaURL,
+			MediaType: req.MediaType,
 			CreatedAt: time.Now(),
 		}
 

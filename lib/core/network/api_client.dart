@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -50,6 +51,7 @@ class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   String? _authToken;
+  void Function()? onUnauthorized;
 
   void setAuthToken(String? token) {
     _authToken = token;
@@ -62,11 +64,18 @@ class ApiClient {
     if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
+  void _checkResponse(http.Response response) {
+    if (response.statusCode == 401) {
+      onUnauthorized?.call();
+    }
+  }
+
   Future<bool> checkHealth() async {
     try {
       final url = Uri.parse('$baseUrl/health');
-      final response =
-          await _client.get(url).timeout(const Duration(seconds: 4));
+      final response = await _client
+          .get(url)
+          .timeout(const Duration(seconds: 4));
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return true;
       }
@@ -74,8 +83,9 @@ class ApiClient {
 
     try {
       final altUrl = Uri.parse('$baseUrl/api/health');
-      final altResp =
-          await _client.get(altUrl).timeout(const Duration(seconds: 4));
+      final altResp = await _client
+          .get(altUrl)
+          .timeout(const Duration(seconds: 4));
       return altResp.statusCode >= 200 && altResp.statusCode < 300;
     } catch (_) {
       return false;
@@ -271,8 +281,10 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> getServers() async {
     final url = Uri.parse('$baseUrl/servers');
     try {
-      final response =
-          await _client.get(url, headers: _headers).timeout(const Duration(seconds: 6));
+      final response = await _client
+          .get(url, headers: _headers)
+          .timeout(const Duration(seconds: 6));
+      _checkResponse(response);
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as List<dynamic>? ?? [];
         return data.cast<Map<String, dynamic>>();
@@ -318,10 +330,18 @@ class ApiClient {
         'category': category ?? 'Comunidade Geral',
       }),
     );
+    _checkResponse(response);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    return null;
+    String errorMsg = 'Falha ao criar servidor (${response.statusCode})';
+    try {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['error'] != null) {
+        errorMsg = data['error'].toString();
+      }
+    } catch (_) {}
+    throw Exception(errorMsg);
   }
 
   Future<Map<String, dynamic>?> updateServer(
@@ -601,8 +621,10 @@ class ApiClient {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as List<dynamic>? ?? [];
         return data
-            .map((item) =>
-                PublicServerModel.fromJson(item as Map<String, dynamic>))
+            .map(
+              (item) =>
+                  PublicServerModel.fromJson(item as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -632,7 +654,8 @@ class ApiClient {
       } else {
         final data = jsonDecode(response.body) as Map<String, dynamic>?;
         throw Exception(
-            data?['error'] ?? 'Falha ao solicitar entrada no servidor');
+          data?['error'] ?? 'Falha ao solicitar entrada no servidor',
+        );
       }
     } catch (e) {
       rethrow;
@@ -643,15 +666,18 @@ class ApiClient {
     String serverId, {
     String status = 'pending',
   }) async {
-    final url =
-        Uri.parse('$baseUrl/servers/$serverId/join-requests?status=$status');
+    final url = Uri.parse(
+      '$baseUrl/servers/$serverId/join-requests?status=$status',
+    );
     try {
       final response = await _client.get(url, headers: _headers);
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as List<dynamic>? ?? [];
         return data
-            .map((item) =>
-                ServerJoinRequestModel.fromJson(item as Map<String, dynamic>))
+            .map(
+              (item) =>
+                  ServerJoinRequestModel.fromJson(item as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -665,8 +691,9 @@ class ApiClient {
     String requestId, {
     required bool approve,
   }) async {
-    final url =
-        Uri.parse('$baseUrl/servers/$serverId/join-requests/$requestId/review');
+    final url = Uri.parse(
+      '$baseUrl/servers/$serverId/join-requests/$requestId/review',
+    );
     try {
       final response = await _client.post(
         url,
@@ -690,8 +717,9 @@ class ApiClient {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as List<dynamic>? ?? [];
         return data
-            .map((item) =>
-                ServerRoleModel.fromJson(item as Map<String, dynamic>))
+            .map(
+              (item) => ServerRoleModel.fromJson(item as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -778,8 +806,9 @@ class ApiClient {
     String userId,
     String roleId,
   ) async {
-    final url =
-        Uri.parse('$baseUrl/servers/$serverId/members/$userId/roles/$roleId');
+    final url = Uri.parse(
+      '$baseUrl/servers/$serverId/members/$userId/roles/$roleId',
+    );
     try {
       final response = await _client.post(url, headers: _headers);
       return response.statusCode >= 200 && response.statusCode < 300;
@@ -793,13 +822,65 @@ class ApiClient {
     String userId,
     String roleId,
   ) async {
-    final url =
-        Uri.parse('$baseUrl/servers/$serverId/members/$userId/roles/$roleId');
+    final url = Uri.parse(
+      '$baseUrl/servers/$serverId/members/$userId/roles/$roleId',
+    );
     try {
       final response = await _client.delete(url, headers: _headers);
       return response.statusCode >= 200 && response.statusCode < 300;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Tamanho máximo permitido para upload de mídia (5 MB)
+  static const int maxUploadSizeBytes = 5 * 1024 * 1024; // 5 MB
+
+  /// Realiza o upload de uma imagem ou arquivo de mídia
+  Future<Map<String, dynamic>> uploadMedia({
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    if (bytes.length > maxUploadSizeBytes) {
+      throw Exception('O arquivo excede o tamanho máximo permitido de 5 MB.');
+    }
+
+    final url = Uri.parse('$baseUrl/media/upload');
+    try {
+      final request = http.MultipartRequest('POST', url);
+      if (_authToken != null) {
+        request.headers['Authorization'] = 'Bearer $_authToken';
+      }
+
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
+
+      final streamedResponse = await _client
+          .send(request)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw TimeoutException(
+              'Tempo limite excedido ao enviar a imagem. Verifique sua conexão.',
+            ),
+          );
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        var errorMsg =
+            'Falha no upload da imagem (Código ${response.statusCode})';
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>?;
+          if (data?['error'] != null) {
+            errorMsg = data!['error'].toString();
+          }
+        } catch (_) {}
+        throw Exception(errorMsg);
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 }

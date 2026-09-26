@@ -403,8 +403,8 @@ func (r *PostgresRepository) CreateMessage(msg *models.Message) error {
 	msg.CreatedAt = time.Now()
 
 	query := `
-	INSERT INTO messages (id, channel_id, server_id, author_id, content, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6)`
+	INSERT INTO messages (id, channel_id, server_id, author_id, content, media_url, media_type, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	_, err := r.db.Exec(query,
 		msg.ID,
@@ -412,6 +412,8 @@ func (r *PostgresRepository) CreateMessage(msg *models.Message) error {
 		msg.ServerID,
 		msg.AuthorID,
 		msg.Content,
+		msg.MediaURL,
+		msg.MediaType,
 		msg.CreatedAt,
 	)
 	return err
@@ -419,7 +421,7 @@ func (r *PostgresRepository) CreateMessage(msg *models.Message) error {
 
 func (r *PostgresRepository) GetMessageByID(id string) (*models.Message, error) {
 	query := `
-	SELECT m.id, m.channel_id, m.server_id, m.author_id, m.content, m.created_at,
+	SELECT m.id, m.channel_id, m.server_id, m.author_id, m.content, COALESCE(m.media_url, ''), COALESCE(m.media_type, ''), m.created_at,
 	       u.id, u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
 	FROM messages m
 	JOIN users u ON m.author_id = u.id
@@ -433,6 +435,8 @@ func (r *PostgresRepository) GetMessageByID(id string) (*models.Message, error) 
 		&msg.ServerID,
 		&msg.AuthorID,
 		&msg.Content,
+		&msg.MediaURL,
+		&msg.MediaType,
 		&msg.CreatedAt,
 		&msg.Author.ID,
 		&msg.Author.Username,
@@ -482,7 +486,7 @@ func (r *PostgresRepository) ListMessagesByChannel(channelID string, limit int) 
 	}
 
 	query := `
-	SELECT m.id, m.channel_id, m.server_id, m.author_id, m.content, m.created_at,
+	SELECT m.id, m.channel_id, m.server_id, m.author_id, m.content, COALESCE(m.media_url, ''), COALESCE(m.media_type, ''), m.created_at,
 	       u.id, u.username, u.email, COALESCE(u.avatar_url, ''), u.status, u.created_at
 	FROM messages m
 	JOIN users u ON m.author_id = u.id
@@ -505,6 +509,8 @@ func (r *PostgresRepository) ListMessagesByChannel(channelID string, limit int) 
 			&msg.ServerID,
 			&msg.AuthorID,
 			&msg.Content,
+			&msg.MediaURL,
+			&msg.MediaType,
 			&msg.CreatedAt,
 			&msg.Author.ID,
 			&msg.Author.Username,
@@ -991,7 +997,7 @@ func (r *PostgresRepository) CreateJoinRequest(req *models.ServerJoinRequest) er
 	query := `
 	INSERT INTO server_join_requests (id, server_id, user_id, status, created_at)
 	VALUES ($1, $2, $3, $4, $5)
-	ON CONFLICT (server_id, user_id) 
+	ON CONFLICT (server_id, user_id)
 	DO UPDATE SET status = 'pending', created_at = EXCLUDED.created_at, reviewed_by = NULL, reviewed_at = NULL`
 
 	_, err := r.db.Exec(query, req.ID, req.ServerID, req.UserID, req.Status, req.CreatedAt)
