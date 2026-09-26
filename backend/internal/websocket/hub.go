@@ -186,11 +186,22 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 	case models.EventChatMessage:
 		var req struct {
 			Content   string `json:"content"`
-			MediaURL  string `json:"media_url"`
-			MediaType string `json:"media_type"`
+			MediaURL string `json:"media_url"`
 		}
 		if err := json.Unmarshal(event.Payload, &req); err != nil || (req.Content == "" && req.MediaURL == "") {
 			return
+		}
+
+		// Anti-BOLA: só aceita mídia enviada pelo próprio autor via /media/upload,
+		// e o tipo vem do registro no servidor, nunca do cliente.
+		mediaType := ""
+		if req.MediaURL != "" {
+			upload, err := h.Repo.GetMediaUploadByURL(req.MediaURL)
+			if err != nil || upload.OwnerID != client.UserID {
+				log.Printf("[Hub] media_url rejeitada para usuário %s: %s", client.UserID, req.MediaURL)
+				return
+			}
+			mediaType = upload.MediaType
 		}
 
 		author, _ := h.Repo.GetUserByID(client.UserID)
@@ -202,7 +213,7 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			Author:    author,
 			Content:   req.Content,
 			MediaURL:  req.MediaURL,
-			MediaType: req.MediaType,
+			MediaType: mediaType,
 			CreatedAt: time.Now(),
 		}
 

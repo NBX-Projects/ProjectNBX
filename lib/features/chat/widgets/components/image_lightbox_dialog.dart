@@ -1,22 +1,36 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:projectnbx/core/utils/file_saver.dart';
+
+/// Assinatura da função que persiste os bytes baixados (injetável em testes)
+typedef ImageFileSaver =
+    Future<bool> Function({
+      required Uint8List bytes,
+      required String fileName,
+      String mimeType,
+    });
 
 /// Modal dialog elegante para visualização de imagem em tela cheia com zoom e opção de download/salvar
 class ImageLightboxDialog extends StatelessWidget {
   final String imageUrl;
   final String? caption;
   final bool isDark;
+  final http.Client? httpClient;
+  final ImageFileSaver fileSaver;
 
   const ImageLightboxDialog({
     super.key,
     required this.imageUrl,
     this.caption,
     this.isDark = true,
+    this.httpClient,
+    this.fileSaver = saveBytesToFile,
   });
 
   static Future<void> show(
@@ -36,26 +50,40 @@ class ImageLightboxDialog extends StatelessWidget {
     );
   }
 
-  Future<void> _handleSaveOrOpen(BuildContext context) async {
+  Future<void> _handleSave(BuildContext context) async {
+    final client = httpClient ?? http.Client();
     try {
       final uri = Uri.parse(imageUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Não foi possível abrir a imagem externamente.'),
-            ),
-          );
-        }
+      final response = await client.get(uri);
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
       }
-    } catch (e) {
-      if (context.mounted) {
+
+      final fileName = uri.pathSegments.isNotEmpty
+          ? uri.pathSegments.last
+          : 'imagem.jpg';
+      final saved = await fileSaver(
+        bytes: response.bodyBytes,
+        fileName: fileName,
+        mimeType: response.headers['content-type'] ?? 'image/jpeg',
+      );
+
+      if (saved && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar/abrir imagem: $e')),
+          const SnackBar(content: Text('Imagem salva com sucesso.')),
         );
       }
+    } catch (e) {
+      debugPrint('[ImageLightbox] Falha ao salvar imagem: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível salvar a imagem. Tente novamente.'),
+          ),
+        );
+      }
+    } finally {
+      if (httpClient == null) client.close();
     }
   }
 
@@ -151,7 +179,7 @@ class ImageLightboxDialog extends StatelessWidget {
                   children: [
                     // Botão Salvar / Baixar
                     InkWell(
-                      onTap: () => _handleSaveOrOpen(context),
+                      onTap: () => _handleSave(context),
                       borderRadius: AppRadius.borderPill,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(

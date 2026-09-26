@@ -534,6 +534,62 @@ func (r *PostgresRepository) ListMessagesByChannel(channelID string, limit int) 
 	return msgs, nil
 }
 
+// Media upload methods
+func (r *PostgresRepository) CreateMediaUpload(upload *models.MediaUpload) error {
+	if upload.CreatedAt.IsZero() {
+		upload.CreatedAt = time.Now()
+	}
+
+	query := `
+	INSERT INTO media_uploads (url, owner_id, media_type, size_bytes, created_at)
+	VALUES ($1, $2, $3, $4, $5)`
+
+	_, err := r.db.Exec(query, upload.URL, upload.OwnerID, upload.MediaType, upload.SizeBytes, upload.CreatedAt)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return ErrAlreadyExists
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *PostgresRepository) GetMediaUploadByURL(url string) (*models.MediaUpload, error) {
+	query := `
+	SELECT url, owner_id, media_type, size_bytes, created_at
+	FROM media_uploads
+	WHERE url = $1`
+
+	upload := &models.MediaUpload{}
+	err := r.db.QueryRow(query, url).Scan(
+		&upload.URL,
+		&upload.OwnerID,
+		&upload.MediaType,
+		&upload.SizeBytes,
+		&upload.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return upload, nil
+}
+
+func (r *PostgresRepository) DeleteMediaUpload(url string) error {
+	res, err := r.db.Exec(`DELETE FROM media_uploads WHERE url = $1`, url)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Audit methods
 func (r *PostgresRepository) CreateAuditLog(log *models.AuditLog) error {
 	if log.ID == "" {

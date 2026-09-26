@@ -146,4 +146,91 @@ func TestUploadMedia_ExceedsMaxSize(t *testing.T) {
 	}
 }
 
+// uploadBytes envia o conteúdo como multipart autenticado e retorna o recorder
+func uploadBytes(t *testing.T, handler *MediaHandler, filename string, content []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatalf("Erro ao criar form file: %v", err)
+	}
+	_, _ = part.Write(content)
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/media/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req = req.WithContext(auth.WithUserContext(context.Background(), "user_test_123", "testuser"))
+
+	w := httptest.NewRecorder()
+	handler.UploadMedia(w, req)
+	return w
+}
+
+func TestUploadMedia_RegistersOwnership(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	handler := NewMediaHandler(storage.NewLocalStorageService(t.TempDir(), "http://localhost:8080"), repo)
+
+	w := uploadBytes(t, handler, "avatar.png", createValidPNGBuffer().Bytes())
+	if w.Code != http.StatusOK {
+		t.Fatalf("Esperava 200 OK, obteve %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp UploadMediaResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+
+	upload, err := repo.GetMediaUploadByURL(resp.URL)
+	if err != nil {
+		t.Fatalf("Upload deveria estar registrado: %v", err)
+	}
+	if upload.OwnerID != "user_test_123" {
+		t.Errorf("OwnerID esperado user_test_123, obteve %s", upload.OwnerID)
+	}
+	if upload.MediaType != "image/png" {
+		t.Errorf("MediaType esperado image/png, obteve %s", upload.MediaType)
+	}
+}
+
+func TestUploadMedia_AcceptsGIFAndWEBP(t *testing.T) {
+	cases := []struct {
+		name     string
+		filename string
+		header   []byte
+		wantMime string
+	}{
+		{"gif", "anim.gif", []byte("GIF89a"), "image/gif"},
+		{"webp", "photo.webp", append([]byte("RIFF\x00\x00\x00\x00WEBPVP8 "), 0x00), "image/webp"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := NewMediaHandler(storage.NewLocalStorageService(t.TempDir(), "http://localhost:8080"), repository.NewMemoryRepository())
+			content := append(append([]byte{}, tc.header...), bytes.Repeat([]byte{0x00}, 500)...)
+
+			w := uploadBytes(t, handler, tc.filename, content)
+			if w.Code != http.StatusOK {
+				t.Fatalf("Esperava 200 OK, obteve %d. Body: %s", w.Code, w.Body.String())
+			}
+			var resp UploadMediaResponse
+			_ = json.NewDecoder(w.Body).Decode(&resp)
+			if resp.MediaType != tc.wantMime {
+				t.Errorf("MediaType esperado %s, obteve %s", tc.wantMime, resp.MediaType)
+			}
+		})
+	}
+}
+
+func TestUploadMedia_AcceptsFileAtExactLimit(t *testing.T) {
+	handler := NewMediaHandler(storage.NewLocalStorageService(t.TempDir(), "http://localhost:8080"), repository.NewMemoryRepository())
+
+	// Arquivo com exatamente 5 MB: o overhead do multipart não pode causar rejeição
+	content := createValidPNGBuffer().Bytes()
+	content = append(content, bytes.Repeat([]byte{0x00}, maxUploadSize-len(content))...)
+
+	w := uploadBytes(t, handler, "limit.png", content)
+	if w.Code != http.StatusOK {
+		t.Errorf("Arquivo de exatamente 5 MB deveria ser aceito, obteve %d. Body: %s", w.Code, w.Body.String())
+	}
+}
+
 

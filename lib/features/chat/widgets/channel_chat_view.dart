@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
 import 'package:projectnbx/core/utils/image_compressor.dart';
@@ -97,59 +98,46 @@ class ChannelChatView extends StatefulWidget {
 
 class _ChannelChatViewState extends State<ChannelChatView> {
   PlatformFile? _attachedFile;
+  String? _attachedMimeType;
   bool _isUploading = false;
   bool _isDragging = false;
   bool _isCompressing = false;
 
-  /// Processa e comprime uma imagem (via picker ou drag & drop)
-  static const int maxFileSizeBytes = 5 * 1024 * 1024; // 5 MB máximo
+  static const int maxFileSizeBytes = ApiClient.maxUploadSizeBytes;
+  static const String _unsupportedFormatMessage =
+      'Formato de imagem não suportado. Utilize PNG, JPG, WEBP, GIF ou BMP.';
+  static const String _fileTooLargeMessage =
+      'O arquivo excede o limite máximo permitido de 5 MB.';
 
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(LucideIcons.alertCircle, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: const Color(0xFFEF4444),
+      ),
+    );
+  }
+
+  /// Valida, processa e anexa uma imagem (via picker ou drag & drop)
   Future<void> _processAndAttachImage({
     required Uint8List bytes,
     required String filename,
     String? path,
   }) async {
     if (!ImageCompressor.isImageFile(filename)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(LucideIcons.alertCircle, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Formato de imagem não suportado. Utilize PNG, JPG, WEBP, GIF ou BMP.',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Color(0xFFEF4444),
-          ),
-        );
-      }
+      _showErrorSnackBar(_unsupportedFormatMessage);
       return;
     }
 
     if (bytes.length > maxFileSizeBytes) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(LucideIcons.alertCircle, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'O arquivo selecionado excede o limite máximo permitido de 5 MB.',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Color(0xFFEF4444),
-          ),
-        );
-      }
+      _showErrorSnackBar(_fileTooLargeMessage);
       return;
     }
 
@@ -174,31 +162,11 @@ class _ChannelChatViewState extends State<ChannelChatView> {
       if (mounted) {
         setState(() {
           _attachedFile = platformFile;
+          _attachedMimeType = compressed.mimeType;
         });
-
-        if (compressed.compressionPercentage >= 15.0) {
-          final origKb = (compressed.originalSize / 1024).toStringAsFixed(0);
-          final compKb = (compressed.compressedSize / 1024).toStringAsFixed(0);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Imagem otimizada com sucesso: $origKb KB → $compKb KB (-${compressed.compressionPercentage.toStringAsFixed(0)}%)',
-              ),
-              duration: const Duration(seconds: 2),
-              backgroundColor: const Color(0xFF2D6A4F),
-            ),
-          );
-        }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao comprimir imagem: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
+      _showErrorSnackBar('Erro ao processar imagem: $e');
     } finally {
       if (mounted) {
         setState(() => _isCompressing = false);
@@ -215,24 +183,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
     final filename = dropFile.name;
 
     if (!ImageCompressor.isImageFile(filename)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(LucideIcons.alertCircle, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Formato de imagem não suportado. Solte um arquivo PNG, JPG, WEBP, GIF ou BMP.',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Color(0xFFEF4444),
-          ),
-        );
-      }
+      _showErrorSnackBar(_unsupportedFormatMessage);
       return;
     }
 
@@ -240,42 +191,13 @@ class _ChannelChatViewState extends State<ChannelChatView> {
       setState(() => _isCompressing = true);
       final bytes = await dropFile.readAsBytes();
 
-      if (bytes.length > maxFileSizeBytes) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(LucideIcons.alertCircle, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'O arquivo arrastado excede o limite máximo permitido de 5 MB.',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Color(0xFFEF4444),
-            ),
-          );
-        }
-        return;
-      }
-
       await _processAndAttachImage(
         bytes: bytes,
         filename: filename,
         path: kIsWeb ? null : dropFile.path,
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao processar imagem arrastada: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
+      _showErrorSnackBar('Erro ao processar imagem arrastada: $e');
     } finally {
       if (mounted) {
         setState(() => _isCompressing = false);
@@ -293,79 +215,26 @@ class _ChannelChatViewState extends State<ChannelChatView> {
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
 
+        // Checagem antecipada pelo tamanho informado, antes de ler o arquivo
         if (file.size > maxFileSizeBytes) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.alertCircle,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'O arquivo selecionado excede o limite máximo permitido de 5 MB.',
-                      ),
-                    ),
-                  ],
-                ),
-                backgroundColor: Color(0xFFEF4444),
-              ),
-            );
-          }
+          _showErrorSnackBar(_fileTooLargeMessage);
           return;
         }
 
-        List<int>? rawBytes = file.bytes;
+        var rawBytes = file.bytes;
         if (rawBytes == null && !kIsWeb && file.path != null) {
           rawBytes = await File(file.path!).readAsBytes();
         }
         if (rawBytes == null) return;
 
-        if (rawBytes.length > maxFileSizeBytes) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.alertCircle,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'O arquivo selecionado excede o limite máximo permitido de 5 MB.',
-                      ),
-                    ),
-                  ],
-                ),
-                backgroundColor: Color(0xFFEF4444),
-              ),
-            );
-          }
-          return;
-        }
-
         await _processAndAttachImage(
-          bytes: Uint8List.fromList(rawBytes),
+          bytes: rawBytes,
           filename: file.name,
           path: kIsWeb ? null : file.path,
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao selecionar imagem: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
+      _showErrorSnackBar('Erro ao selecionar imagem: $e');
     }
   }
 
@@ -373,121 +242,49 @@ class _ChannelChatViewState extends State<ChannelChatView> {
     if (_isUploading || _isCompressing) return;
 
     final hasText = widget.messageController.text.trim().isNotEmpty;
-    final hasAttachment = _attachedFile != null;
+    final attachment = _attachedFile;
 
-    if (!hasText && !hasAttachment) {
+    if (!hasText && attachment == null) {
       widget.messageFocusNode?.requestFocus();
       return;
     }
 
     String? uploadedUrl;
-    if (_attachedFile != null) {
-      if (widget.onUploadMedia != null) {
-        setState(() => _isUploading = true);
-        try {
-          List<int>? bytes = _attachedFile!.bytes;
-          if (bytes == null && !kIsWeb && _attachedFile!.path != null) {
-            bytes = await File(_attachedFile!.path!).readAsBytes();
-          }
-          if (bytes != null) {
-            if (bytes.length > maxFileSizeBytes) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Row(
-                      children: [
-                        Icon(
-                          LucideIcons.alertCircle,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'O arquivo excede o limite máximo permitido de 5 MB.',
-                          ),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: Color(0xFFEF4444),
-                  ),
-                );
-              }
-              setState(() => _isUploading = false);
-              return;
-            }
-
-            uploadedUrl = await widget.onUploadMedia!(
-              bytes,
-              _attachedFile!.name,
-            );
-          }
-
-          if (uploadedUrl == null || uploadedUrl.isEmpty) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Row(
-                    children: [
-                      Icon(
-                        LucideIcons.alertCircle,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Falha no upload: o servidor não retornou a URL da imagem.',
-                        ),
-                      ),
-                    ],
-                  ),
-                  backgroundColor: Color(0xFFEF4444),
-                ),
-              );
-            }
-            setState(() => _isUploading = false);
-            return;
-          }
-        } catch (e) {
-          if (mounted) {
-            final errorMsg = e.toString().replaceAll('Exception: ', '').trim();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(
-                      LucideIcons.alertCircle,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Falha no upload da imagem: $errorMsg'),
-                    ),
-                  ],
-                ),
-                backgroundColor: const Color(0xFFEF4444),
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
-          setState(() => _isUploading = false);
-          return;
-        } finally {
-          if (mounted) {
-            setState(() => _isUploading = false);
-          }
+    if (attachment != null && widget.onUploadMedia != null) {
+      setState(() => _isUploading = true);
+      try {
+        var bytes = attachment.bytes;
+        if (bytes == null && !kIsWeb && attachment.path != null) {
+          bytes = await File(attachment.path!).readAsBytes();
         }
+        if (bytes != null) {
+          uploadedUrl = await widget.onUploadMedia!(bytes, attachment.name);
+        }
+      } catch (e) {
+        final errorMsg = e.toString().replaceAll('Exception: ', '').trim();
+        _showErrorSnackBar('Falha no upload da imagem: $errorMsg');
+        return;
+      } finally {
+        if (mounted) {
+          setState(() => _isUploading = false);
+        }
+      }
+
+      if (uploadedUrl == null || uploadedUrl.isEmpty) {
+        _showErrorSnackBar(
+          'Falha no upload: o servidor não retornou a URL da imagem.',
+        );
+        return;
       }
     }
 
-    final fileType = _attachedFile != null
-        ? 'image/${_attachedFile!.extension ?? 'png'}'
-        : null;
+    if (!mounted) return;
+
+    final mediaType = uploadedUrl != null ? _attachedMimeType : null;
 
     setState(() {
       _attachedFile = null;
+      _attachedMimeType = null;
     });
 
     if (widget.onSendMessageWithMedia != null) {
@@ -495,7 +292,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
         widget.channelKey,
         widget.username,
         mediaUrl: uploadedUrl,
-        mediaType: fileType,
+        mediaType: mediaType,
       );
     } else {
       widget.onSendMessage(widget.channelKey, widget.username);
@@ -1023,12 +820,12 @@ class _ChannelChatViewState extends State<ChannelChatView> {
                                   borderRadius: AppRadius.borderSm,
                                   child: _attachedFile!.bytes != null
                                       ? Image.memory(
-                                          Uint8List.fromList(
-                                            _attachedFile!.bytes!,
-                                          ),
+                                          _attachedFile!.bytes!,
                                           width: 32,
                                           height: 32,
+                                          cacheWidth: 64,
                                           fit: BoxFit.cover,
+                                          gaplessPlayback: true,
                                         )
                                       : const Icon(LucideIcons.image, size: 24),
                                 ),
@@ -1077,8 +874,13 @@ class _ChannelChatViewState extends State<ChannelChatView> {
                                   )
                                 else
                                   InkWell(
-                                    onTap: () =>
-                                        setState(() => _attachedFile = null),
+                                    key: const ValueKey(
+                                      'chat_remove_attachment',
+                                    ),
+                                    onTap: () => setState(() {
+                                      _attachedFile = null;
+                                      _attachedMimeType = null;
+                                    }),
                                     borderRadius: AppRadius.borderPill,
                                     child: const Padding(
                                       padding: EdgeInsets.all(4),
@@ -1261,7 +1063,7 @@ class _ChannelChatViewState extends State<ChannelChatView> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Formatos suportados: PNG, JPG, WEBP, GIF (compressão automática)',
+                    'Formatos suportados: PNG, JPG, WEBP, GIF e BMP (até 5 MB)',
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: isDark

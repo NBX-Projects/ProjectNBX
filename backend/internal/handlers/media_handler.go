@@ -48,6 +48,10 @@ var allowedMimeTypes = map[string]string{
 
 const maxUploadSize = 5 << 20 // 5 MB (5 * 1024 * 1024 = 5.242.880 bytes)
 
+// maxRequestSize reserva folga para os cabeçalhos e boundaries do multipart,
+// para que um arquivo de até maxUploadSize não seja rejeitado pelo overhead do envelope.
+const maxRequestSize = maxUploadSize + 64<<10
+
 // UploadMedia recebe um arquivo multipart/form-data, valida magic bytes e formato, e armazena via StorageService
 func (h *MediaHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -60,9 +64,9 @@ func (h *MediaHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Limita o tamanho máximo lido para prevenir saturação de memória (Anti-DoS)
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+	if err := r.ParseMultipartForm(maxRequestSize); err != nil {
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error": "Arquivo excede o tamanho máximo permitido de 5 MB",
@@ -125,7 +129,22 @@ func (h *MediaHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Registro de auditoria
+	// 5. Registra a propriedade do arquivo: só o dono pode anexá-lo a mensagens (Anti-BOLA)
+	if h.repo != nil {
+		if err := h.repo.CreateMediaUpload(&models.MediaUpload{
+			URL:       publicURL,
+			OwnerID:   userID,
+			MediaType: detectedMime,
+			SizeBytes: header.Size,
+		}); err != nil {
+			_ = h.storage.Delete(r.Context(), publicURL)
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Erro ao registrar imagem enviada"})
+			return
+		}
+	}
+
+	// 6. Registro de auditoria
 	if h.repo != nil {
 		_ = h.repo.CreateAuditLog(&models.AuditLog{
 			ID:        "aud_" + uuid.New().String(),

@@ -25,6 +25,7 @@ type MemoryRepository struct {
 	joinRequests map[string]*models.ServerJoinRequest // requestID -> joinRequest
 	roles        map[string]*models.ServerRole // roleID -> role
 	memberRoles  map[string]map[string][]string // serverID -> userID -> []roleID
+	mediaUploads map[string]*models.MediaUpload // url -> upload
 }
 
 // NewMemoryRepository inicializa o repositório com dados padrão de demonstração
@@ -39,6 +40,7 @@ func NewMemoryRepository() *MemoryRepository {
 		joinRequests: make(map[string]*models.ServerJoinRequest),
 		roles:        make(map[string]*models.ServerRole),
 		memberRoles:  make(map[string]map[string][]string),
+		mediaUploads: make(map[string]*models.MediaUpload),
 	}
 
 	repo.seedInitialData()
@@ -518,6 +520,43 @@ func (r *MemoryRepository) ListMessagesByChannel(channelID string, limit int) ([
 	}
 	start := len(msgs) - limit
 	return msgs[start:], nil
+}
+
+// Media upload methods
+func (r *MemoryRepository) CreateMediaUpload(upload *models.MediaUpload) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.mediaUploads[upload.URL]; exists {
+		return ErrAlreadyExists
+	}
+	if upload.CreatedAt.IsZero() {
+		upload.CreatedAt = time.Now()
+	}
+	r.mediaUploads[upload.URL] = upload
+	return nil
+}
+
+func (r *MemoryRepository) GetMediaUploadByURL(url string) (*models.MediaUpload, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	upload, ok := r.mediaUploads[url]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return upload, nil
+}
+
+func (r *MemoryRepository) DeleteMediaUpload(url string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.mediaUploads[url]; !ok {
+		return ErrNotFound
+	}
+	delete(r.mediaUploads, url)
+	return nil
 }
 
 func (r *MemoryRepository) CreateAuditLog(log *models.AuditLog) error {

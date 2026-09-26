@@ -66,5 +66,33 @@ void main() {
         expect(result.filename, 'corrompido.jpg');
       },
     );
+
+    test('isGif detecta pela assinatura mesmo com extensão errada', () {
+      final gifHeader = Uint8List.fromList('GIF89a'.codeUnits);
+
+      expect(ImageCompressor.isGif(gifHeader, 'renomeado.png'), isTrue);
+      expect(ImageCompressor.isGif(Uint8List(0), 'anim.GIF'), isTrue);
+      expect(
+        ImageCompressor.isGif(Uint8List.fromList([0x89, 0x50]), 'foto.png'),
+        isFalse,
+      );
+    });
+
+    test('GIF animado é repassado intacto, sem recodificar', () async {
+      final frame1 = img.Image(width: 64, height: 64);
+      final frame2 = img.Image(width: 64, height: 64);
+      img.fill(frame2, color: img.ColorRgb8(255, 0, 0));
+      frame1.addFrame(frame2);
+      final gifBytes = Uint8List.fromList(img.encodeGif(frame1));
+
+      final result = await ImageCompressor.compress(
+        bytes: gifBytes,
+        filename: 'anim.gif',
+      );
+
+      expect(identical(result.bytes, gifBytes), isTrue);
+      expect(result.mimeType, 'image/gif');
+      expect(result.filename, 'anim.gif');
+    });
   });
 }
