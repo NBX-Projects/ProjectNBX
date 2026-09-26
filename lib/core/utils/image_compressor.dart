@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
+import 'package:projectnbx/core/utils/image_compressor_browser.dart';
 
 /// Resultado do processo de compressão de imagem
 class CompressedImageResult {
@@ -67,7 +68,8 @@ class ImageCompressor {
 
   /// Comprime a imagem reduzindo resolução se necessário e aplicando quantização de alta eficiência.
   ///
-  /// Executa fora da thread principal de UI via [compute] para evitar travamentos visuais.
+  /// Nunca bloqueia a thread da UI: no nativo roda em isolate via [compute];
+  /// na Web (sem isolates) usa o codec nativo do navegador.
   static Future<CompressedImageResult> compress({
     required Uint8List bytes,
     required String filename,
@@ -83,8 +85,13 @@ class ImageCompressor {
       maxHeight: maxHeight,
     );
 
+    // GIF é enviado intacto para preservar a animação: evita decodificar todos os frames à toa
+    if (isGif(bytes, filename)) {
+      return _passthrough(payload);
+    }
+
     if (kIsWeb) {
-      return _compressWorker(payload);
+      return _compressInBrowser(payload);
     }
 
     try {
@@ -93,6 +100,83 @@ class ImageCompressor {
       // Fallback local se a inicialização de isolate falhar
       return _compressWorker(payload);
     }
+  }
+
+  /// Detecta GIF pela assinatura "GIF8" ou, na falta dela, pela extensão
+  static bool isGif(Uint8List bytes, String filename) {
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38) {
+      return true;
+    }
+    return filename.toLowerCase().endsWith('.gif');
+  }
+
+  static CompressedImageResult _passthrough(
+    _CompressPayload payload, {
+    int width = 0,
+    int height = 0,
+  }) {
+    return CompressedImageResult(
+      bytes: payload.bytes,
+      filename: payload.filename,
+      mimeType: _guessMimeType(payload.filename),
+      originalSize: payload.bytes.length,
+      compressedSize: payload.bytes.length,
+      width: width,
+      height: height,
+    );
+  }
+
+  /// Compressão na Web via createImageBitmap + OffscreenCanvas (assíncrona, fora do Dart)
+  static Future<CompressedImageResult> _compressInBrowser(
+    _CompressPayload payload,
+  ) async {
+    final isPng = payload.filename.toLowerCase().endsWith('.png');
+    final encoded = await encodeInBrowser(
+      bytes: payload.bytes,
+      // PNG mantém o formato para preservar transparência
+      targetMimeType: isPng ? 'image/png' : 'image/jpeg',
+      quality: payload.quality / 100,
+      maxWidth: payload.maxWidth,
+      maxHeight: payload.maxHeight,
+    );
+
+    if (encoded == null) {
+      return _passthrough(payload);
+    }
+
+    final originalSize = payload.bytes.length;
+    final notWorthIt =
+        !encoded.wasResized && (isPng || encoded.bytes.length >= originalSize);
+    if (notWorthIt) {
+      return _passthrough(
+        payload,
+        width: encoded.width,
+        height: encoded.height,
+      );
+    }
+
+    return CompressedImageResult(
+      bytes: encoded.bytes,
+      filename: isPng ? payload.filename : _withJpgExtension(payload.filename),
+      mimeType: isPng ? 'image/png' : 'image/jpeg',
+      originalSize: originalSize,
+      compressedSize: encoded.bytes.length,
+      width: encoded.width,
+      height: encoded.height,
+    );
+  }
+
+  static String _withJpgExtension(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return filename;
+    final dotIndex = filename.lastIndexOf('.');
+    return dotIndex != -1
+        ? '${filename.substring(0, dotIndex)}.jpg'
+        : '$filename.jpg';
   }
 
   /// Função de execução da compressão (adequada para Isolate/Compute)
@@ -169,14 +253,7 @@ class ImageCompressor {
       finalMimeType = 'image/jpeg';
 
       // Ajusta extensão se o original era .png/.bmp mas foi convertido para .jpg compacto
-      if (!lowerName.endsWith('.jpg') && !lowerName.endsWith('.jpeg')) {
-        final dotIndex = finalFilename.lastIndexOf('.');
-        if (dotIndex != -1) {
-          finalFilename = '${finalFilename.substring(0, dotIndex)}.jpg';
-        } else {
-          finalFilename = '$finalFilename.jpg';
-        }
-      }
+      finalFilename = _withJpgExtension(finalFilename);
     }
 
     // Se a imagem não foi redimensionada e por alguma razão o arquivo resultante ficou maior, mantém o menor

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"log"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -326,20 +327,16 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-
-		// Se a mensagem possuía anexo de mídia, remove do Cloudinary ou armazenamento local
-		if existing.MediaURL != "" && h.storage != nil {
-			go func(mediaURL string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-				defer cancel()
-				_ = h.storage.Delete(ctx, mediaURL)
-			}(existing.MediaURL)
-		}
 	}
 
 	if err := h.repo.DeleteMessage(messageID); err != nil {
 		http.Error(w, `{"error":"Erro ao excluir mensagem"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Remove o anexo somente após a mensagem sair do banco
+	if existing != nil && existing.MediaURL != "" {
+		h.deleteMessageMedia(existing)
 	}
 
 	payloadBytes, _ := json.Marshal(map[string]string{"id": messageID})
@@ -351,6 +348,31 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteMessageMedia remove do storage o anexo de uma mensagem excluída.
+// Anti-BOLA: só apaga arquivos registrados como upload do próprio autor da mensagem,
+// impedindo que uma media_url forjada aponte para a mídia de outro usuário.
+func (h *ServerHandler) deleteMessageMedia(msg *models.Message) {
+	if h.storage == nil {
+		return
+	}
+
+	upload, err := h.repo.GetMediaUploadByURL(msg.MediaURL)
+	if err != nil || upload.OwnerID != msg.AuthorID {
+		log.Printf("[Media] Anexo não removido (sem registro de upload do autor): %s", msg.MediaURL)
+		return
+	}
+
+	go func(mediaURL string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := h.storage.Delete(ctx, mediaURL); err != nil {
+			log.Printf("[Media] Falha ao remover anexo %s: %v", mediaURL, err)
+			return
+		}
+		_ = h.repo.DeleteMediaUpload(mediaURL)
+	}(upload.URL)
 }
 
 func (h *ServerHandler) ListMembers(w http.ResponseWriter, r *http.Request) {

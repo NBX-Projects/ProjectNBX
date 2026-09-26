@@ -836,51 +836,63 @@ class ApiClient {
   /// Tamanho máximo permitido para upload de mídia (5 MB)
   static const int maxUploadSizeBytes = 5 * 1024 * 1024; // 5 MB
 
+  static const String _uploadTooLargeMessage =
+      'O arquivo excede o tamanho máximo permitido de 5 MB.';
+
   /// Realiza o upload de uma imagem ou arquivo de mídia
   Future<Map<String, dynamic>> uploadMedia({
     required List<int> bytes,
     required String filename,
   }) async {
     if (bytes.length > maxUploadSizeBytes) {
-      throw Exception('O arquivo excede o tamanho máximo permitido de 5 MB.');
+      throw Exception(_uploadTooLargeMessage);
     }
 
     final url = Uri.parse('$baseUrl/media/upload');
+    final request = http.MultipartRequest('POST', url);
+    if (_authToken != null) {
+      request.headers['Authorization'] = 'Bearer $_authToken';
+    }
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
+
+    final http.Response response;
     try {
-      final request = http.MultipartRequest('POST', url);
-      if (_authToken != null) {
-        request.headers['Authorization'] = 'Bearer $_authToken';
-      }
-
-      request.files.add(
-        http.MultipartFile.fromBytes('file', bytes, filename: filename),
-      );
-
       final streamedResponse = await _client
           .send(request)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw TimeoutException(
-              'Tempo limite excedido ao enviar a imagem. Verifique sua conexão.',
-            ),
-          );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else {
-        var errorMsg =
-            'Falha no upload da imagem (Código ${response.statusCode})';
-        try {
-          final data = jsonDecode(response.body) as Map<String, dynamic>?;
-          if (data?['error'] != null) {
-            errorMsg = data!['error'].toString();
-          }
-        } catch (_) {}
-        throw Exception(errorMsg);
-      }
-    } catch (e) {
-      rethrow;
+          .timeout(const Duration(seconds: 30));
+      response = await http.Response.fromStream(streamedResponse);
+    } on TimeoutException {
+      throw Exception(
+        'Tempo limite excedido ao enviar a imagem. Verifique sua conexão.',
+      );
+    } on http.ClientException {
+      // Na Web, respostas de proxy sem CORS (ex.: 413) também chegam aqui como "Failed to fetch"
+      throw Exception(
+        'Não foi possível enviar a imagem. Verifique sua conexão ou tente um arquivo menor.',
+      );
+    } on SocketException {
+      throw Exception(
+        'Não foi possível enviar a imagem. Verifique sua conexão.',
+      );
     }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    if (response.statusCode == 413) {
+      throw Exception(_uploadTooLargeMessage);
+    }
+
+    var errorMsg = 'Falha no upload da imagem (Código ${response.statusCode})';
+    try {
+      final data = jsonDecode(response.body) as Map<String, dynamic>?;
+      if (data?['error'] != null) {
+        errorMsg = data!['error'].toString();
+      }
+    } catch (_) {}
+    throw Exception(errorMsg);
   }
 }

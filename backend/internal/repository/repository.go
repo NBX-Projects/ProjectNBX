@@ -47,6 +47,11 @@ type Repository interface {
 	DeleteMessage(id string) error
 	ListMessagesByChannel(channelID string, limit int) ([]*models.Message, error)
 
+	// Mídias (propriedade dos uploads)
+	CreateMediaUpload(upload *models.MediaUpload) error
+	GetMediaUploadByURL(url string) (*models.MediaUpload, error)
+	DeleteMediaUpload(url string) error
+
 	// Auditoria
 	CreateAuditLog(log *models.AuditLog) error
 	ListAuditLogs(limit int, source models.AuditSource) ([]*models.AuditLog, error)
