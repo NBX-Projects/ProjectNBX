@@ -319,6 +319,7 @@ class WhatsAppChatBubble extends StatelessWidget {
         ],
         if (hasMedia) ...[
           GestureDetector(
+            key: ValueKey('chat_bubble_media_${msg.id}'),
             behavior: HitTestBehavior.opaque,
             onTap: () {
               ImageLightboxDialog.show(
@@ -332,6 +333,8 @@ class WhatsAppChatBubble extends StatelessWidget {
               borderRadius: AppRadius.borderMd,
               child: Container(
                 constraints: BoxConstraints(
+                  minWidth: 180,
+                  minHeight: 140,
                   maxWidth: isMobile ? screenWidth * 0.68 : 340,
                   maxHeight: 260,
                 ),

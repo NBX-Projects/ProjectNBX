@@ -295,9 +295,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Clica na imagem anexada
-      final imageFinder = find.byType(Image);
-      expect(imageFinder, findsOneWidget);
-      await tester.tap(imageFinder, warnIfMissed: false);
+      final mediaFinder = find.byKey(
+        const ValueKey('chat_bubble_media_msg_click_test'),
+      );
+      expect(mediaFinder, findsOneWidget);
+      await tester.tap(mediaFinder);
       await tester.pumpAndSettle();
 
       // Confirma abertura do Lightbox
