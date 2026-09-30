@@ -59,6 +59,10 @@ jobs:
             git pull origin main &&
             cd backend &&
             docker compose build --no-cache api &&
-            docker compose up -d --force-recreate
+            if [ -f docker-compose.prod.yml ]; then
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+            else
+              docker compose up -d --force-recreate
+            fi
           "
 
