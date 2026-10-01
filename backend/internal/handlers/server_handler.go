@@ -53,8 +53,42 @@ func NewServerHandler(repo repository.Repository, hub *websocket.Hub, stor ...st
 	}
 }
 
+func (h *ServerHandler) requireServerMember(w http.ResponseWriter, r *http.Request, serverID string) (*models.Server, bool) {
+	userID := auth.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return nil, false
+	}
+
+	server, err := h.repo.GetServerByID(serverID)
+	if err != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return nil, false
+	}
+	if server.OwnerID == userID {
+		return server, true
+	}
+
+	isMember, err := h.repo.IsServerMember(serverID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"Erro ao validar acesso ao servidor"}`, http.StatusInternalServerError)
+		return nil, false
+	}
+	if !isMember {
+		http.Error(w, `{"error":"Acesso negado"}`, http.StatusForbidden)
+		return nil, false
+	}
+	return server, true
+}
+
 func (h *ServerHandler) ListServers(w http.ResponseWriter, r *http.Request) {
-	servers, err := h.repo.ListServers()
+	currentUserID := auth.GetUserID(r.Context())
+	if currentUserID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	servers, err := h.repo.ListServersByUserID(currentUserID)
 	if err != nil {
 		http.Error(w, `{"error":"Erro ao listar servidores"}`, http.StatusInternalServerError)
 		return
@@ -128,11 +162,20 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) GetServer(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
+	currentUserID := auth.GetUserID(r.Context())
 
 	server, err := h.repo.GetServerByID(serverID)
-	if err != nil {
+	if err != nil || server == nil {
 		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
 		return
+	}
+
+	if currentUserID != "" && server.OwnerID != currentUserID {
+		isMember, _ := h.repo.IsServerMember(serverID, currentUserID)
+		if !isMember {
+			http.Error(w, `{"error":"Acesso negado. Você precisa ser membro deste servidor."}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	channels, _ := h.repo.ListChannelsByServer(serverID)
@@ -198,6 +241,21 @@ func (h *ServerHandler) UpdateServer(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
+	currentUserID := auth.GetUserID(r.Context())
+
+	server, err := h.repo.GetServerByID(serverID)
+	if err != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if currentUserID != "" && server.OwnerID != currentUserID {
+		isMember, _ := h.repo.IsServerMember(serverID, currentUserID)
+		if !isMember {
+			http.Error(w, `{"error":"Acesso negado. Você precisa ser membro deste servidor."}`, http.StatusForbidden)
+			return
+		}
+	}
 
 	channels, err := h.repo.ListChannelsByServer(serverID)
 	if err != nil {
@@ -212,6 +270,16 @@ func (h *ServerHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
+	currentUserID := auth.GetUserID(r.Context())
+	server, ok := h.requireServerMember(w, r, serverID)
+	if !ok {
+		return
+	}
+	canManageChannels, err := h.repo.HasServerPermission(serverID, currentUserID, "can_manage_roles")
+	if err != nil || !canManageChannels {
+		http.Error(w, `{"error":"Sem permissao para criar canais"}`, http.StatusForbidden)
+		return
+	}
 
 	var req models.CreateChannelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
@@ -225,7 +293,7 @@ func (h *ServerHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	channel := &models.Channel{
-		ServerID: serverID,
+		ServerID: server.ID,
 		Name:     req.Name,
 		Type:     channelType,
 	}
@@ -243,6 +311,36 @@ func (h *ServerHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	channelID := vars["channelId"]
+	if channelID == "" {
+		channelID = vars["id"]
+	}
+	currentUserID := auth.GetUserID(r.Context())
+	if currentUserID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channel, err := h.repo.GetChannelByID(channelID)
+	if err != nil || channel == nil {
+		http.Error(w, `{"error":"Canal não encontrado"}`, http.StatusNotFound)
+		return
+	}
+	server, err := h.repo.GetServerByID(channel.ServerID)
+	if err != nil || server == nil {
+		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+	if server.OwnerID != currentUserID {
+		isMember, err := h.repo.IsServerMember(channel.ServerID, currentUserID)
+		if err != nil {
+			http.Error(w, `{"error":"Erro ao validar acesso ao canal"}`, http.StatusInternalServerError)
+			return
+		}
+		if !isMember {
+			http.Error(w, `{"error":"Acesso negado. Você precisa ser membro deste servidor."}`, http.StatusForbidden)
+			return
+		}
+	}
 
 	limit := 50
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
@@ -275,7 +373,15 @@ func (h *ServerHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
 	existing, err := h.repo.GetMessageByID(messageID)
-	if err == nil && existing != nil && existing.AuthorID != "" && userID != "" && existing.AuthorID != userID {
+	if err != nil || existing == nil || existing.ServerID != serverID || existing.ChannelID != channelID {
+		http.Error(w, `{"error":"Mensagem nao encontrada"}`, http.StatusNotFound)
+		return
+	}
+	if userID == "" {
+		http.Error(w, `{"error":"Nao autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+	if existing.AuthorID != userID {
 		http.Error(w, `{"error":"Sem permissão para editar esta mensagem"}`, http.StatusForbidden)
 		return
 	}
@@ -319,13 +425,19 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
 	existing, err := h.repo.GetMessageByID(messageID)
-	if err == nil && existing != nil {
-		if existing.AuthorID != "" && userID != "" && existing.AuthorID != userID {
-			server, errS := h.repo.GetServerByID(serverID)
-			if errS != nil || server == nil || server.OwnerID != userID {
-				http.Error(w, `{"error":"Sem permissão para excluir esta mensagem"}`, http.StatusForbidden)
-				return
-			}
+	if err != nil || existing == nil || existing.ServerID != serverID || existing.ChannelID != channelID {
+		http.Error(w, `{"error":"Mensagem nao encontrada"}`, http.StatusNotFound)
+		return
+	}
+	if userID == "" {
+		http.Error(w, `{"error":"Nao autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+	if existing.AuthorID != userID {
+		server, errS := h.repo.GetServerByID(existing.ServerID)
+		if errS != nil || server == nil || server.OwnerID != userID {
+			http.Error(w, `{"error":"Sem permissão para excluir esta mensagem"}`, http.StatusForbidden)
+			return
 		}
 	}
 
@@ -379,9 +491,7 @@ func (h *ServerHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
 
-	server, errS := h.repo.GetServerByID(serverID)
-	if errS != nil || server == nil {
-		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+	if _, ok := h.requireServerMember(w, r, serverID); !ok {
 		return
 	}
 
@@ -406,7 +516,11 @@ func (h *ServerHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if currentUserID != "" && server.OwnerID != currentUserID {
+	if currentUserID == "" {
+		http.Error(w, `{"error":"Não autorizado"}`, http.StatusUnauthorized)
+		return
+	}
+	if server.OwnerID != currentUserID {
 		http.Error(w, `{"error":"Sem permissão para adicionar membros a este servidor"}`, http.StatusForbidden)
 		return
 	}
@@ -520,6 +634,10 @@ func (h *ServerHandler) JoinServer(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"Código de convite inválido ou servidor não encontrado"}`, http.StatusNotFound)
 			return
 		}
+		if server.IsPublic {
+			http.Error(w, `{"error":"Este servidor é público e requer aprovação dos moderadores. Envie uma solicitação para entrar."}`, http.StatusForbidden)
+			return
+		}
 		targetServerID = server.ID
 	}
 
@@ -549,9 +667,7 @@ func (h *ServerHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server, err := h.repo.GetServerByID(serverID)
-	if err != nil || server == nil {
-		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+	if _, ok := h.requireServerMember(w, r, serverID); !ok {
 		return
 	}
 
@@ -607,9 +723,7 @@ func (h *ServerHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
 
-	server, err := h.repo.GetServerByID(serverID)
-	if err != nil || server == nil {
-		http.Error(w, `{"error":"Servidor não encontrado"}`, http.StatusNotFound)
+	if _, ok := h.requireServerMember(w, r, serverID); !ok {
 		return
 	}
 
@@ -771,6 +885,9 @@ func (h *ServerHandler) ReviewJoinRequest(w http.ResponseWriter, r *http.Request
 func (h *ServerHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	serverID := vars["id"]
+	if _, ok := h.requireServerMember(w, r, serverID); !ok {
+		return
+	}
 
 	roles, err := h.repo.ListServerRoles(serverID)
 	if err != nil {

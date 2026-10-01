@@ -297,6 +297,99 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 	return servers, nil
 }
 
+func (r *PostgresRepository) ListServersByUserID(userID string) ([]*models.Server, error) {
+	query := `
+	SELECT s.id, s.name, COALESCE(s.icon_url, ''), s.owner_id, s.member_count, COALESCE(s.is_public, FALSE), COALESCE(s.description, ''), COALESCE(s.category, 'Comunidade Geral'), s.created_at
+	FROM servers s
+	INNER JOIN server_members sm ON sm.server_id = s.id
+	WHERE sm.user_id = $1
+	ORDER BY s.created_at ASC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	servers := make([]*models.Server, 0)
+	serverIDs := make([]string, 0)
+	for rows.Next() {
+		srv := &models.Server{}
+		if err := rows.Scan(
+			&srv.ID,
+			&srv.Name,
+			&srv.IconURL,
+			&srv.OwnerID,
+			&srv.MemberCount,
+			&srv.IsPublic,
+			&srv.Description,
+			&srv.Category,
+			&srv.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		serverIDs = append(serverIDs, srv.ID)
+		servers = append(servers, srv)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	channelsByServer, err := r.listChannelsByServerIDs(serverIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, server := range servers {
+		server.Channels = channelsByServer[server.ID]
+		if server.Channels == nil {
+			server.Channels = make([]*models.Channel, 0)
+		}
+	}
+	return servers, nil
+}
+
+func (r *PostgresRepository) listChannelsByServerIDs(serverIDs []string) (map[string][]*models.Channel, error) {
+	channelsByServer := make(map[string][]*models.Channel, len(serverIDs))
+	if len(serverIDs) == 0 {
+		return channelsByServer, nil
+	}
+
+	query := `
+	SELECT id, server_id, name, type, position, created_at
+	FROM channels
+	WHERE server_id = ANY($1)
+	ORDER BY server_id, position ASC, created_at ASC`
+	rows, err := r.db.Query(query, pq.Array(serverIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		channel := &models.Channel{}
+		if err := rows.Scan(
+			&channel.ID,
+			&channel.ServerID,
+			&channel.Name,
+			&channel.Type,
+			&channel.Position,
+			&channel.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		channelsByServer[channel.ServerID] = append(channelsByServer[channel.ServerID], channel)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return channelsByServer, nil
+}
+
 func (r *PostgresRepository) UpdateServer(server *models.Server) error {
 	query := `
 	UPDATE servers
@@ -1422,5 +1515,3 @@ func (r *PostgresRepository) HasServerPermission(serverID, userID, permission st
 	}
 	return false, nil
 }
-
-

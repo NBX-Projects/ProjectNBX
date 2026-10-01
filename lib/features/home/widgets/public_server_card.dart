@@ -151,7 +151,15 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
+      child: GestureDetector(
+        onTap: () {
+          if (isMember) {
+            widget.onOpenServer();
+          } else if (status != 'pending') {
+            _showJoinRequestDialog();
+          }
+        },
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
@@ -326,8 +334,9 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildActionButton(bool isMember, String status, Color accentColor, bool isLightAccent) {
     if (isMember) {

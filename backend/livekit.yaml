@@ -26,4 +26,7 @@ logging:
 webhook:
   api_key: devkey
   urls:
-    - "http://127.0.0.1:8081/api/livekit/webhook"
+    - "http://api:8080/api/livekit/webhook"
+
+ingress:
+  whip_base_url: "http://localhost:8083/w"

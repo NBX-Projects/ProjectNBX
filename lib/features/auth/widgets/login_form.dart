@@ -43,13 +43,6 @@ class _LoginFormState extends ConsumerState<LoginForm> {
     super.dispose();
   }
 
-  void _fillDemoCredentials() {
-    setState(() {
-      _loginController.text = 'srSixSeven@gmail.com';
-      _passwordController.text = 'SixSeven67*';
-    });
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     await ref
@@ -230,37 +223,6 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             ),
           ),
           const SizedBox(height: 18),
-
-          // Demo Credentials Shortcut
-          Center(
-            child: InkWell(
-              onTap: _fillDemoCredentials,
-              borderRadius: AppRadius.borderPill,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.key, size: 14, color: textMuted),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Preencher credenciais de teste (dev@nbx.com)',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: textMuted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

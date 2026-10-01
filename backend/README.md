@@ -66,6 +66,12 @@ docker-compose up -d --build
 
 O backend estará acessível em `http://localhost:8081` (ou `8080` interno), o LiveKit SFU em `ws://localhost:7880`, o PostgreSQL na porta `8190` e o **Adminer** (gerenciador Web do banco de dados) em `http://localhost:8082`.
 
+### Deploy de Produção
+
+O workflow de deploy usa `docker-compose.production.yml` e exige Docker Compose v2.24.4 ou mais recente por causa das regras `!override`. Configure no servidor as variáveis `DATABASE_URL` (PostgreSQL com TLS), `JWT_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `ALLOWED_ORIGINS` (origens HTTPS separadas por vírgula), `LIVEKIT_SERVER_VERSION`, `LIVEKIT_INGRESS_VERSION`, `REDIS_VERSION` e `LIVEKIT_NODE_IP`. Configure `AUDIT_ADMIN_USER_IDS` com os IDs de usuário autorizados a consultar logs de auditoria.
+
+O banco local do Compose fica desativado nesse perfil; a API usa `DATABASE_URL` com `sslmode=require`, `verify-ca` ou `verify-full`. O Adminer também não inicia por padrão. Configure `AUDIT_ADMIN_USER_IDS` com ao menos um ID de usuário administrador e o secret `SERVER_KNOWN_HOSTS` no GitHub Actions com a chave pública SSH do servidor antes de habilitar o deploy.
+
 
 ### Opção 2: Execução Nativa em Go
 
@@ -96,8 +102,8 @@ go run cmd/api/main.go
   ```json
   {
     "username": "meu_usuario",
-    "email": "dev@nbx.com",
-    "password": "senha_segura_123"
+    "email": "user@example.com",
+    "password": "example-password"
   }
   ```
 
@@ -106,8 +112,8 @@ go run cmd/api/main.go
 * **Body:**
   ```json
   {
-    "email": "dev@nbx.com",
-    "password": "senha_segura_123"
+    "email": "user@example.com",
+    "password": "example-password"
   }
   ```
 * **Retorno:**
@@ -115,9 +121,9 @@ go run cmd/api/main.go
   {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "user": {
-      "id": "usr_dev_1",
+      "id": "usr_example_1",
       "username": "meu_usuario",
-      "email": "dev@nbx.com",
+      "email": "user@example.com",
       "status": "online"
     }
   }
@@ -148,6 +154,22 @@ go run cmd/api/main.go
   }
   ```
 *(O token gerado pode ser passado diretamente para o `LiveKitClient.connect()` no Flutter)*.
+
+### Protótipo de compartilhamento de tela por WHIP
+
+O Compose local inclui o LiveKit Ingress em `http://localhost:8083/w` e UDP `7885`. O endpoint protegido `POST /api/screen-share/ingress` cria uma sessão WHIP para um canal de voz e retorna `whip_url`; a identidade publicada na sala será `<user_id>:screen`.
+
+```json
+{ "channel_id": "chn_voice_lounge" }
+```
+
+Com o `whip_url` retornado, iniciar a captura de tela inteira no Windows usando FFmpeg 8 e NVENC:
+
+```powershell
+ffmpeg -f lavfi -i "ddagrab=framerate=60" -an -c:v h264_nvenc -preset p1 -tune ull -bf 0 -f whip "<whip_url>"
+```
+
+Interrompa o FFmpeg com `Ctrl+C`. Esta etapa é manual: o app ainda não inicia nem gerencia o processo auxiliar.
 
 ---
 

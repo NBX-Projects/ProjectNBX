@@ -63,7 +63,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
             children: [
               // 1. Top Banner / Thumbnail in same proportion
               Container(
-                height: 88,
+                height: 96,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.topLg,
@@ -174,7 +174,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 8,
+                  vertical: 10,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

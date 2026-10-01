@@ -115,6 +115,11 @@ class AppTheme {
           ),
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
+        ),
+      ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           enabledMouseCursor: SystemMouseCursors.click,
@@ -283,6 +288,11 @@ class AppTheme {
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
           ),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
         ),
       ),
       textButtonTheme: TextButtonThemeData(

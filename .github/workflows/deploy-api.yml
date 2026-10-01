@@ -27,18 +27,28 @@ jobs:
           cloudflared --version
 
       - name: Configurar chave SSH
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/github_actions_deploy
+          printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/github_actions_deploy
           chmod 600 ~/.ssh/github_actions_deploy
 
       - name: Configurar SSH
+        env:
+          SSH_SERVER: ${{ secrets.SSH_SERVER }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
         run: |
+          test -n "$SERVER_KNOWN_HOSTS" || { echo "SERVER_KNOWN_HOSTS secret is required"; exit 1; }
+          printf '%s\n' "$SERVER_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           cat <<EOF > ~/.ssh/config
-          Host ${{ secrets.SSH_SERVER }}
-            User ${{ secrets.SERVER_USER }}
+          Host $SSH_SERVER
+            User $SERVER_USER
             IdentityFile ~/.ssh/github_actions_deploy
-            StrictHostKeyChecking no
+            UserKnownHostsFile ~/.ssh/known_hosts
+            StrictHostKeyChecking yes
             ProxyCommand cloudflared access ssh --hostname %h
           EOF
           chmod 600 ~/.ssh/config
@@ -59,11 +69,8 @@ jobs:
             git fetch origin main &&
             git reset --hard origin/main &&
             cd backend &&
-            docker compose build --no-cache api &&
-            if [ -f docker-compose.prod.yml ]; then
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
-            else
-              docker compose up -d --force-recreate
-            fi
+            test -f docker-compose.production.yml || { echo 'docker-compose.production.yml is required for API deployment'; exit 1; } &&
+            docker compose -f docker-compose.yml -f docker-compose.production.yml build --no-cache api &&
+            docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --force-recreate
           "
 

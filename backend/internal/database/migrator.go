@@ -8,9 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // RunMigrations executa todos os scripts .up.sql pendentes
@@ -97,65 +94,5 @@ func RunMigrations(db *sql.DB, migrationsDir string) error {
 		log.Printf("✅ Migration %s aplicada com sucesso!", file)
 	}
 
-	// 4. Seed de dados iniciais se banco estiver vazio
-	if err := SeedInitialData(db); err != nil {
-		log.Printf("⚠️ Aviso durante seed inicial: %v", err)
-	}
-
-	return nil
-}
-
-// SeedInitialData insere usuários e servidores de demonstração se a tabela estiver vazia
-func SeedInitialData(db *sql.DB) error {
-	var userCount int
-	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount); err != nil {
-		return err
-	}
-
-	if userCount > 0 {
-		return nil // Banco já possui dados
-	}
-
-	log.Println("🌱 Populando banco com dados iniciais (Seed)...")
-
-	// Usuário 1: DevNBX (dev@nbx.com / senha_segura_123)
-	devHash, _ := bcrypt.GenerateFromPassword([]byte("senha_segura_123"), bcrypt.DefaultCost)
-	_, err := db.Exec(`
-		INSERT INTO users (id, username, email, password, avatar_url, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (email) DO NOTHING`,
-		"usr_dev_1",
-		"DevNBX",
-		"dev@nbx.com",
-		string(devHash),
-		"https://api.dicebear.com/7.x/bottts/svg?seed=taui",
-		"online",
-		time.Now(),
-		time.Now(),
-	)
-	if err != nil {
-		return fmt.Errorf("erro ao criar usuário DevNBX: %w", err)
-	}
-
-	// Usuário 2: DarkLord_X (dev@projectnbx.com / admin123)
-	adminHash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
-	_, err = db.Exec(`
-		INSERT INTO users (id, username, email, password, avatar_url, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (email) DO NOTHING`,
-		"usr_dev_2",
-		"DarkLord_X",
-		"dev@projectnbx.com",
-		string(adminHash),
-		"https://api.dicebear.com/7.x/bottts/svg?seed=nbxdev",
-		"online",
-		time.Now(),
-		time.Now(),
-	)
-	if err != nil {
-		return fmt.Errorf("erro ao criar usuário DarkLord_X: %w", err)
-	}
-
-	log.Println("✨ Seed inicial de usuários de teste concluído com sucesso (sem dados mock de servidores)!")
 	return nil
 }

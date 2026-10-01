@@ -330,6 +330,7 @@ class _QuickAudioDeviceMenuState extends ConsumerState<QuickAudioDeviceMenu> {
                 Navigator.pop(context);
                 SettingsScreen.show(context, initialSection: 'voice');
               },
+              mouseCursor: SystemMouseCursors.click,
               borderRadius: AppRadius.borderSm,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -391,6 +392,7 @@ class _QuickAudioDeviceMenuState extends ConsumerState<QuickAudioDeviceMenu> {
       children: [
         InkWell(
           onTap: onToggle,
+          mouseCursor: SystemMouseCursors.click,
           borderRadius: AppRadius.borderSm,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -459,6 +461,7 @@ class _QuickAudioDeviceMenuState extends ConsumerState<QuickAudioDeviceMenu> {
   }) {
     return InkWell(
       onTap: onTap,
+      mouseCursor: SystemMouseCursors.click,
       borderRadius: AppRadius.borderXs,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
