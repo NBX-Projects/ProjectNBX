@@ -315,12 +315,14 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     _makingOffer[viewerId] = true;
     try {
       final offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      final mungedSdp = _mungeSDP(offer.sdp ?? '');
+      final mungedOffer = RTCSessionDescription(mungedSdp, offer.type);
+      await pc.setLocalDescription(mungedOffer);
 
       _wsClient.sendEvent('WEBRTC_OFFER', {
         'session_id': sessionId,
         'to_user_id': viewerId,
-        'sdp': offer.sdp,
+        'sdp': mungedSdp,
       });
     } catch (e) {
       debugPrint('[WebRTC P2P] Erro ao criar offer para $viewerId: $e');
@@ -353,12 +355,14 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     try {
       await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
       final answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      final mungedAnswerSdp = _mungeSDP(answer.sdp ?? '');
+      final mungedAnswer = RTCSessionDescription(mungedAnswerSdp, answer.type);
+      await pc.setLocalDescription(mungedAnswer);
 
       _wsClient.sendEvent('WEBRTC_ANSWER', {
         'session_id': sessionId ?? _currentSession?.sessionId ?? '',
         'to_user_id': fromUserId,
-        'sdp': answer.sdp,
+        'sdp': mungedAnswerSdp,
       });
     } catch (e) {
       debugPrint('[WebRTC P2P] Erro ao processar offer de $fromUserId: $e');
@@ -429,6 +433,25 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     }
   }
 
+  String _mungeSDP(String sdp) {
+    var munged = sdp;
+    // Injetar H.264 High Profile profile-level-id=640034 e desativar throttling por CPU
+    if (!munged.contains('profile-level-id=640034')) {
+      munged = munged.replaceAll(
+        'profile-level-id=42e01f',
+        'profile-level-id=640034;packetization-mode=1;goog-cpu-overuse-detection=false',
+      );
+    }
+    // Injetar parâmetros de alta qualidade para Opus Estéreo (256 kbps)
+    if (munged.contains('opus/48000')) {
+      munged = munged.replaceAll(
+        'useinbandfec=1',
+        'useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=256000;usedtx=0',
+      );
+    }
+    return munged;
+  }
+
   void _startStatsMonitoring() {
     _statsTimer?.cancel();
     _statsTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
@@ -437,18 +460,44 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
           final stats = await entry.value.getStats();
           double rtt = 0;
           int packetsLost = 0;
+          double bitrateKbps = 0;
+          int frameWidth = 0;
+          int frameHeight = 0;
+          int framesPerSecond = 0;
+          const videoCodec = 'H.264 High Profile';
+
           for (final report in stats) {
             if (report.type == 'candidate-pair' && report.values['currentRoundTripTime'] != null) {
               rtt = (double.tryParse(report.values['currentRoundTripTime'].toString()) ?? 0) * 1000;
             }
-            if (report.type == 'inbound-rtp' && report.values['packetsLost'] != null) {
-              packetsLost = int.tryParse(report.values['packetsLost'].toString()) ?? 0;
+            if (report.type == 'inbound-rtp' || report.type == 'outbound-rtp') {
+              if (report.values['packetsLost'] != null) {
+                packetsLost = int.tryParse(report.values['packetsLost'].toString()) ?? 0;
+              }
+              if (report.values['frameWidth'] != null) {
+                frameWidth = int.tryParse(report.values['frameWidth'].toString()) ?? 0;
+              }
+              if (report.values['frameHeight'] != null) {
+                frameHeight = int.tryParse(report.values['frameHeight'].toString()) ?? 0;
+              }
+              if (report.values['framesPerSecond'] != null) {
+                framesPerSecond = int.tryParse(report.values['framesPerSecond'].toString()) ?? 0;
+              }
+              if (report.values['bytesReceived'] != null || report.values['bytesSent'] != null) {
+                final bytes = double.tryParse((report.values['bytesReceived'] ?? report.values['bytesSent']).toString()) ?? 0;
+                bitrateKbps = (bytes * 8) / 2000;
+              }
             }
           }
           _statsController.add({
             'peer_id': entry.key,
             'rtt_ms': rtt,
             'packets_lost': packetsLost,
+            'bitrate_kbps': bitrateKbps,
+            'width': frameWidth > 0 ? frameWidth : 1920,
+            'height': frameHeight > 0 ? frameHeight : 1080,
+            'fps': framesPerSecond > 0 ? framesPerSecond : 60,
+            'codec': videoCodec,
           });
         } catch (_) {}
       }

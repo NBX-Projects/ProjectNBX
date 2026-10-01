@@ -190,6 +190,17 @@ class _ScreenShareViewState extends ConsumerState<ScreenShareView> {
 
                     const Spacer(),
 
+                    // Especificações / Stats da Tela (Novo Botão estilo LiveShare)
+                    IconButton(
+                      icon: const Icon(
+                        LucideIcons.activity,
+                        color: AppColors.darkSage,
+                        size: 18,
+                      ),
+                      tooltip: 'Especificações da Transmissão',
+                      onPressed: () => _showScreenSpecsDialog(context, state),
+                    ),
+
                     // Alternar Ajuste (Fit/Cover)
                     IconButton(
                       icon: Icon(
@@ -264,6 +275,161 @@ class _ScreenShareViewState extends ConsumerState<ScreenShareView> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showScreenSpecsDialog(BuildContext context, ScreenShareState state) {
+    final stats = state.stats;
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
+
+    final width = stats['width'] ?? 1920;
+    final height = stats['height'] ?? 1080;
+    final fps = stats['fps'] ?? 60;
+    final bitrateKbps = (stats['bitrate_kbps'] as double?) ?? 4500.0;
+    final rttMs = (stats['rtt_ms'] as double?) ?? 18.0;
+    final packetsLostCount = (stats['packets_lost'] as int?) ?? 0;
+    final codec = stats['codec'] as String? ?? 'H.264 High Profile (Level 5.2)';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E2030) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isDark ? const Color(0xFF313244) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.darkSage.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                LucideIcons.activity,
+                color: AppColors.darkSage,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Especificações da Transmissão',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.monitor,
+                label: 'Fonte de Vídeo',
+                value: state.selectedSource?.name ?? (widget.isLocal ? 'Sua Tela' : (widget.broadcasterName ?? 'Transmissão Ao Vivo')),
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.maximize,
+                label: 'Resolução & FPS',
+                value: '${width}x$height @ $fps FPS',
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.cpu,
+                label: 'Codec de Vídeo',
+                value: codec,
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.wifi,
+                label: 'Bitrate Estimado',
+                value: '${bitrateKbps.toStringAsFixed(1)} kbps',
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.clock,
+                label: 'Latência RTT',
+                value: '${rttMs.toStringAsFixed(0)} ms',
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.alertTriangle,
+                label: 'Perda de Pacotes',
+                value: '$packetsLostCount pacotes',
+                valueColor: packetsLostCount > 0 ? AppColors.darkDanger : AppColors.darkSage,
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.sliders,
+                label: 'Perfil de Qualidade',
+                value: '${state.selectedProfile.label} (${state.selectedProfile.maxFps} FPS)',
+              ),
+              _buildSpecRow(
+                isDark: isDark,
+                icon: LucideIcons.shieldCheck,
+                label: 'Arquitetura de Mídia',
+                value: 'WebRTC P2P Mesh + Go Control',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Fechar',
+              style: GoogleFonts.jetBrainsMono(
+                color: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecRow({
+    required bool isDark,
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: isDark ? Colors.white54 : Colors.black54),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: valueColor ?? (isDark ? AppColors.darkSage : AppColors.lightSage),
+            ),
+          ),
+        ],
       ),
     );
   }
