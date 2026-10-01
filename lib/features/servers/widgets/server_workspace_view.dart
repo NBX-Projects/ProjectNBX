@@ -489,6 +489,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               } else {
                 event.track.enable();
                 event.track.mediaStreamTrack.enabled = true;
+                final rat = event.track as RemoteAudioTrack;
+                try {
+                  rtc.Helper.setVolume(_streamVolume, rat.mediaStreamTrack);
+                } catch (_) {}
               }
             } else {
               final isDeafened = ref.read(voiceStateProvider).isDeafened;
@@ -734,6 +738,24 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   void _applyStreamVolume(double volume) {
     setState(() => _streamVolume = volume);
     _syncScreenShareAudioState();
+    _syncP2PScreenShareAudioState();
+  }
+
+  void _syncP2PScreenShareAudioState() {
+    try {
+      final remoteShare = ref.read(screenShareControllerProvider).remoteShare;
+      final stream = remoteShare?.stream;
+      if (stream != null) {
+        for (final track in stream.getAudioTracks()) {
+          track.enabled = _streamVolume > 0;
+          try {
+            rtc.Helper.setVolume(_streamVolume, track);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('[P2P] Erro ao sincronizar volume de áudio P2P: $e');
+    }
   }
 
   bool _isScreenShareAudio(TrackPublication pub, Participant participant) {
@@ -789,6 +811,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               if (shouldEnableAudio) {
                 t.enable();
                 t.mediaStreamTrack.enabled = true;
+                try {
+                  rtc.Helper.setVolume(_streamVolume, t.mediaStreamTrack);
+                } catch (_) {}
               } else {
                 t.disable();
                 t.mediaStreamTrack.enabled = false;
@@ -811,6 +836,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
     });
     _syncScreenShareAudioState();
+    _syncP2PScreenShareAudioState();
   }
 
   List<Map<String, dynamic>> _serverMembers = [];
