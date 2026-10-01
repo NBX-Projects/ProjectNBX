@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -6,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/features/voice/controllers/screen_share_controller.dart';
+import 'package:window_manager/window_manager.dart';
 
 class ScreenShareView extends ConsumerStatefulWidget {
   final MediaStream stream;
@@ -56,8 +58,35 @@ class _ScreenShareViewState extends ConsumerState<ScreenShareView> {
     }
   }
 
+  Future<void> _toggleFullscreen() async {
+    final nextState = !_isFullscreen;
+    setState(() {
+      _isFullscreen = nextState;
+    });
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.linux)) {
+      try {
+        await windowManager.setFullScreen(nextState);
+      } catch (e) {
+        debugPrint('[Window] Erro ao alternar tela cheia no ScreenShareView: $e');
+      }
+    }
+  }
+
   @override
   void dispose() {
+    if (_isFullscreen) {
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.linux)) {
+        try {
+          windowManager.setFullScreen(false);
+        } catch (_) {}
+      }
+    }
     _renderer.srcObject = null;
     _renderer.dispose();
     super.dispose();
@@ -230,11 +259,7 @@ class _ScreenShareViewState extends ConsumerState<ScreenShareView> {
                         size: 18,
                       ),
                       tooltip: _isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia',
-                      onPressed: () {
-                        setState(() {
-                          _isFullscreen = !_isFullscreen;
-                        });
-                      },
+                      onPressed: _toggleFullscreen,
                     ),
 
                     const SizedBox(width: 8),

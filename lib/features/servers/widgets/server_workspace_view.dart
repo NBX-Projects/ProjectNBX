@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:google_fonts/google_fonts.dart';
@@ -14,6 +15,7 @@ import 'package:projectnbx/core/network/api_client.dart';
 import 'package:projectnbx/core/network/websocket_client.dart';
 import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:projectnbx/core/theme/app_radius.dart';
+import 'package:projectnbx/core/theme/theme_controller.dart';
 import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 import 'package:projectnbx/features/chat/models/chat_message.dart';
 import 'package:projectnbx/features/chat/widgets/channel_chat_view.dart';
@@ -32,10 +34,12 @@ import 'package:projectnbx/features/voice/controllers/screen_share_controller.da
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 import 'package:projectnbx/features/voice/services/desktop_hardware_service.dart';
+import 'package:projectnbx/features/voice/services/windows_audio_ducking_service.dart';
 import 'package:projectnbx/features/voice/widgets/immersive_stream_player.dart';
 import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
 import 'package:projectnbx/features/voice/widgets/stream_bottom_control_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
 
 export 'package:projectnbx/features/servers/models/server_workspace_enums.dart';
 
@@ -321,6 +325,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   Future<void> _connectToLiveKitVoice(String channelId) async {
     try {
+      final audioSettings = ref.read(audioSettingsProvider);
+      await WindowsAudioDuckingService.setDuckingOptOut(audioSettings.disableWindowsDucking);
+
       final voiceState = ref.read(voiceStateProvider);
       final prevServerId =
           voiceState.connectedServerId ?? _connectedVoiceServerId;
@@ -827,7 +834,71 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     }
   }
 
+  OverlayEntry? _fullscreenOverlayEntry;
+
+  Future<void> _toggleFullscreen() async {
+    final nextState = !_isFullscreen;
+    await _setFullscreenState(nextState);
+  }
+
+  Future<void> _setFullscreenState(bool enable) async {
+    if (_isFullscreen == enable) return;
+    setState(() {
+      _isFullscreen = enable;
+    });
+
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.linux)) {
+      try {
+        await windowManager.setFullScreen(enable);
+      } catch (e) {
+        debugPrint('[Window] Erro ao alternar tela cheia: $e');
+      }
+    }
+
+    if (enable) {
+      _showFullscreenOverlay();
+    } else {
+      _removeFullscreenOverlay();
+    }
+  }
+
+  void _showFullscreenOverlay() {
+    _removeFullscreenOverlay();
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    _fullscreenOverlayEntry = OverlayEntry(
+      builder: (ctx) => CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            _setFullscreenState(false);
+          },
+        },
+        child: Focus(
+          autofocus: true,
+          child: Material(
+            color: const Color(0xFF0C0D14),
+            child: _buildStreamStageContent(
+              isDark: ref.read(themeModeProvider) == ThemeMode.dark,
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_fullscreenOverlayEntry!);
+  }
+
+  void _removeFullscreenOverlay() {
+    _fullscreenOverlayEntry?.remove();
+    _fullscreenOverlayEntry = null;
+  }
+
   void _setWatchingRemoteStream(VoiceParticipantInfo? participant) {
+    if (participant == null && _isFullscreen) {
+      _setFullscreenState(false);
+    }
     setState(() {
       _watchingRemoteStream = participant;
       if (participant != null) {
@@ -1368,6 +1439,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
   @override
   void dispose() {
+    _setFullscreenState(false);
     _noiseGateReleaseTimer?.cancel();
     _noiseGateReleaseTimer = null;
     _audioLevelDecayTimer?.cancel();
@@ -2150,7 +2222,18 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       );
     }
 
-    // CASO 2: COM TRANSMISSÃO ATIVA OU ASSISTINDO -> Mostra Palco de Vídeo/Tela + Chat Flutuante HUD
+    return _buildStreamStageContent(isDark: isDark);
+  }
+
+  Widget _buildStreamStageContent({required bool isDark}) {
+    final username = ref.read(authControllerProvider).user?.username ?? 'Você';
+    final activeChannelName = _activeChannel?.name ?? 'canal-desconhecido';
+    final channelKey = _activeChannel?.id ?? widget.server.channels.first.id;
+    final messages = _channelMessages[channelKey] ?? [];
+    final channels = widget.server.channels;
+    final voiceState = ref.watch(voiceStateProvider);
+    final voiceNotifier = ref.read(voiceStateProvider.notifier);
+
     VideoTrack? remoteVideoTrack;
     if (_watchingRemoteStream != null && _liveKitRoom != null) {
       final remoteUid = _watchingRemoteStream!.userId;
@@ -2186,7 +2269,10 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
                   ?.stream,
               accentColor: _selectedAccentColor,
               streamVolume: _streamVolume,
-              onBackToChat: () => _setWatchingRemoteStream(null),
+              onBackToChat: () {
+                _setFullscreenState(false);
+                _setWatchingRemoteStream(null);
+              },
             ),
           ),
 
@@ -2206,9 +2292,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               onToggleChat: () =>
                   setState(() => _isChatVisible = !_isChatVisible),
               isFullscreen: _isFullscreen,
-              onToggleFullscreen: () =>
-                  setState(() => _isFullscreen = !_isFullscreen),
+              onToggleFullscreen: _toggleFullscreen,
               onStopOrLeave: () {
+                _setFullscreenState(false);
                 if (_watchingRemoteStream != null) {
                   _setWatchingRemoteStream(null);
                 } else {

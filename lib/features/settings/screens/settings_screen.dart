@@ -2312,6 +2312,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           audioSettings.vadOptimization,
           (val) => audioSettingsNotifier.setVadOptimization(val),
         ),
+        _buildSwitchTile(
+          isDark,
+          'Evitar Atenuação de Áudio no Windows',
+          'Impede que o Windows reduza o volume de jogos e outros aplicativos durante chamadas de voz',
+          audioSettings.disableWindowsDucking,
+          (val) => audioSettingsNotifier.setDisableWindowsDucking(val),
+        ),
       ],
     );
   }

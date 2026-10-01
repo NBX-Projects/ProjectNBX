@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
+import 'package:projectnbx/features/voice/services/windows_audio_ducking_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AudioSettings {
@@ -12,6 +13,9 @@ class AudioSettings {
   final bool highPassFilter;
   final bool typingNoiseDetection;
   final bool vadOptimization;
+
+  // Atenuação de áudio no Windows
+  final bool disableWindowsDucking;
 
   // Noise Gate & Input Sensitivity
   final bool autoNoiseGate;
@@ -33,6 +37,7 @@ class AudioSettings {
     this.highPassFilter = false,
     this.typingNoiseDetection = true,
     this.vadOptimization = true,
+    this.disableWindowsDucking = true,
     this.autoNoiseGate = true,
     this.noiseGateThreshold = 0.15,
     this.noiseGateReleaseMs = 300,
@@ -50,6 +55,7 @@ class AudioSettings {
     bool? highPassFilter,
     bool? typingNoiseDetection,
     bool? vadOptimization,
+    bool? disableWindowsDucking,
     bool? autoNoiseGate,
     double? noiseGateThreshold,
     int? noiseGateReleaseMs,
@@ -66,6 +72,7 @@ class AudioSettings {
       highPassFilter: highPassFilter ?? this.highPassFilter,
       typingNoiseDetection: typingNoiseDetection ?? this.typingNoiseDetection,
       vadOptimization: vadOptimization ?? this.vadOptimization,
+      disableWindowsDucking: disableWindowsDucking ?? this.disableWindowsDucking,
       autoNoiseGate: autoNoiseGate ?? this.autoNoiseGate,
       noiseGateThreshold: noiseGateThreshold ?? this.noiseGateThreshold,
       noiseGateReleaseMs: noiseGateReleaseMs ?? this.noiseGateReleaseMs,
@@ -120,6 +127,7 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
   static const String _keyHighPassFilter = 'audio_high_pass_filter';
   static const String _keyTypingNoiseDetection = 'audio_typing_noise_detection';
   static const String _keyVadOptimization = 'audio_vad_optimization';
+  static const String _keyDisableWindowsDucking = 'audio_disable_windows_ducking';
   static const String _keyAutoNoiseGate = 'audio_auto_noise_gate';
   static const String _keyNoiseGateThreshold = 'audio_noise_gate_threshold';
   static const String _keyNoiseGateReleaseMs = 'audio_noise_gate_release_ms';
@@ -139,6 +147,7 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
           ? 0x100000104
           : savedKeyId;
       final isPushToTalk = prefs.getBool(_keyIsPushToTalk) ?? false;
+      final disableWindowsDucking = prefs.getBool(_keyDisableWindowsDucking) ?? true;
 
       state = state.copyWith(
         echoCancellation: prefs.getBool(_keyEchoCancellation) ?? true,
@@ -147,6 +156,7 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
         highPassFilter: prefs.getBool(_keyHighPassFilter) ?? false,
         typingNoiseDetection: prefs.getBool(_keyTypingNoiseDetection) ?? true,
         vadOptimization: prefs.getBool(_keyVadOptimization) ?? true,
+        disableWindowsDucking: disableWindowsDucking,
         autoNoiseGate: prefs.getBool(_keyAutoNoiseGate) ?? true,
         noiseGateThreshold: prefs.getDouble(_keyNoiseGateThreshold) ?? 0.15,
         noiseGateReleaseMs: prefs.getInt(_keyNoiseGateReleaseMs) ?? 300,
@@ -155,10 +165,18 @@ class AudioSettingsNotifier extends StateNotifier<AudioSettings> {
         pttKeyLabel: prefs.getString(_keyPttKeyLabel) ?? 'Caps Lock',
       );
 
+      await WindowsAudioDuckingService.setDuckingOptOut(disableWindowsDucking);
+
       if (isPushToTalk && _ref != null) {
         _ref.read(voiceStateProvider.notifier).setMicMuted(true);
       }
     } catch (_) {}
+  }
+
+  Future<void> setDisableWindowsDucking(bool enabled) async {
+    state = state.copyWith(disableWindowsDucking: enabled);
+    await _persistBool(_keyDisableWindowsDucking, enabled);
+    await WindowsAudioDuckingService.setDuckingOptOut(enabled);
   }
 
   Future<void> setIsPushToTalk(bool enabled) async {
