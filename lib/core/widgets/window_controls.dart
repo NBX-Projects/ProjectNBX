@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Desktop window control buttons (Minimize, Maximize/Restore, Close)

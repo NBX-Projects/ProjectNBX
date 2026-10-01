@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/api_status_controller.dart';
-import 'package:projectnbx/core/widgets/api_offline_screen.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/core/widgets/api_offline_screen.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/api_offline_exception.dart';
-import 'package:projectnbx/core/network/api_status_controller.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/api_offline_exception.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {

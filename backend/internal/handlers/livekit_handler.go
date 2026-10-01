@@ -54,11 +54,16 @@ func (h *LiveKitHandler) GenerateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Garante que o usuário faça parte dos membros do servidor comunitário
+	// 3. Usuários só podem gerar tokens de voz se já forem membros do servidor.
 	if channel.ServerID != "" {
-		isMember, _ := h.repo.IsServerMember(channel.ServerID, ctxUserID)
+		isMember, err := h.repo.IsServerMember(channel.ServerID, ctxUserID)
+		if err != nil {
+			http.Error(w, `{"error":"Erro ao validar acesso ao canal de voz"}`, http.StatusInternalServerError)
+			return
+		}
 		if !isMember {
-			_ = h.repo.AddServerMember(channel.ServerID, ctxUserID)
+			http.Error(w, `{"error":"Você precisa ser membro do servidor para entrar no canal de voz"}`, http.StatusForbidden)
+			return
 		}
 	}
 

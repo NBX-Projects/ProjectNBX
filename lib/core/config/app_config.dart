@@ -10,7 +10,7 @@ class AppConfig {
 
   static const String appName = String.fromEnvironment(
     'APP_NAME',
-    defaultValue: 'ProjectNBX Dev',
+    defaultValue: 'Just Talking Dev',
   );
 
   static const String apiBaseUrl = String.fromEnvironment(

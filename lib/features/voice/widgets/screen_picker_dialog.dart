@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/features/voice/controllers/screen_share_controller.dart';
+import 'package:justtalking/features/voice/services/screen_capture_source.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/features/voice/controllers/screen_share_controller.dart';
-import 'package:projectnbx/features/voice/services/screen_capture_source.dart';
 
 class ScreenPickerDialog extends ConsumerStatefulWidget {
   final String channelId;

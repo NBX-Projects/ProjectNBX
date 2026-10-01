@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/localization/locale_controller.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
+import 'package:justtalking/features/servers/widgets/create_server_dialog.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/localization/locale_controller.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
-import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 
 class HubLeftRail extends ConsumerWidget {
   final String activeTab;
   final ValueChanged<String> onTabChanged;
+  final List<ServerModel>? servers;
 
   const HubLeftRail({
     super.key,
     this.activeTab = 'home',
     required this.onTabChanged,
+    this.servers,
   });
 
   void _handleTabTap(BuildContext context, WidgetRef ref, String id) {
@@ -63,7 +65,7 @@ class HubLeftRail extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
     final serversState = ref.watch(serversControllerProvider);
     final strings = ref.watch(stringsProvider);
-    final servers = serversState.servers;
+    final servers = this.servers ?? serversState.servers;
 
     final navItems = [
       {'id': 'home', 'icon': LucideIcons.house, 'tooltip': strings.navHome},

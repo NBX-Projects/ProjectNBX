@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:justtalking/core/localization/app_language.dart';
+import 'package:justtalking/core/localization/app_strings.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/widgets/window_controls.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/settings/screens/settings_screen.dart';
+import 'package:justtalking/features/voice/controllers/audio_devices_controller.dart';
+import 'package:justtalking/features/voice/services/audio_hardware_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/localization/app_language.dart';
-import 'package:projectnbx/core/localization/app_strings.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/widgets/window_controls.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/settings/screens/settings_screen.dart';
-import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
-import 'package:projectnbx/features/voice/services/audio_hardware_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockAudioHardwareService extends AudioHardwareService {

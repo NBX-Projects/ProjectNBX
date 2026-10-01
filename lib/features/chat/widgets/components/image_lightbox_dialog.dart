@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/utils/file_saver.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/core/utils/file_saver.dart';
 
 /// Assinatura da função que persiste os bytes baixados (injetável em testes)
 typedef ImageFileSaver =

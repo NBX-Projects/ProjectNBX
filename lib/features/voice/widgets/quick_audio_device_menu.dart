@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/settings/screens/settings_screen.dart';
+import 'package:justtalking/features/voice/controllers/audio_devices_controller.dart';
+import 'package:justtalking/features/voice/controllers/audio_settings_controller.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/settings/screens/settings_screen.dart';
-import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
-import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 
 class QuickAudioDeviceMenu extends ConsumerStatefulWidget {
   final bool initialShowInput;

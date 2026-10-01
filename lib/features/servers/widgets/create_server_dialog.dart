@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/localization/locale_controller.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/localization/locale_controller.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
 
 class CreateServerDialog extends ConsumerStatefulWidget {
   const CreateServerDialog({super.key});

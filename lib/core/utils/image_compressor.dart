@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
-import 'package:projectnbx/core/utils/image_compressor_browser.dart';
+import 'package:justtalking/core/utils/image_compressor_browser.dart';
 
 /// Resultado do processo de compressão de imagem
 class CompressedImageResult {

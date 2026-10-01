@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/features/chat/widgets/channel_chat_view.dart';
+import 'package:justtalking/features/chat/widgets/components/image_lightbox_dialog.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/features/chat/widgets/channel_chat_view.dart';
-import 'package:projectnbx/features/chat/widgets/components/image_lightbox_dialog.dart';
 
 /// PNG 1x1 transparente válido (decodificável pelo ImageCompressor)
 final Uint8List _kPng = base64Decode(

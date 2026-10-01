@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
 
 class UserStatusChip extends StatefulWidget {
   final UserModel? user;

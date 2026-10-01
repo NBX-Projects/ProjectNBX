@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/api_status_controller.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 

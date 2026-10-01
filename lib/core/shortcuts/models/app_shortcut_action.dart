@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:justtalking/core/shortcuts/models/shortcut_combination.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/shortcuts/models/shortcut_combination.dart';
 
 enum ShortcutCategory {
   voice('Áudio & Transmissão', LucideIcons.mic),

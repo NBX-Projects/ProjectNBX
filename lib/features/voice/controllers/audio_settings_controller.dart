@@ -1,9 +1,9 @@
 // ignore_for_file: experimental_member_use
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/features/voice/services/windows_audio_ducking_service.dart';
 import 'package:livekit_client/livekit_client.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
-import 'package:projectnbx/features/voice/services/windows_audio_ducking_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AudioSettings {

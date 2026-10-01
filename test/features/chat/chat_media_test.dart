@@ -3,13 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/utils/image_compressor.dart';
+import 'package:justtalking/features/chat/models/chat_message.dart';
+import 'package:justtalking/features/chat/widgets/components/chat_bubble_components.dart';
+import 'package:justtalking/features/chat/widgets/components/confirm_delete_dialog.dart';
+import 'package:justtalking/features/chat/widgets/components/image_lightbox_dialog.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/utils/image_compressor.dart';
-import 'package:projectnbx/features/chat/models/chat_message.dart';
-import 'package:projectnbx/features/chat/widgets/components/chat_bubble_components.dart';
-import 'package:projectnbx/features/chat/widgets/components/confirm_delete_dialog.dart';
-import 'package:projectnbx/features/chat/widgets/components/image_lightbox_dialog.dart';
 
 class _MockHttpOverrides extends HttpOverrides {
   @override

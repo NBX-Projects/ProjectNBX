@@ -2,18 +2,20 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/localization/locale_controller.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/widgets/window_controls.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/home/widgets/topbar/user_status_chip.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/core/widgets/window_controls.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/home/widgets/topbar/user_status_chip.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
-import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:window_manager/window_manager.dart';
 
-class HubTopBar extends StatelessWidget {
+class HubTopBar extends ConsumerWidget {
   final UserModel? user;
   final bool isDark;
   final int totalInVoice;
@@ -38,7 +40,8 @@ class HubTopBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strings = ref.watch(stringsProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
     final isDesktopPlatform =
@@ -97,7 +100,7 @@ class HubTopBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'NBX PROJECT',
+                  strings.appTitle,
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -137,7 +140,7 @@ class HubTopBar extends StatelessWidget {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Buscar servidores, canais, membros...',
+                                  strings.searchPlaceholder,
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -195,7 +198,7 @@ class HubTopBar extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '$totalInVoice em chamadas',
+                          '$totalInVoice ${strings.inCallsBadge}',
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,

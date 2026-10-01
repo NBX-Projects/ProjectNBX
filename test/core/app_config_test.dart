@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:projectnbx/core/config/app_config.dart';
+import 'package:justtalking/core/config/app_config.dart';
 
 void main() {
   group('AppConfig Tests', () {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/features/settings/screens/settings_screen.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/features/settings/screens/settings_screen.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
-import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
 
 /// Rodapé fixo indicando conexão ativa de áudio no canal com menu rápido de dispositivos
 class DockedVoiceFooter extends StatefulWidget {

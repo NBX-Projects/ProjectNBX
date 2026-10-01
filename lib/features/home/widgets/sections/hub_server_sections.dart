@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/features/home/widgets/create_server_card.dart';
-import 'package:projectnbx/features/home/widgets/hub_server_card.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/features/home/widgets/create_server_card.dart';
+import 'package:justtalking/features/home/widgets/hub_server_card.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
 
 class HubServerSections extends StatelessWidget {
   final List<ServerModel> servers;

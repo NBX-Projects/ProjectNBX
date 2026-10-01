@@ -1,14 +1,14 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:justtalking/features/chat/models/chat_message.dart';
+import 'package:justtalking/features/chat/utils/chat_helpers.dart';
+import 'package:justtalking/features/chat/widgets/channel_chat_view.dart';
+import 'package:justtalking/features/chat/widgets/components/chat_bubble_components.dart';
+import 'package:justtalking/features/chat/widgets/floating_chat_hud.dart';
+import 'package:justtalking/features/servers/models/channel_model.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/features/chat/models/chat_message.dart';
-import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
-import 'package:projectnbx/features/chat/widgets/channel_chat_view.dart';
-import 'package:projectnbx/features/chat/widgets/components/chat_bubble_components.dart';
-import 'package:projectnbx/features/chat/widgets/floating_chat_hud.dart';
-import 'package:projectnbx/features/servers/models/channel_model.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 
 void main() {
   group('ChatMessage model tests', () {

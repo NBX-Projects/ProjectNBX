@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:justtalking/core/localization/locale_controller.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/localization/locale_controller.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
 
 class HubRightPanel extends ConsumerWidget {
   const HubRightPanel({super.key});

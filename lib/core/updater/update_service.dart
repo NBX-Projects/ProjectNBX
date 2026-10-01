@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/updater/update_models.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/updater/update_models.dart';
 
 class UpdateService {
   final http.Client _client;

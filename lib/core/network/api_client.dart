@@ -4,12 +4,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/network/api_offline_exception.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/servers/models/public_server_model.dart';
-import 'package:projectnbx/features/servers/models/server_join_request_model.dart';
-import 'package:projectnbx/features/servers/models/server_role_model.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/network/api_offline_exception.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/servers/models/public_server_model.dart';
+import 'package:justtalking/features/servers/models/server_join_request_model.dart';
+import 'package:justtalking/features/servers/models/server_role_model.dart';
 
 class ApiClient {
   static String? _customBaseUrl;

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/auth/screens/login_screen.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
+import 'package:justtalking/features/servers/models/channel_model.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
+import 'package:justtalking/features/servers/widgets/create_server_dialog.dart';
+import 'package:justtalking/main.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/auth/screens/login_screen.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
-import 'package:projectnbx/features/servers/models/channel_model.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
-import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
-import 'package:projectnbx/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -35,7 +35,7 @@ void main() {
 
     // Verify Title & Login screen elements
     expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.text('ProjectNBX'), findsOneWidget);
+    expect(find.text('NBX Projects'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
     expect(find.text('Criar Conta'), findsOneWidget);
 

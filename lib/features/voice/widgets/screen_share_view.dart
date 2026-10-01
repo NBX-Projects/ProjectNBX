@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/features/voice/controllers/screen_share_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/features/voice/controllers/screen_share_controller.dart';
 import 'package:window_manager/window_manager.dart';
 
 class ScreenShareView extends ConsumerStatefulWidget {

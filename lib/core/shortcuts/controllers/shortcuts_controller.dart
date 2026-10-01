@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
-import 'package:projectnbx/core/shortcuts/models/shortcut_combination.dart';
+import 'package:justtalking/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:justtalking/core/shortcuts/models/shortcut_combination.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ShortcutsState {

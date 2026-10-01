@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/chat/models/chat_message.dart';
+import 'package:justtalking/features/chat/widgets/components/image_lightbox_dialog.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/chat/models/chat_message.dart';
-import 'package:projectnbx/features/chat/widgets/components/image_lightbox_dialog.dart';
 
 class ChatTimestampText extends StatelessWidget {
   final DateTime? timestamp;

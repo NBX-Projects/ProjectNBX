@@ -4,29 +4,29 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
+import 'package:justtalking/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:justtalking/core/shortcuts/services/keyboard_shortcuts_service.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/core/updater/update_controller.dart';
+import 'package:justtalking/core/updater/widgets/update_banner.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/home/widgets/hub_left_rail.dart';
+import 'package:justtalking/features/home/widgets/hub_right_panel.dart';
+import 'package:justtalking/features/home/widgets/public_server_card.dart';
+import 'package:justtalking/features/home/widgets/sections/hub_header.dart';
+import 'package:justtalking/features/home/widgets/sections/hub_server_sections.dart';
+import 'package:justtalking/features/home/widgets/topbar/hub_top_bar.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
+import 'package:justtalking/features/servers/models/public_server_model.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
+import 'package:justtalking/features/servers/widgets/create_server_dialog.dart';
+import 'package:justtalking/features/servers/widgets/server_workspace_view.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/websocket_client.dart';
-import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
-import 'package:projectnbx/core/shortcuts/services/keyboard_shortcuts_service.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/core/updater/update_controller.dart';
-import 'package:projectnbx/core/updater/widgets/update_banner.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/home/widgets/hub_left_rail.dart';
-import 'package:projectnbx/features/home/widgets/hub_right_panel.dart';
-import 'package:projectnbx/features/home/widgets/public_server_card.dart';
-import 'package:projectnbx/features/home/widgets/sections/hub_header.dart';
-import 'package:projectnbx/features/home/widgets/sections/hub_server_sections.dart';
-import 'package:projectnbx/features/home/widgets/topbar/hub_top_bar.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
-import 'package:projectnbx/features/servers/models/public_server_model.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
-import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
-import 'package:projectnbx/features/servers/widgets/server_workspace_view.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
-import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -143,9 +143,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  void _handleOpenCreateServer() {
+  Future<void> _handleOpenCreateServer() async {
     if (mounted) {
-      CreateServerDialog.show(context);
+      await CreateServerDialog.show(context);
+      _loadPublicServers();
     }
   }
 
@@ -185,9 +186,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final user = authState.user;
     final allServers = serversState.servers;
 
+    // Filter out servers where the user is definitively not a member.
+    // In environments where the backend endpoint returns all servers in the database,
+    // public servers where isMember == false and the user is not the owner must be excluded from "Meus Servidores".
+    final nonMemberPublicIds = _publicServers
+        .where((pub) => !pub.isMember && pub.server.ownerId != user?.id)
+        .map((pub) => pub.server.id)
+        .toSet();
+
+    final userJoinedServers = allServers
+        .where((s) => !nonMemberPublicIds.contains(s.id))
+        .toList();
+
     final servers = _searchQuery.trim().isEmpty
-        ? allServers
-        : allServers
+        ? userJoinedServers
+        : userJoinedServers
               .where(
                 (s) => s.name.toLowerCase().contains(
                   _searchQuery.trim().toLowerCase(),
@@ -197,7 +210,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     const totalVoiceCount = 0;
 
-    final selectedServer = allServers.cast<ServerModel?>().firstWhere(
+    final selectedServer = userJoinedServers.cast<ServerModel?>().firstWhere(
       (s) => s?.id == _activeTab,
       orElse: () => null,
     );
@@ -244,6 +257,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   : Row(
                       children: [
                         HubLeftRail(
+                          servers: userJoinedServers,
                           activeTab: _activeTab,
                           onTabChanged: (tab) {
                             setState(() => _activeTab = tab);
@@ -297,10 +311,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 totalCommunities:
                                                     servers.length,
                                                 totalInVoice: totalVoiceCount,
-                                                onExplore: () =>
-                                                    CreateServerDialog.show(
-                                                      context,
-                                                    ),
+                                                onExplore: () async {
+                                                  await CreateServerDialog.show(
+                                                    context,
+                                                  );
+                                                  _loadPublicServers();
+                                                },
                                               ),
 
                                               const SizedBox(height: 20),
@@ -325,9 +341,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                                               // Public Servers Discovery Section (não listar servidores que o usuário já participa)
                                               () {
-                                                final myServerIds = allServers
-                                                    .map((s) => s.id)
-                                                    .toSet();
+                                                final myJoinedServerIds =
+                                                    userJoinedServers
+                                                        .map((s) => s.id)
+                                                        .toSet();
                                                 final availablePublicServers =
                                                     _publicServers.where((pub) {
                                                       final matchesFilter =
@@ -343,7 +360,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                               );
                                                       return matchesFilter &&
                                                           !pub.isMember &&
-                                                          !myServerIds.contains(
+                                                          !myJoinedServerIds
+                                                              .contains(
                                                             pub.server.id,
                                                           );
                                                     }).toList();
