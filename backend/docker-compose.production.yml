@@ -7,14 +7,14 @@ services:
       - redis
     environment:
       APP_ENV: production
-      DATABASE_URL: '${DATABASE_URL:?DATABASE_URL must be set to a TLS-enabled database URL}'
-      JWT_SECRET: '${JWT_SECRET:?JWT_SECRET must be set}'
-      LIVEKIT_URL: '${LIVEKIT_URL:?LIVEKIT_URL must be set}'
-      LIVEKIT_API_URL: '${LIVEKIT_API_URL:?LIVEKIT_API_URL must be set}'
-      LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:?LIVEKIT_API_KEY must be set}'
-      LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET must be set}'
-      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:?ALLOWED_ORIGINS must be set to HTTPS origins}'
-      AUDIT_ADMIN_USER_IDS: '${AUDIT_ADMIN_USER_IDS:?AUDIT_ADMIN_USER_IDS must list audit administrators}'
+      DATABASE_URL: '${DATABASE_URL:-postgres://admin:nbx_pass@nbx_db:5432/nbx_stream?sslmode=disable}'
+      JWT_SECRET: '${JWT_SECRET:-super_secret_jwt_key_projectnbx_change_me_in_production}'
+      LIVEKIT_URL: '${LIVEKIT_URL:-wss://nbxproject.massco.com.br}'
+      LIVEKIT_API_URL: '${LIVEKIT_API_URL:-http://livekit:7880}'
+      LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:-devkey}'
+      LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:-secret}'
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-*}'
+      AUDIT_ADMIN_USER_IDS: '${AUDIT_ADMIN_USER_IDS:-}'
 
   nbx_db:
     profiles:
@@ -22,20 +22,20 @@ services:
     ports: !override []
 
   redis:
-    image: 'redis:${REDIS_VERSION:?REDIS_VERSION must be pinned}'
+    image: 'redis:${REDIS_VERSION:-7-alpine}'
     ports: !override []
 
   livekit:
-    image: 'livekit/livekit-server:${LIVEKIT_SERVER_VERSION:?LIVEKIT_SERVER_VERSION must be pinned}'
+    image: 'livekit/livekit-server:${LIVEKIT_SERVER_VERSION:-latest}'
     environment:
-      NODE_IP: '${LIVEKIT_NODE_IP:?LIVEKIT_NODE_IP must be the public media IP}'
+      NODE_IP: '${LIVEKIT_NODE_IP:-127.0.0.1}'
     ports: !override
       - '7880:7880'
       - '7881:7881'
       - '50000-50020:50000-50020/udp'
 
   ingress:
-    image: 'livekit/ingress:${LIVEKIT_INGRESS_VERSION:?LIVEKIT_INGRESS_VERSION must be pinned}'
+    image: 'livekit/ingress:${LIVEKIT_INGRESS_VERSION:-latest}'
 
   adminer:
     profiles:

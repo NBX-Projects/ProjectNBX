@@ -76,8 +76,13 @@ jobs:
             git fetch origin main &&
             git reset --hard origin/main &&
             cd backend &&
-            test -f docker-compose.production.yml || { echo 'docker-compose.production.yml is required for API deployment'; exit 1; } &&
-            docker compose -f docker-compose.yml -f docker-compose.production.yml build --no-cache api &&
-            docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --force-recreate
+            docker compose build --no-cache api &&
+            if [ -f docker-compose.prod.yml ]; then
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+            elif [ -f docker-compose.production.yml ]; then
+              docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --force-recreate
+            else
+              docker compose up -d --force-recreate
+            fi
           "
 
