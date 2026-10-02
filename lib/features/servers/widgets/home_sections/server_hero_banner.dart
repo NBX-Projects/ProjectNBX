@@ -584,6 +584,9 @@ class _ServerHeroBannerState extends ConsumerState<ServerHeroBanner> {
   }
 
   Widget _buildCustomizationDrawer(bool isMobile) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isEdgeToEdge = isMobile || screenWidth <= 1024;
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isMobile ? 12 : 18,
@@ -591,7 +594,7 @@ class _ServerHeroBannerState extends ConsumerState<ServerHeroBanner> {
       ),
       decoration: BoxDecoration(
         color: const Color(0xFF141520),
-        borderRadius: isMobile ? BorderRadius.zero : AppRadius.bottomLgInset,
+        borderRadius: isEdgeToEdge ? BorderRadius.zero : AppRadius.bottomLgInset,
         border: Border(
           top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),

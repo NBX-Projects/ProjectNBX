@@ -242,6 +242,8 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+    final isTablet = screenWidth >= 768 && screenWidth <= 1024;
+    final isMobileOrTablet = screenWidth <= 1024;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final memberCount = _members.isNotEmpty
         ? _members.length
@@ -251,9 +253,9 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
       color: widget.isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          isMobile ? 0 : 20,
+          isMobileOrTablet ? 0 : 20,
           0,
-          isMobile ? 0 : 20,
+          isMobileOrTablet ? 0 : 20,
           isMobile ? (bottomInset > 0 ? bottomInset + 16.0 : 20.0) : 20.0,
         ),
         child: Align(
@@ -265,7 +267,7 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Hero Banner com Personalização, Badges e Paleta (100% width no mobile)
+                  // Hero Banner com Personalização, Badges e Paleta (100% width no mobile e tablet)
                   ServerHeroBanner(
                     server: widget.server,
                     isMobile: isMobile,
@@ -284,10 +286,10 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
 
                   const SizedBox(height: 14),
 
-                  // Cards e Seções de Conteúdo (com margem lateral de 12px no mobile)
+                  // Cards e Seções de Conteúdo (com margem lateral no mobile e tablet)
                   Padding(
                     padding: EdgeInsets.symmetric(
-                      horizontal: isMobile ? 12 : 0,
+                      horizontal: isMobile ? 12 : (isTablet ? 16 : 0),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
