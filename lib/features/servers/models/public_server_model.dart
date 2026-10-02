@@ -1,4 +1,4 @@
-import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
 
 class PublicServerModel {
   final ServerModel server;

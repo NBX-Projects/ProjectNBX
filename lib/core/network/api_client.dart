@@ -4,12 +4,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/network/api_offline_exception.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/servers/models/public_server_model.dart';
-import 'package:projectnbx/features/servers/models/server_join_request_model.dart';
-import 'package:projectnbx/features/servers/models/server_role_model.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/network/api_offline_exception.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/servers/models/public_server_model.dart';
+import 'package:justtalking/features/servers/models/server_join_request_model.dart';
+import 'package:justtalking/features/servers/models/server_role_model.dart';
 
 class ApiClient {
   static String? _customBaseUrl;
@@ -209,20 +209,31 @@ class ApiClient {
   }
 
   Future<UserModel> updateProfile({
-    required String name,
-    required String username,
-    required String email,
+    String? name,
+    String? username,
+    String? email,
+    String? avatarUrl,
+    String? bannerUrl,
+    String? bio,
+    String? customStatus,
+    String? status,
   }) async {
     final url = Uri.parse('$baseUrl/users/me');
+    final Map<String, dynamic> body = {};
+    if (name != null) body['name'] = name.trim();
+    if (username != null) body['username'] = username.trim();
+    if (email != null) body['email'] = email.trim();
+    if (avatarUrl != null) body['avatar_url'] = avatarUrl.trim();
+    if (bannerUrl != null) body['banner_url'] = bannerUrl.trim();
+    if (bio != null) body['bio'] = bio.trim();
+    if (customStatus != null) body['custom_status'] = customStatus.trim();
+    if (status != null) body['status'] = status.trim();
+
     try {
       final response = await _client.put(
         url,
         headers: _headers,
-        body: jsonEncode({
-          'name': name.trim(),
-          'username': username.trim(),
-          'email': email.trim(),
-        }),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -242,6 +253,10 @@ class ApiClient {
       }
       rethrow;
     }
+  }
+
+  Future<UserModel> updateStatus(String status) async {
+    return updateProfile(status: status);
   }
 
   Future<void> changePassword({

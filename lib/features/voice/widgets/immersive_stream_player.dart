@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/voice/models/voice_participant_info.dart';
+import 'package:justtalking/features/voice/widgets/screen_share_dialog.dart';
+import 'package:justtalking/features/voice/widgets/screen_share_view.dart';
+import 'package:justtalking/features/voice/widgets/viewports/stream_preview_viewports.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
-import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
-import 'package:projectnbx/features/voice/widgets/screen_share_view.dart';
-import 'package:projectnbx/features/voice/widgets/viewports/stream_preview_viewports.dart';
 
 /// Banner compacto informando que um participante está transmitindo ao vivo
 class ActiveLiveStreamBanner extends StatelessWidget {

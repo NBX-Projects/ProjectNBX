@@ -58,7 +58,7 @@ func (r *PostgresRepository) CreateUser(user *models.User) error {
 
 func (r *PostgresRepository) GetUserByID(id string) (*models.User, error) {
 	query := `
-	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(custom_status, ''), status, created_at
 	FROM users WHERE id = $1`
 
 	user := &models.User{}
@@ -69,6 +69,9 @@ func (r *PostgresRepository) GetUserByID(id string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.AvatarURL,
+		&user.BannerURL,
+		&user.Bio,
+		&user.CustomStatus,
 		&user.Status,
 		&user.CreatedAt,
 	)
@@ -83,7 +86,7 @@ func (r *PostgresRepository) GetUserByID(id string) (*models.User, error) {
 
 func (r *PostgresRepository) GetUserByEmail(email string) (*models.User, error) {
 	query := `
-	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(custom_status, ''), status, created_at
 	FROM users WHERE LOWER(email) = LOWER($1)`
 
 	user := &models.User{}
@@ -94,6 +97,9 @@ func (r *PostgresRepository) GetUserByEmail(email string) (*models.User, error) 
 		&user.Email,
 		&user.Password,
 		&user.AvatarURL,
+		&user.BannerURL,
+		&user.Bio,
+		&user.CustomStatus,
 		&user.Status,
 		&user.CreatedAt,
 	)
@@ -108,7 +114,7 @@ func (r *PostgresRepository) GetUserByEmail(email string) (*models.User, error) 
 
 func (r *PostgresRepository) GetUserByEmailOrUsername(identifier string) (*models.User, error) {
 	query := `
-	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, password, COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(custom_status, ''), status, created_at
 	FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)
 	LIMIT 1`
 
@@ -120,6 +126,9 @@ func (r *PostgresRepository) GetUserByEmailOrUsername(identifier string) (*model
 		&user.Email,
 		&user.Password,
 		&user.AvatarURL,
+		&user.BannerURL,
+		&user.Bio,
+		&user.CustomStatus,
 		&user.Status,
 		&user.CreatedAt,
 	)
@@ -134,10 +143,22 @@ func (r *PostgresRepository) GetUserByEmailOrUsername(identifier string) (*model
 
 func (r *PostgresRepository) UpdateUser(user *models.User) error {
 	query := `
-	UPDATE users SET name = $1, username = $2, email = $3, updated_at = $4
-	WHERE id = $5`
+	UPDATE users SET name = $1, username = $2, email = $3, avatar_url = $4, banner_url = $5, bio = $6, custom_status = $7, status = $8, updated_at = $9
+	WHERE id = $10`
 
-	res, err := r.db.Exec(query, user.Name, user.Username, user.Email, time.Now(), user.ID)
+	res, err := r.db.Exec(
+		query,
+		user.Name,
+		user.Username,
+		user.Email,
+		user.AvatarURL,
+		user.BannerURL,
+		user.Bio,
+		user.CustomStatus,
+		user.Status,
+		time.Now(),
+		user.ID,
+	)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -295,6 +316,99 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 		return nil, err
 	}
 	return servers, nil
+}
+
+func (r *PostgresRepository) ListServersByUserID(userID string) ([]*models.Server, error) {
+	query := `
+	SELECT s.id, s.name, COALESCE(s.icon_url, ''), s.owner_id, s.member_count, COALESCE(s.is_public, FALSE), COALESCE(s.description, ''), COALESCE(s.category, 'Comunidade Geral'), s.created_at
+	FROM servers s
+	INNER JOIN server_members sm ON sm.server_id = s.id
+	WHERE sm.user_id = $1
+	ORDER BY s.created_at ASC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	servers := make([]*models.Server, 0)
+	serverIDs := make([]string, 0)
+	for rows.Next() {
+		srv := &models.Server{}
+		if err := rows.Scan(
+			&srv.ID,
+			&srv.Name,
+			&srv.IconURL,
+			&srv.OwnerID,
+			&srv.MemberCount,
+			&srv.IsPublic,
+			&srv.Description,
+			&srv.Category,
+			&srv.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		serverIDs = append(serverIDs, srv.ID)
+		servers = append(servers, srv)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	channelsByServer, err := r.listChannelsByServerIDs(serverIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, server := range servers {
+		server.Channels = channelsByServer[server.ID]
+		if server.Channels == nil {
+			server.Channels = make([]*models.Channel, 0)
+		}
+	}
+	return servers, nil
+}
+
+func (r *PostgresRepository) listChannelsByServerIDs(serverIDs []string) (map[string][]*models.Channel, error) {
+	channelsByServer := make(map[string][]*models.Channel, len(serverIDs))
+	if len(serverIDs) == 0 {
+		return channelsByServer, nil
+	}
+
+	query := `
+	SELECT id, server_id, name, type, position, created_at
+	FROM channels
+	WHERE server_id = ANY($1)
+	ORDER BY server_id, position ASC, created_at ASC`
+	rows, err := r.db.Query(query, pq.Array(serverIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		channel := &models.Channel{}
+		if err := rows.Scan(
+			&channel.ID,
+			&channel.ServerID,
+			&channel.Name,
+			&channel.Type,
+			&channel.Position,
+			&channel.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		channelsByServer[channel.ServerID] = append(channelsByServer[channel.ServerID], channel)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return channelsByServer, nil
 }
 
 func (r *PostgresRepository) UpdateServer(server *models.Server) error {
@@ -774,7 +888,7 @@ func (r *PostgresRepository) IsServerMember(serverID, userID string) (bool, erro
 
 func (r *PostgresRepository) FindUser(query string) (*models.User, error) {
 	q := `
-	SELECT id, COALESCE(name, ''), username, email, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(custom_status, ''), status, created_at
 	FROM users
 	WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1) OR id = $1
 	LIMIT 1`
@@ -786,6 +900,9 @@ func (r *PostgresRepository) FindUser(query string) (*models.User, error) {
 		&u.Username,
 		&u.Email,
 		&u.AvatarURL,
+		&u.BannerURL,
+		&u.Bio,
+		&u.CustomStatus,
 		&u.Status,
 		&u.CreatedAt,
 	)
@@ -804,7 +921,7 @@ func (r *PostgresRepository) SearchUsers(query string, limit int) ([]*models.Use
 	}
 
 	q := `
-	SELECT id, COALESCE(name, ''), username, email, COALESCE(avatar_url, ''), status, created_at
+	SELECT id, COALESCE(name, ''), username, email, COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(custom_status, ''), status, created_at
 	FROM users
 	WHERE LOWER(username) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1) OR LOWER(name) LIKE LOWER($1)
 	LIMIT $2`
@@ -824,6 +941,9 @@ func (r *PostgresRepository) SearchUsers(query string, limit int) ([]*models.Use
 			&u.Username,
 			&u.Email,
 			&u.AvatarURL,
+			&u.BannerURL,
+			&u.Bio,
+			&u.CustomStatus,
 			&u.Status,
 			&u.CreatedAt,
 		); err != nil {
@@ -1422,5 +1542,3 @@ func (r *PostgresRepository) HasServerPermission(serverID, userID, permission st
 	}
 	return false, nil
 }
-
-

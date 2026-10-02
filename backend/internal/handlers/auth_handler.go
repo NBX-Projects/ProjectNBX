@@ -210,6 +210,21 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if req.Email != "" {
 		existingUser.Email = req.Email
 	}
+	if req.AvatarURL != nil {
+		existingUser.AvatarURL = *req.AvatarURL
+	}
+	if req.BannerURL != nil {
+		existingUser.BannerURL = *req.BannerURL
+	}
+	if req.Bio != nil {
+		existingUser.Bio = *req.Bio
+	}
+	if req.CustomStatus != nil {
+		existingUser.CustomStatus = *req.CustomStatus
+	}
+	if req.Status != nil && *req.Status != "" {
+		existingUser.Status = *req.Status
+	}
 
 	if err := h.repo.UpdateUser(existingUser); err != nil {
 		if err == repository.ErrAlreadyExists {
@@ -228,9 +243,13 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		IPAddress:  r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
 		Metadata: map[string]interface{}{
-			"name":     existingUser.Name,
-			"username": existingUser.Username,
-			"email":    existingUser.Email,
+			"name":          existingUser.Name,
+			"username":      existingUser.Username,
+			"email":         existingUser.Email,
+			"avatar_url":    existingUser.AvatarURL,
+			"banner_url":    existingUser.BannerURL,
+			"custom_status": existingUser.CustomStatus,
+			"status":        existingUser.Status,
 		},
 	})
 

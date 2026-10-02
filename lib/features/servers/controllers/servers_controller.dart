@@ -1,12 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/api_offline_exception.dart';
-import 'package:projectnbx/core/network/api_status_controller.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/servers/models/channel_model.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/api_offline_exception.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/servers/models/channel_model.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ServersState {
@@ -123,10 +123,20 @@ class ServersNotifier extends StateNotifier<ServersState> {
   }
 
   void selectServer(String serverId) {
-    final server = state.servers.firstWhere(
-      (s) => s.id == serverId,
-      orElse: () => state.servers.first,
+    if (state.servers.isEmpty) {
+      state = state.copyWith(
+        selectedServerId: serverId,
+        selectedChannelId: null,
+      );
+      return;
+    }
+    final server = state.servers.cast<ServerModel?>().firstWhere(
+      (s) => s?.id == serverId,
+      orElse: () => null,
     );
+    if (server == null) {
+      return;
+    }
     state = state.copyWith(
       selectedServerId: serverId,
       selectedChannelId: server.channels.isNotEmpty

@@ -5,6 +5,9 @@ class UserModel {
   final String email;
   final String status;
   final String? avatarUrl;
+  final String? bannerUrl;
+  final String? bio;
+  final String? customStatus;
 
   const UserModel({
     required this.id,
@@ -13,9 +16,14 @@ class UserModel {
     required this.email,
     this.status = 'online',
     this.avatarUrl,
+    this.bannerUrl,
+    this.bio,
+    this.customStatus,
   });
 
   String get displayName => name.trim().isNotEmpty ? name : username;
+  bool get isGifAvatar => avatarUrl?.toLowerCase().contains('.gif') == true;
+  bool get isGifBanner => bannerUrl?.toLowerCase().contains('.gif') == true;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     final username = json['username'] as String? ?? '';
@@ -27,6 +35,9 @@ class UserModel {
       email: json['email'] as String? ?? '',
       status: json['status'] as String? ?? 'online',
       avatarUrl: json['avatar_url'] as String?,
+      bannerUrl: json['banner_url'] as String?,
+      bio: json['bio'] as String?,
+      customStatus: json['custom_status'] as String?,
     );
   }
 
@@ -37,6 +48,9 @@ class UserModel {
     String? email,
     String? status,
     String? avatarUrl,
+    String? bannerUrl,
+    String? bio,
+    String? customStatus,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -45,6 +59,9 @@ class UserModel {
       email: email ?? this.email,
       status: status ?? this.status,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      bannerUrl: bannerUrl ?? this.bannerUrl,
+      bio: bio ?? this.bio,
+      customStatus: customStatus ?? this.customStatus,
     );
   }
 
@@ -56,6 +73,9 @@ class UserModel {
       'email': email,
       'status': status,
       'avatar_url': avatarUrl,
+      'banner_url': bannerUrl,
+      'bio': bio,
+      'custom_status': customStatus,
     };
   }
 }

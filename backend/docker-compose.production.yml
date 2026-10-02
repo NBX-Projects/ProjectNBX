@@ -1,0 +1,43 @@
+services:
+  api:
+    ports: !override
+      - '127.0.0.1:8080:8080'
+    depends_on: !override
+      - livekit
+      - redis
+    environment:
+      APP_ENV: production
+      DATABASE_URL: '${DATABASE_URL:?DATABASE_URL must be set to a TLS-enabled database URL}'
+      JWT_SECRET: '${JWT_SECRET:?JWT_SECRET must be set}'
+      LIVEKIT_URL: '${LIVEKIT_URL:?LIVEKIT_URL must be set}'
+      LIVEKIT_API_URL: '${LIVEKIT_API_URL:?LIVEKIT_API_URL must be set}'
+      LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:?LIVEKIT_API_KEY must be set}'
+      LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET must be set}'
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:?ALLOWED_ORIGINS must be set to HTTPS origins}'
+      AUDIT_ADMIN_USER_IDS: '${AUDIT_ADMIN_USER_IDS:?AUDIT_ADMIN_USER_IDS must list audit administrators}'
+
+  nbx_db:
+    profiles:
+      - local
+    ports: !override []
+
+  redis:
+    image: 'redis:${REDIS_VERSION:?REDIS_VERSION must be pinned}'
+    ports: !override []
+
+  livekit:
+    image: 'livekit/livekit-server:${LIVEKIT_SERVER_VERSION:?LIVEKIT_SERVER_VERSION must be pinned}'
+    environment:
+      NODE_IP: '${LIVEKIT_NODE_IP:?LIVEKIT_NODE_IP must be the public media IP}'
+    ports: !override
+      - '7880:7880'
+      - '7881:7881'
+      - '50000-50020:50000-50020/udp'
+
+  ingress:
+    image: 'livekit/ingress:${LIVEKIT_INGRESS_VERSION:?LIVEKIT_INGRESS_VERSION must be pinned}'
+
+  adminer:
+    profiles:
+      - manual
+    ports: !override []

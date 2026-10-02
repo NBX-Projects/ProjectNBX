@@ -40,7 +40,7 @@ jobs:
         working-directory: backend
         run: |
           go mod download
-          go test -v -coverprofile=coverage.out ./... || true
+          go test -v -coverprofile=coverage.out ./...
 
       # 3. SonarCloud / SonarQube Scanner
       - name: SonarQube / SonarCloud Scan

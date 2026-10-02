@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/servers/models/public_server_model.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/servers/models/public_server_model.dart';
 
 class PublicServerCard extends ConsumerStatefulWidget {
   final PublicServerModel publicServer;
@@ -151,7 +151,15 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
+      child: GestureDetector(
+        onTap: () {
+          if (isMember) {
+            widget.onOpenServer();
+          } else if (status != 'pending') {
+            _showJoinRequestDialog();
+          }
+        },
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
@@ -326,8 +334,9 @@ class _PublicServerCardState extends ConsumerState<PublicServerCard> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildActionButton(bool isMember, String status, Color accentColor, bool isLightAccent) {
     if (isMember) {

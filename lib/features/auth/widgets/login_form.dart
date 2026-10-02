@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
 
 class LoginForm extends ConsumerStatefulWidget {
   final VoidCallback onSwitchToRegister;
@@ -41,13 +41,6 @@ class _LoginFormState extends ConsumerState<LoginForm> {
     _loginController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  void _fillDemoCredentials() {
-    setState(() {
-      _loginController.text = 'srSixSeven@gmail.com';
-      _passwordController.text = 'SixSeven67*';
-    });
   }
 
   Future<void> _submit() async {
@@ -98,15 +91,15 @@ class _LoginFormState extends ConsumerState<LoginForm> {
               fillColor: inputBg,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 14,
+                vertical: 16,
               ),
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 14, right: 10),
                 child: Icon(LucideIcons.user, size: 16, color: textSecondary),
               ),
               prefixIconConstraints: const BoxConstraints(
-                minWidth: 42,
-                minHeight: 42,
+                minWidth: 44,
+                minHeight: 48,
               ),
               border: OutlineInputBorder(
                 borderRadius: AppRadius.borderMd,
@@ -143,15 +136,15 @@ class _LoginFormState extends ConsumerState<LoginForm> {
               fillColor: inputBg,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 14,
+                vertical: 16,
               ),
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 14, right: 10),
                 child: Icon(LucideIcons.lock, size: 16, color: textSecondary),
               ),
               prefixIconConstraints: const BoxConstraints(
-                minWidth: 42,
-                minHeight: 42,
+                minWidth: 44,
+                minHeight: 48,
               ),
               suffixIcon: IconButton(
                 icon: Icon(
@@ -190,7 +183,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
 
           // Submit Button
           SizedBox(
-            height: 48,
+            height: 52,
             child: ElevatedButton(
               onPressed: authState.isLoading ? null : _submit,
               style: ElevatedButton.styleFrom(
@@ -198,7 +191,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
                 foregroundColor: onPrimaryColor,
                 elevation: 0,
                 shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.borderPill,
+                  borderRadius: AppRadius.borderMd,
                 ),
               ),
               child: authState.isLoading
@@ -230,37 +223,6 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             ),
           ),
           const SizedBox(height: 18),
-
-          // Demo Credentials Shortcut
-          Center(
-            child: InkWell(
-              onTap: _fillDemoCredentials,
-              borderRadius: AppRadius.borderPill,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.key, size: 14, color: textMuted),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Preencher credenciais de teste (dev@nbx.com)',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: textMuted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

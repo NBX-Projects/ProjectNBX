@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:projectnbx/features/voice/services/screen_capture_source.dart';
+import 'package:justtalking/features/voice/services/screen_capture_source.dart';
 
 enum ScreenShareRole { broadcaster, viewer }
 

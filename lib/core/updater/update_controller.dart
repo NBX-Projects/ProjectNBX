@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/updater/update_models.dart';
-import 'package:projectnbx/core/updater/update_service.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/updater/update_models.dart';
+import 'package:justtalking/core/updater/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final updateServiceProvider = Provider<UpdateService>((ref) {

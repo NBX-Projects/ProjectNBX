@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:justtalking/features/voice/controllers/audio_devices_controller.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/features/voice/models/voice_participant_info.dart';
+import 'package:justtalking/features/voice/services/audio_hardware_service.dart';
+import 'package:justtalking/features/voice/widgets/screen_share_dialog.dart';
+import 'package:justtalking/features/voice/widgets/stream_bottom_control_bar.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
-import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
-import 'package:projectnbx/features/voice/services/audio_hardware_service.dart';
-import 'package:projectnbx/features/voice/widgets/screen_share_dialog.dart';
-import 'package:projectnbx/features/voice/widgets/stream_bottom_control_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockAudioService extends AudioHardwareService {

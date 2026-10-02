@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
+import 'package:justtalking/features/servers/models/channel_model.dart';
+import 'package:justtalking/features/servers/models/server_join_request_model.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
+import 'package:justtalking/features/servers/models/server_role_model.dart';
+import 'package:justtalking/features/servers/widgets/invite_member_dialog.dart';
+import 'package:justtalking/features/servers/widgets/server_join_requests_dialog.dart';
+import 'package:justtalking/features/servers/widgets/server_roles_dialog.dart';
+import 'package:justtalking/features/voice/models/voice_participant_info.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
-import 'package:projectnbx/features/servers/models/channel_model.dart';
-import 'package:projectnbx/features/servers/models/server_join_request_model.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
-import 'package:projectnbx/features/servers/models/server_role_model.dart';
-import 'package:projectnbx/features/servers/widgets/invite_member_dialog.dart';
-import 'package:projectnbx/features/servers/widgets/server_join_requests_dialog.dart';
-import 'package:projectnbx/features/servers/widgets/server_roles_dialog.dart';
-import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
 
 class ServerHomeView extends ConsumerStatefulWidget {
   final ServerModel server;

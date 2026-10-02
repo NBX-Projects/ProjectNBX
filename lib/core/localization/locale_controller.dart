@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/localization/app_language.dart';
-import 'package:projectnbx/core/localization/app_strings.dart';
+import 'package:justtalking/core/localization/app_language.dart';
+import 'package:justtalking/core/localization/app_strings.dart';
 
 class LocaleNotifier extends StateNotifier<AppLanguage> {
   LocaleNotifier() : super(AppLanguage.pt);

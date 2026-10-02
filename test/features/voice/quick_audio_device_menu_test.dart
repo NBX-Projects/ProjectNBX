@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
+import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

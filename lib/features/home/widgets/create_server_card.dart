@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/features/servers/widgets/create_server_dialog.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
 
 class CreateServerCard extends StatefulWidget {
   final VoidCallback? onCreated;
@@ -63,7 +63,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
             children: [
               // 1. Top Banner / Thumbnail in same proportion
               Container(
-                height: 88,
+                height: 96,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.topLg,
@@ -174,7 +174,7 @@ class _CreateServerCardState extends State<CreateServerCard> {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 8,
+                  vertical: 10,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

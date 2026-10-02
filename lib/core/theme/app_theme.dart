@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
 
-export 'package:projectnbx/core/theme/app_radius.dart';
+export 'package:justtalking/core/theme/app_radius.dart';
 
 class AppTheme {
   // ==========================================
@@ -113,6 +113,11 @@ class AppTheme {
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
           ),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -283,6 +288,11 @@ class AppTheme {
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
           ),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          enabledMouseCursor: SystemMouseCursors.click,
         ),
       ),
       textButtonTheme: TextButtonThemeData(

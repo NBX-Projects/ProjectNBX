@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/features/voice/services/audio_hardware_service.dart';
+import 'package:justtalking/features/voice/services/audio_hardware_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AudioDevicesState {

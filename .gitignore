@@ -28,6 +28,7 @@ devtools_options.yaml
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
@@ -54,11 +55,16 @@ app.*.map.json
 # FVM Version Cache
 .fvm/
 
-# Environment secrets
-.env
-.env.*
-*.env
-!.env.example
+# IDE-generated widget preview application
+.widget_preview/
 
-# Docker overrides / prod environment
+# Environment files may contain credentials; keep checked-in templates visible.
+**/.env
+**/.env.*
+**/*.env
+!**/.env.example
+!**/.env.*.example
+
+# Machine-local Compose overrides may contain deployment credentials.
 backend/docker-compose.prod.yml
+backend/docker-compose.override.yml

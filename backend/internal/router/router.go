@@ -56,6 +56,7 @@ func (r *Router) SetupRoutes() http.Handler {
 	authHandler := handlers.NewAuthHandler(r.repo, r.jwtService)
 	liveKitService := auth.NewLiveKitService(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret)
 	liveKitHandler := handlers.NewLiveKitHandler(liveKitService, r.repo, r.cfg)
+	screenIngressHandler := handlers.NewScreenIngressHandler(r.repo, r.cfg)
 	liveKitWebhookHandler := handlers.NewLiveKitWebhookHandler(r.cfg.LiveKitAPIKey, r.cfg.LiveKitSecret, r.repo, r.hub)
 	storageService := storage.NewStorageService(r.cfg)
 	serverHandler := handlers.NewServerHandler(r.repo, r.hub, storageService)
@@ -127,6 +128,7 @@ func (r *Router) SetupRoutes() http.Handler {
 
 	// LiveKit Token
 	protected.HandleFunc("/voice/token", liveKitHandler.GenerateToken).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/screen-share/ingress", screenIngressHandler.Create).Methods("POST", "OPTIONS")
 
 	// WebRTC P2P TURN Credentials (RFC 5766)
 	protected.HandleFunc("/webrtc/turn-credentials", webrtcHandler.GetTURNCredentials).Methods("GET", "OPTIONS")
@@ -176,6 +178,10 @@ func (r *Router) SetupRoutes() http.Handler {
 
 	// Auditoria
 	protected.HandleFunc("/audit-logs", func(w http.ResponseWriter, req *http.Request) {
+		if !r.cfg.IsAuditAdmin(auth.GetUserID(req.Context())) {
+			http.Error(w, `{"error":"Acesso restrito a administradores"}`, http.StatusForbidden)
+			return
+		}
 		source := models.AuditSource(req.URL.Query().Get("source"))
 		logs, err := r.repo.ListAuditLogs(50, source)
 		if err != nil {
@@ -204,15 +210,28 @@ func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		origin := req.Header.Get("Origin")
 		if origin != "" {
+			allowed := false
+			for _, configuredOrigin := range strings.Split(r.cfg.AllowedOrigins, ",") {
+				configuredOrigin = strings.TrimSpace(configuredOrigin)
+				if configuredOrigin == "*" || configuredOrigin == origin {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				http.Error(w, `{"error":"Origem não permitida"}`, http.StatusForbidden)
+				return
+			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-		} else if r.cfg.AllowedOrigins != "" && r.cfg.AllowedOrigins != "*" {
-			w.Header().Set("Access-Control-Allow-Origin", r.cfg.AllowedOrigins)
-		} else {
+			w.Header().Add("Vary", "Origin")
+			if strings.TrimSpace(r.cfg.AllowedOrigins) != "*" {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
+		} else if strings.TrimSpace(r.cfg.AllowedOrigins) == "*" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Origin, X-Requested-With")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if req.Method == "OPTIONS" {
@@ -313,10 +332,7 @@ func (r *Router) handleHealthCheck(w http.ResponseWriter, req *http.Request) {
 				"status":     dbStatus,
 				"latency_ms": dbLatencyMs,
 			},
-			"livekit": map[string]interface{}{
-				"status": "configured",
-				"url":    r.cfg.LiveKitURL,
-			},
+			"livekit": map[string]interface{}{"status": "configured"},
 			"websocket": map[string]interface{}{
 				"status": "active",
 			},
@@ -371,29 +387,8 @@ func (r *Router) setupLiveKitProxy(targetURLStr string) http.Handler {
 		req.Host = targetURL.Host
 	}
 
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		origin := resp.Request.Header.Get("Origin")
-		if origin != "" {
-			resp.Header.Set("Access-Control-Allow-Origin", origin)
-		} else if r.cfg.AllowedOrigins != "" && r.cfg.AllowedOrigins != "*" {
-			resp.Header.Set("Access-Control-Allow-Origin", r.cfg.AllowedOrigins)
-		} else {
-			resp.Header.Set("Access-Control-Allow-Origin", "*")
-		}
-		resp.Header.Set("Access-Control-Allow-Credentials", "true")
-		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		resp.Header.Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Origin, X-Requested-With")
-		return nil
-	}
-
 	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, proxyErr error) {
 		log.Printf("[LiveKit Proxy Error] %s %s: %v", req.Method, req.URL.Path, proxyErr)
-		origin := req.Header.Get("Origin")
-		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		} else {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{

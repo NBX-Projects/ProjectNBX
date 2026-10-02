@@ -190,13 +190,22 @@ func TestServerHandler_JoinServer_InviteCases(t *testing.T) {
 		t.Errorf("Expected status 400 Bad Request for expired invite, got %d", rrExp.Code)
 	}
 
-	// 4. Fallback: Join with direct ServerID
-	reqFallback := newAuthRequest("POST", "/api/servers/join/1", nil, "usr_dev_2", map[string]string{"code": "1"})
+	// 4. Direct ServerID join on public server should be forbidden (requires join request)
+	reqPublicDirect := newAuthRequest("POST", "/api/servers/join/1", nil, "usr_dev_2", map[string]string{"code": "1"})
+	rrPublicDirect := httptest.NewRecorder()
+	handler.JoinServer(rrPublicDirect, reqPublicDirect)
+
+	if rrPublicDirect.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403 Forbidden for direct join on public server, got %d: %s", rrPublicDirect.Code, rrPublicDirect.Body.String())
+	}
+
+	// 4b. Fallback: Join with direct ServerID on private server (CS2 Tactics, id "5")
+	reqFallback := newAuthRequest("POST", "/api/servers/join/5", nil, "usr_dev_2", map[string]string{"code": "5"})
 	rrFallback := httptest.NewRecorder()
 	handler.JoinServer(rrFallback, reqFallback)
 
 	if rrFallback.Code != http.StatusOK {
-		t.Errorf("Expected status 200 OK with server ID fallback, got %d: %s", rrFallback.Code, rrFallback.Body.String())
+		t.Errorf("Expected status 200 OK with server ID fallback on private server, got %d: %s", rrFallback.Code, rrFallback.Body.String())
 	}
 
 	// 5. Join with non-existent code/server

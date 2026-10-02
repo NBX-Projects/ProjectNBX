@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/websocket_client.dart';
-import 'package:projectnbx/features/voice/services/screen_capture_source.dart';
-import 'package:projectnbx/features/voice/services/screen_share_transport.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
+import 'package:justtalking/features/voice/services/screen_capture_source.dart';
+import 'package:justtalking/features/voice/services/screen_share_transport.dart';
 
 /// Implementação do transporte de Screen Sharing via WebRTC P2P Mesh
 class P2PWebRTCScreenTransport implements ScreenShareTransport {

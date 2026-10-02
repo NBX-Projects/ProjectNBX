@@ -5,17 +5,17 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/utils/image_compressor.dart';
+import 'package:justtalking/features/chat/models/chat_message.dart';
+import 'package:justtalking/features/chat/utils/chat_helpers.dart';
+import 'package:justtalking/features/chat/widgets/components/chat_bubble_components.dart';
+import 'package:justtalking/features/chat/widgets/components/confirm_delete_dialog.dart';
+import 'package:justtalking/features/voice/models/voice_participant_info.dart';
+import 'package:justtalking/features/voice/widgets/immersive_stream_player.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/core/utils/image_compressor.dart';
-import 'package:projectnbx/features/chat/models/chat_message.dart';
-import 'package:projectnbx/features/chat/utils/chat_helpers.dart';
-import 'package:projectnbx/features/chat/widgets/components/chat_bubble_components.dart';
-import 'package:projectnbx/features/chat/widgets/components/confirm_delete_dialog.dart';
-import 'package:projectnbx/features/voice/models/voice_participant_info.dart';
-import 'package:projectnbx/features/voice/widgets/immersive_stream_player.dart';
 
 class ChannelChatView extends StatefulWidget {
   final bool isDark;

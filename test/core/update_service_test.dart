@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/updater/update_controller.dart';
-import 'package:projectnbx/core/updater/update_models.dart';
-import 'package:projectnbx/core/updater/update_service.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/updater/update_controller.dart';
+import 'package:justtalking/core/updater/update_models.dart';
+import 'package:justtalking/core/updater/update_service.dart';
 
 void main() {
   group('UpdateService Version Comparison Tests', () {

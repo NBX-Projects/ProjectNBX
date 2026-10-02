@@ -148,6 +148,23 @@ func TestMemoryRepository_ServersAndChannels(t *testing.T) {
 	if err != ErrNotFound {
 		t.Errorf("Expected ErrNotFound for missing channel, got: %v", err)
 	}
+
+	// ListServersByUserID
+	userServers, err := repo.ListServersByUserID("usr_dev_1")
+	if err != nil {
+		t.Fatalf("ListServersByUserID failed: %v", err)
+	}
+	if len(userServers) == 0 {
+		t.Fatal("Expected usr_dev_1 to have servers")
+	}
+
+	nonMemberServers, err := repo.ListServersByUserID("usr_unknown_999")
+	if err != nil {
+		t.Fatalf("ListServersByUserID failed for unknown user: %v", err)
+	}
+	if len(nonMemberServers) != 0 {
+		t.Errorf("Expected 0 servers for unknown user, got: %d", len(nonMemberServers))
+	}
 }
 
 func TestMemoryRepository_Messages(t *testing.T) {

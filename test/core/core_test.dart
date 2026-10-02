@@ -7,18 +7,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/localization/app_language.dart';
+import 'package:justtalking/core/localization/app_strings.dart';
+import 'package:justtalking/core/localization/locale_controller.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_theme.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/core/widgets/window_controls.dart';
+import 'package:justtalking/features/servers/models/server_workspace_enums.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/localization/app_language.dart';
-import 'package:projectnbx/core/localization/app_strings.dart';
-import 'package:projectnbx/core/localization/locale_controller.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/websocket_client.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_theme.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/core/widgets/window_controls.dart';
-import 'package:projectnbx/features/servers/models/server_workspace_enums.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +48,7 @@ void main() {
     test('AppStrings translations for PT and EN', () {
       const ptStrings = AppStrings(AppLanguage.pt);
       expect(ptStrings.isPt, isTrue);
-      expect(ptStrings.appTitle, 'NBX PROJECT');
+      expect(ptStrings.appTitle, 'Just Talking');
       expect(ptStrings.online, 'Online');
       expect(ptStrings.idle, 'Ausente');
       expect(ptStrings.dnd, 'Não Perturbe');
@@ -69,7 +69,7 @@ void main() {
 
       const enStrings = AppStrings(AppLanguage.en);
       expect(enStrings.isPt, isFalse);
-      expect(enStrings.appTitle, 'NBX PROJECT');
+      expect(enStrings.appTitle, 'Just Talking');
       expect(enStrings.online, 'Online');
       expect(enStrings.idle, 'Away');
       expect(enStrings.dnd, 'Do Not Disturb');

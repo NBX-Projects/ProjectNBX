@@ -19,13 +19,13 @@ type MemoryRepository struct {
 	users        map[string]*models.User
 	servers      map[string]*models.Server
 	channels     map[string]*models.Channel
-	messages     map[string][]*models.Message // channelID -> messages
-	members      map[string]map[string]time.Time // serverID -> userID -> joinedAt
-	invites      map[string]*models.ServerInvite // code -> invite
+	messages     map[string][]*models.Message         // channelID -> messages
+	members      map[string]map[string]time.Time      // serverID -> userID -> joinedAt
+	invites      map[string]*models.ServerInvite      // code -> invite
 	joinRequests map[string]*models.ServerJoinRequest // requestID -> joinRequest
-	roles        map[string]*models.ServerRole // roleID -> role
-	memberRoles  map[string]map[string][]string // serverID -> userID -> []roleID
-	mediaUploads map[string]*models.MediaUpload // url -> upload
+	roles        map[string]*models.ServerRole        // roleID -> role
+	memberRoles  map[string]map[string][]string       // serverID -> userID -> []roleID
+	mediaUploads map[string]*models.MediaUpload       // url -> upload
 }
 
 // NewMemoryRepository inicializa o repositório com dados padrão de demonstração
@@ -314,8 +314,12 @@ func (r *MemoryRepository) UpdateUser(user *models.User) error {
 	u.Name = user.Name
 	u.Username = user.Username
 	u.Email = user.Email
-	if user.AvatarURL != "" {
-		u.AvatarURL = user.AvatarURL
+	u.AvatarURL = user.AvatarURL
+	u.BannerURL = user.BannerURL
+	u.Bio = user.Bio
+	u.CustomStatus = user.CustomStatus
+	if user.Status != "" {
+		u.Status = user.Status
 	}
 	return nil
 }
@@ -390,6 +394,37 @@ func (r *MemoryRepository) ListServers() ([]*models.Server, error) {
 		sCopy := *s
 		sCopy.Channels = channels
 		servers = append(servers, &sCopy)
+	}
+	return servers, nil
+}
+
+func (r *MemoryRepository) ListServersByUserID(userID string) ([]*models.Server, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	servers := make([]*models.Server, 0)
+	serversByID := make(map[string]*models.Server)
+	for _, s := range r.servers {
+		isMember := false
+		if s.OwnerID == userID {
+			isMember = true
+		} else if membersMap, exists := r.members[s.ID]; exists {
+			if _, ok := membersMap[userID]; ok {
+				isMember = true
+			}
+		}
+
+		if isMember {
+			sCopy := *s
+			sCopy.Channels = make([]*models.Channel, 0)
+			serversByID[sCopy.ID] = &sCopy
+			servers = append(servers, &sCopy)
+		}
+	}
+	for _, channel := range r.channels {
+		if server, ok := serversByID[channel.ServerID]; ok {
+			server.Channels = append(server.Channels, channel)
+		}
 	}
 	return servers, nil
 }
@@ -1106,4 +1141,3 @@ func (r *MemoryRepository) HasServerPermission(serverID, userID string, permissi
 func (r *MemoryRepository) Ping(_ context.Context) error {
 	return nil
 }
-

@@ -17,6 +17,7 @@ services:
       PORT: '8080'
       DATABASE_URL: 'postgres://admin:nbx_pass@nbx_db:5432/nbx_stream?sslmode=disable'
       LIVEKIT_URL: '${LIVEKIT_URL:-wss://nbxproject.massco.com.br}'
+      LIVEKIT_API_URL: '${LIVEKIT_API_URL:-http://livekit:7880}'
       LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:-devkey}'
       LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:-secret}'
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-*}'
@@ -64,6 +65,29 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     depends_on:
+      - redis
+
+  # WHIP Ingress para receber vídeo do FFmpeg e publicar na sala LiveKit
+  ingress:
+    image: livekit/ingress:latest
+    container_name: projectnbx-ingress
+    restart: unless-stopped
+    ports:
+      - '8083:8080'
+      - '7885:7885/udp'
+    environment:
+      INGRESS_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY:-devkey}
+        api_secret: ${LIVEKIT_API_SECRET:-secret}
+        ws_url: ws://livekit:7880
+        whip_port: 8080
+        rtc_config:
+          udp_port: 7885
+          use_external_ip: true
+        redis:
+          address: redis:6379
+    depends_on:
+      - livekit
       - redis
 
   # Redis para estado e sessões

@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
-import 'package:projectnbx/core/shortcuts/controllers/shortcuts_controller.dart';
-import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
-import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/core/shortcuts/controllers/shortcuts_controller.dart';
+import 'package:justtalking/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:justtalking/features/voice/controllers/audio_settings_controller.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 
 class KeyboardShortcutsService {
   static final KeyboardShortcutsService instance =

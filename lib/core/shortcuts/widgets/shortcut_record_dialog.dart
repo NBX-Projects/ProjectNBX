@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/shortcuts/controllers/shortcuts_controller.dart';
+import 'package:justtalking/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:justtalking/core/shortcuts/models/shortcut_combination.dart';
+import 'package:justtalking/core/shortcuts/services/keyboard_shortcuts_service.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/shortcuts/controllers/shortcuts_controller.dart';
-import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
-import 'package:projectnbx/core/shortcuts/models/shortcut_combination.dart';
-import 'package:projectnbx/core/shortcuts/services/keyboard_shortcuts_service.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
 
 class ShortcutRecordDialog extends ConsumerStatefulWidget {
   final AppShortcutAction action;

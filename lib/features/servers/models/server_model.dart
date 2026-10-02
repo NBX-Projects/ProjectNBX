@@ -1,4 +1,4 @@
-import 'package:projectnbx/features/servers/models/channel_model.dart';
+import 'package:justtalking/features/servers/models/channel_model.dart';
 
 class ServerModel {
   static const List<String> canonicalCategories = [

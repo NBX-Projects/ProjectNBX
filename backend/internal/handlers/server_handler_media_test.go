@@ -126,9 +126,9 @@ func TestDeleteMessage_KeepsMediaWhenMessageDeletionFails(t *testing.T) {
 	mediaURL := "http://localhost:8080/uploads/img_orphan.png"
 	_ = repo.CreateMediaUpload(&models.MediaUpload{URL: mediaURL, OwnerID: "usr_dev_1", MediaType: "image/png"})
 
-	// Mensagem inexistente: DeleteMessage falha e nenhum arquivo deve ser tocado
-	if rr := deleteMessageAs(handler, "usr_dev_1", "msg_missing"); rr.Code != http.StatusInternalServerError {
-		t.Fatalf("Esperava 500 para mensagem inexistente, obteve %d", rr.Code)
+	// Mensagem inexistente: DeleteMessage falha (404) e nenhum arquivo deve ser tocado
+	if rr := deleteMessageAs(handler, "usr_dev_1", "msg_missing"); rr.Code != http.StatusNotFound && rr.Code != http.StatusInternalServerError {
+		t.Fatalf("Esperava 404 ou 500 para mensagem inexistente, obteve %d", rr.Code)
 	}
 
 	if waitForRemoval(filePath, noRemovalTimeout) {

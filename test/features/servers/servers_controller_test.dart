@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
-import 'package:projectnbx/features/servers/models/channel_model.dart';
-import 'package:projectnbx/features/servers/models/server_model.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
+import 'package:justtalking/features/servers/models/channel_model.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

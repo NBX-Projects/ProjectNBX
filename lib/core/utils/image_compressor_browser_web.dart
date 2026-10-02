@@ -1,11 +1,11 @@
 import 'dart:js_interop';
 
 import 'package:flutter/foundation.dart';
-import 'package:projectnbx/core/utils/image_compressor_browser_stub.dart'
+import 'package:justtalking/core/utils/image_compressor_browser_stub.dart'
     show BrowserEncodedImage;
 import 'package:web/web.dart' as web;
 
-export 'package:projectnbx/core/utils/image_compressor_browser_stub.dart'
+export 'package:justtalking/core/utils/image_compressor_browser_stub.dart'
     show BrowserEncodedImage;
 
 /// Redimensiona e recodifica a imagem com o codec nativo do navegador

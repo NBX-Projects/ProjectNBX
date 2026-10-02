@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/core/widgets/window_controls.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/servers/controllers/servers_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/api_status_controller.dart';
-import 'package:projectnbx/core/network/websocket_client.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/core/widgets/window_controls.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/servers/controllers/servers_controller.dart';
 import 'package:window_manager/window_manager.dart';
 
 class ApiOfflineScreen extends ConsumerStatefulWidget {

@@ -1,31 +1,32 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/localization/app_language.dart';
+import 'package:justtalking/core/localization/app_strings.dart';
+import 'package:justtalking/core/localization/locale_controller.dart';
+import 'package:justtalking/core/shortcuts/controllers/shortcuts_controller.dart';
+import 'package:justtalking/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:justtalking/core/shortcuts/services/keyboard_shortcuts_service.dart';
+import 'package:justtalking/core/shortcuts/widgets/shortcut_record_dialog.dart';
+import 'package:justtalking/core/theme/app_colors.dart';
+import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/core/updater/update_controller.dart';
+import 'package:justtalking/core/updater/update_models.dart';
+import 'package:justtalking/core/updater/widgets/update_dialog.dart';
+import 'package:justtalking/core/widgets/window_controls.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/voice/controllers/audio_devices_controller.dart';
+import 'package:justtalking/features/voice/controllers/audio_settings_controller.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/localization/app_language.dart';
-import 'package:projectnbx/core/localization/app_strings.dart';
-import 'package:projectnbx/core/localization/locale_controller.dart';
-import 'package:projectnbx/core/shortcuts/controllers/shortcuts_controller.dart';
-import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
-import 'package:projectnbx/core/shortcuts/services/keyboard_shortcuts_service.dart';
-import 'package:projectnbx/core/shortcuts/widgets/shortcut_record_dialog.dart';
-import 'package:projectnbx/core/theme/app_colors.dart';
-import 'package:projectnbx/core/theme/app_radius.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/core/updater/update_controller.dart';
-import 'package:projectnbx/core/updater/update_models.dart';
-import 'package:projectnbx/core/updater/widgets/update_dialog.dart';
-import 'package:projectnbx/core/widgets/window_controls.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/voice/controllers/audio_devices_controller.dart';
-import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
 import 'package:window_manager/window_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -65,6 +66,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _selectedSection = widget.initialSection;
+    final initialUser = ref.read(authControllerProvider).user;
+    if (initialUser != null && initialUser.status.isNotEmpty) {
+      final st = initialUser.status.toLowerCase();
+      if (st == 'ausente' || st == 'away' || st == 'idle') {
+        _userStatus = 'idle';
+      } else if (st == 'ocupado' || st == 'busy' || st == 'dnd') {
+        _userStatus = 'dnd';
+      } else {
+        _userStatus = 'online';
+      }
+    }
   }
 
   bool get _isDesktop =>
@@ -84,6 +96,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _nameEditController = TextEditingController();
   final _usernameEditController = TextEditingController();
   final _emailEditController = TextEditingController();
+  final _bioEditController = TextEditingController();
+  final _customStatusEditController = TextEditingController();
 
   @override
   void dispose() {
@@ -91,6 +105,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _nameEditController.dispose();
     _usernameEditController.dispose();
     _emailEditController.dispose();
+    _bioEditController.dispose();
+    _customStatusEditController.dispose();
     super.dispose();
   }
 
@@ -102,6 +118,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : (user?.username ?? '');
       _usernameEditController.text = user?.username ?? '';
       _emailEditController.text = user?.email ?? '';
+      _bioEditController.text = user?.bio ?? '';
+      _customStatusEditController.text = user?.customStatus ?? '';
     });
   }
 
@@ -121,6 +139,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           name: _nameEditController.text.trim(),
           username: _usernameEditController.text.trim(),
           email: _emailEditController.text.trim(),
+          bio: _bioEditController.text.trim(),
+          customStatus: _customStatusEditController.text.trim(),
         );
 
     if (mounted) {
@@ -157,6 +177,456 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _openImageChangeDialog({required bool isAvatar}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final user = ref.read(authControllerProvider).user;
+    final currentUrl =
+        isAvatar ? (user?.avatarUrl ?? '') : (user?.bannerUrl ?? '');
+
+    final urlController = TextEditingController(text: currentUrl);
+    String previewUrl = currentUrl;
+    bool isUploading = false;
+    String? localError;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (sbContext, setDialogState) {
+            final cardBg =
+                isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface;
+            final borderColor =
+                isDark ? AppColors.darkBorder : AppColors.lightBorder;
+            final textPrimary =
+                isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+            final textSecondary = isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary;
+            final primaryColor =
+                isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+            final onPrimaryColor = isDark ? AppColors.darkCanvas : Colors.white;
+
+            final isGif = previewUrl.toLowerCase().contains('.gif');
+
+            Future<void> pickAndUpload() async {
+              try {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: const [
+                    'png',
+                    'jpg',
+                    'jpeg',
+                    'webp',
+                    'gif',
+                    'bmp',
+                  ],
+                  withData: true,
+                );
+                if (result != null && result.files.isNotEmpty) {
+                  final picked = result.files.first;
+                  setDialogState(() {
+                    isUploading = true;
+                    localError = null;
+                  });
+
+                  var bytes = picked.bytes;
+                  if (bytes == null && !kIsWeb && picked.path != null) {
+                    bytes = await File(picked.path!).readAsBytes();
+                  }
+                  if (bytes == null) {
+                    setDialogState(() {
+                      isUploading = false;
+                      localError = 'Não foi possível ler o arquivo selecionado';
+                    });
+                    return;
+                  }
+
+                  final apiClient = ref.read(apiClientProvider);
+                  final uploadRes = await apiClient.uploadMedia(
+                    bytes: bytes,
+                    filename: picked.name,
+                  );
+
+                  final newUrl = uploadRes['url'] as String? ?? '';
+                  setDialogState(() {
+                    isUploading = false;
+                    previewUrl = newUrl;
+                    urlController.text = newUrl;
+                  });
+                }
+              } catch (e) {
+                setDialogState(() {
+                  isUploading = false;
+                  localError = e.toString().replaceFirst('Exception: ', '');
+                });
+              }
+            }
+
+            return Dialog(
+              backgroundColor: cardBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: AppRadius.borderMd,
+                side: BorderSide(color: borderColor),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isAvatar ? LucideIcons.user : LucideIcons.image,
+                            size: 18,
+                            color: primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isAvatar ? 'Foto de Perfil' : 'Capa de Perfil',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(LucideIcons.x, size: 16),
+                            onPressed: () => Navigator.of(dialogCtx).pop(),
+                            splashRadius: 18,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        isAvatar
+                            ? 'Escolha um arquivo do computador (PNG, JPG, WEBP ou GIF animado) ou informe uma URL direta.'
+                            : 'Personalize sua capa com uma imagem ou GIF animado para dar destaque ao seu perfil.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Preview Container
+                      Center(
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if (isAvatar)
+                              Container(
+                                width: 84,
+                                height: 84,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDark
+                                      ? AppColors.darkLavender
+                                      : AppColors.lightLavender,
+                                  border: Border.all(
+                                    color: primaryColor,
+                                    width: 2.5,
+                                  ),
+                                ),
+                                child: ClipOval(
+                                  child: previewUrl.isNotEmpty
+                                      ? Image.network(
+                                          previewUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Center(
+                                            child: Icon(
+                                              LucideIcons.imageOff,
+                                              color: textSecondary,
+                                            ),
+                                          ),
+                                        )
+                                      : Center(
+                                          child: Icon(
+                                            LucideIcons.user,
+                                            size: 36,
+                                            color: isDark
+                                                ? Colors.black
+                                                : Colors.white,
+                                          ),
+                                        ),
+                                ),
+                              )
+                            else
+                              Container(
+                                width: double.infinity,
+                                height: 110,
+                                decoration: BoxDecoration(
+                                  borderRadius: AppRadius.borderSm,
+                                  color: isDark
+                                      ? const Color(0xFF1E2030)
+                                      : const Color(0xFFE2E8F0),
+                                  border: Border.all(color: borderColor),
+                                  image: previewUrl.isNotEmpty
+                                      ? DecorationImage(
+                                          image: NetworkImage(previewUrl),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: previewUrl.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          'Nenhuma capa definida (usando padrão)',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: textSecondary,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            if (isGif && previewUrl.isNotEmpty)
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.8),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'GIF ANIMADO',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Botão Escolher Arquivo do Computador
+                      SizedBox(
+                        width: double.infinity,
+                        height: 38,
+                        child: OutlinedButton.icon(
+                          onPressed: isUploading ? null : pickAndUpload,
+                          icon: isUploading
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(LucideIcons.uploadCloud, size: 15),
+                          label: Text(
+                            isUploading
+                                ? 'Enviando imagem...'
+                                : 'Escolher Arquivo (Suporta GIF)',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primaryColor,
+                            side: BorderSide(
+                              color: primaryColor.withValues(alpha: 0.5),
+                            ),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderPill,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: borderColor)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'OU URL DIRETA',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: textSecondary,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: borderColor)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Campo de URL direta
+                      TextField(
+                        controller: urlController,
+                        style: TextStyle(color: textPrimary, fontSize: 12.5),
+                        decoration: InputDecoration(
+                          hintText: 'https://exemplo.com/imagem.gif',
+                          prefixIcon: Icon(
+                            LucideIcons.link,
+                            size: 14,
+                            color: textSecondary,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: const Icon(LucideIcons.check, size: 14),
+                            tooltip: 'Carregar prévia',
+                            onPressed: () {
+                              setDialogState(() {
+                                previewUrl = urlController.text.trim();
+                              });
+                            },
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setDialogState(() {
+                            previewUrl = val.trim();
+                          });
+                        },
+                      ),
+
+                      if (localError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          localError!,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.darkDanger,
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (currentUrl.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: () async {
+                                final notifier = ref.read(
+                                  authControllerProvider.notifier,
+                                );
+                                if (isAvatar) {
+                                  await notifier.updateProfile(avatarUrl: '');
+                                } else {
+                                  await notifier.updateProfile(bannerUrl: '');
+                                }
+                                if (dialogCtx.mounted) {
+                                  Navigator.of(dialogCtx).pop();
+                                }
+                              },
+                              icon: const Icon(
+                                LucideIcons.trash2,
+                                size: 13,
+                                color: AppColors.darkDanger,
+                              ),
+                              label: Text(
+                                'Remover',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 11,
+                                  color: AppColors.darkDanger,
+                                ),
+                              ),
+                            )
+                          else
+                            const SizedBox.shrink(),
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.of(dialogCtx).pop(),
+                                child: Text(
+                                  'Cancelar',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 12,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  foregroundColor: onPrimaryColor,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: AppRadius.borderPill,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 10,
+                                  ),
+                                ),
+                                onPressed: isUploading
+                                    ? null
+                                    : () async {
+                                        final newUrl = previewUrl.trim();
+                                        final notifier = ref.read(
+                                          authControllerProvider.notifier,
+                                        );
+                                        final ok = isAvatar
+                                            ? await notifier.updateProfile(
+                                                avatarUrl: newUrl,
+                                              )
+                                            : await notifier.updateProfile(
+                                                bannerUrl: newUrl,
+                                              );
+                                        if (dialogCtx.mounted) {
+                                          Navigator.of(dialogCtx).pop();
+                                        }
+                                        if (!mounted) return;
+                                        if (ok) {
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              backgroundColor: const Color(
+                                                0xFF2D6A4F,
+                                              ),
+                                              content: Text(
+                                                isAvatar
+                                                    ? 'Foto de perfil atualizada!'
+                                                    : 'Capa de perfil atualizada!',
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                child: Text(
+                                  'Salvar',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showChangePasswordDialog(
@@ -1249,6 +1719,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? user!.email
         : 'tauisilva@gmail.com';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
+    final avatarUrl = user?.avatarUrl?.trim();
+    final bannerUrl = user?.bannerUrl?.trim();
+    final hasBanner = bannerUrl != null && bannerUrl.isNotEmpty;
+    final isGifAvatar = user?.isGifAvatar == true;
+    final isGifBanner = user?.isGifBanner == true;
+    final customStatus = user?.customStatus?.trim();
+    final bio = user?.bio?.trim();
 
     final primaryColor = isDark
         ? AppColors.darkPrimary
@@ -1267,6 +1744,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : AppColors.lightTextMuted;
     final dangerColor = isDark ? AppColors.darkDanger : AppColors.lightDanger;
 
+    // Normaliza o status para o dropdown
+    String currentDropdownStatus = _userStatus;
+    if (currentDropdownStatus == 'ausente' || currentDropdownStatus == 'away') {
+      currentDropdownStatus = 'idle';
+    } else if (currentDropdownStatus == 'ocupado' || currentDropdownStatus == 'busy') {
+      currentDropdownStatus = 'dnd';
+    } else if (currentDropdownStatus != 'idle' && currentDropdownStatus != 'dnd') {
+      currentDropdownStatus = 'online';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1277,9 +1764,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 24),
 
-        // 1. User Profile Details Card
+        // 1. User Profile Details Card (com Capa e Avatar Modernos)
         Container(
-          padding: const EdgeInsets.all(24),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: cardBg,
             borderRadius: AppRadius.borderLg,
@@ -1288,313 +1775,600 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Row: Avatar, Main Names, Status Badge & Edit Action
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              // Capa de Perfil (Banner)
+              Stack(
                 children: [
                   Container(
-                    width: 68,
-                    height: 68,
+                    height: 135,
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkLavender
-                          : AppColors.lightLavender,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: borderColor, width: 2),
+                      gradient: !hasBanner
+                          ? LinearGradient(
+                              colors: isDark
+                                  ? [
+                                      const Color(0xFF2C243B),
+                                      const Color(0xFF1E2030),
+                                      const Color(0xFF1A2634),
+                                    ]
+                                  : [
+                                      const Color(0xFFD8E2DC),
+                                      const Color(0xFFFFE5D9),
+                                      const Color(0xFFECE4DB),
+                                    ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      image: hasBanner
+                          ? DecorationImage(
+                              image: NetworkImage(bannerUrl),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                     ),
-                    child: Center(
-                      child: Text(
-                        initial,
+                  ),
+                  if (isGifBanner)
+                    Positioned(
+                      top: 10,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'GIF ANIMADO',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    top: 10,
+                    right: 12,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.black.withValues(alpha: 0.6),
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white38),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderPill,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                      ),
+                      onPressed: () => _openImageChangeDialog(isAvatar: false),
+                      icon: const Icon(LucideIcons.image, size: 13, color: Colors.white),
+                      label: Text(
+                        hasBanner ? 'Alterar Capa' : 'Adicionar Capa',
                         style: GoogleFonts.jetBrainsMono(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.black : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                displayName,
-                                style:
-                                    (isDark
-                                            ? GoogleFonts.spaceGrotesk()
-                                            : GoogleFonts.plusJakartaSans())
-                                        .copyWith(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w700,
-                                          color: textPrimary,
+                ],
+              ),
+
+              // Header Content com Avatar Sobreposto
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Transform.translate(
+                      offset: const Offset(0, -32),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 78,
+                                height: 78,
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? AppColors.darkLavender
+                                      : AppColors.lightLavender,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: cardBg,
+                                    width: 3.5,
+                                  ),
+                                ),
+                                child: ClipOval(
+                                  child: avatarUrl != null && avatarUrl.isNotEmpty
+                                      ? Image.network(
+                                          avatarUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Center(
+                                            child: Text(
+                                              initial,
+                                              style: GoogleFonts.jetBrainsMono(
+                                                fontSize: 26,
+                                                fontWeight: FontWeight.w800,
+                                                color: isDark ? Colors.black : Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : Center(
+                                          child: Text(
+                                            initial,
+                                            style: GoogleFonts.jetBrainsMono(
+                                              fontSize: 26,
+                                              fontWeight: FontWeight.w800,
+                                              color: isDark ? Colors.black : Colors.white,
+                                            ),
+                                          ),
                                         ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 9,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    (isDark
-                                            ? AppColors.darkSage
-                                            : AppColors.lightSage)
-                                        .withValues(alpha: 0.15),
-                                borderRadius: AppRadius.borderPill,
-                                border: Border.all(
-                                  color:
-                                      (isDark
-                                              ? AppColors.darkSage
-                                              : AppColors.lightSage)
-                                          .withValues(alpha: 0.3),
                                 ),
                               ),
+                              if (isGifAvatar)
+                                Positioned(
+                                  left: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.8),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: Text(
+                                      'GIF',
+                                      style: GoogleFonts.jetBrainsMono(
+                                        fontSize: 7.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: InkWell(
+                                  onTap: () => _openImageChangeDialog(isAvatar: true),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    width: 26,
+                                    height: 26,
+                                    decoration: BoxDecoration(
+                                      color: primaryColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: cardBg, width: 2),
+                                    ),
+                                    child: Icon(
+                                      LucideIcons.camera,
+                                      size: 13,
+                                      color: onPrimaryColor,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          displayName,
+                                          style: (isDark
+                                                  ? GoogleFonts.spaceGrotesk()
+                                                  : GoogleFonts.plusJakartaSans())
+                                              .copyWith(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w700,
+                                                color: textPrimary,
+                                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2.5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: (isDark
+                                                  ? AppColors.darkSage
+                                                  : AppColors.lightSage)
+                                              .withValues(alpha: 0.15),
+                                          borderRadius: AppRadius.borderPill,
+                                          border: Border.all(
+                                            color: (isDark
+                                                    ? AppColors.darkSage
+                                                    : AppColors.lightSage)
+                                                .withValues(alpha: 0.3),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          strings.connected,
+                                          style: GoogleFonts.jetBrainsMono(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark
+                                                ? AppColors.darkSage
+                                                : AppColors.lightSage,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '@$username',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    email,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      color: textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (!_isEditingProfile)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isDark
+                                      ? AppColors.darkSurfaceElevated
+                                      : AppColors.lightSurfaceElevated,
+                                  foregroundColor: textPrimary,
+                                  elevation: 0,
+                                  side: BorderSide(color: borderColor),
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: AppRadius.borderPill,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                onPressed: () => _startEditingProfile(user),
+                                icon: const Icon(LucideIcons.pencil, size: 13),
+                                label: Text(
+                                  'Editar Perfil',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    if (customStatus != null && customStatus.isNotEmpty) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (isDark ? Colors.white : Colors.black)
+                              .withValues(alpha: 0.04),
+                          borderRadius: AppRadius.borderSm,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              LucideIcons.sparkles,
+                              size: 14,
+                              color: primaryColor,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
                               child: Text(
-                                strings.connected,
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? AppColors.darkSage
-                                      : AppColors.lightSage,
+                                customStatus,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  color: textPrimary,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '@$username',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: primaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          email,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.5,
-                            color: textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!_isEditingProfile)
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark
-                            ? AppColors.darkSurfaceElevated
-                            : AppColors.lightSurfaceElevated,
-                        foregroundColor: textPrimary,
-                        elevation: 0,
-                        side: BorderSide(color: borderColor),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: AppRadius.borderPill,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
                       ),
-                      onPressed: () => _startEditingProfile(user),
-                      icon: const Icon(LucideIcons.pencil, size: 14),
-                      label: Text(
-                        'Editar Perfil',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                      const SizedBox(height: 12),
+                    ],
 
-              const SizedBox(height: 20),
-              Divider(color: borderColor),
-              const SizedBox(height: 16),
-
-              // Interactive Edit Form or Readonly Information
-              if (_isEditingProfile) ...[
-                Form(
-                  key: _profileFormKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                    if (bio != null && bio.isNotEmpty) ...[
                       Text(
-                        'Atualizar Informações Cadastrais',
+                        'Sobre Mim',
                         style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        bio,
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          color: textSecondary,
+                          height: 1.4,
                         ),
                       ),
                       const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _nameEditController,
-                        style: TextStyle(color: textPrimary, fontSize: 13.5),
-                        decoration: InputDecoration(
-                          labelText: 'Nome Completo',
-                          hintText: 'Ex: Taui Silva Lima',
-                          prefixIcon: Icon(
-                            LucideIcons.idCard,
-                            size: 16,
-                            color: textSecondary,
-                          ),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Informe seu nome completo';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _usernameEditController,
-                        style: TextStyle(color: textPrimary, fontSize: 13.5),
-                        decoration: InputDecoration(
-                          labelText: 'Nome de Usuário',
-                          hintText: 'Ex: tauilima',
-                          prefixIcon: Icon(
-                            LucideIcons.user,
-                            size: 16,
-                            color: textSecondary,
-                          ),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Informe seu nome de usuário';
-                          }
-                          if (v.trim().contains(' ')) {
-                            return 'Nome de usuário não pode conter espaços';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _emailEditController,
-                        keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(color: textPrimary, fontSize: 13.5),
-                        decoration: InputDecoration(
-                          labelText: 'E-mail',
-                          hintText: 'Ex: tauisilva@gmail.com',
-                          prefixIcon: Icon(
-                            LucideIcons.mail,
-                            size: 16,
-                            color: textSecondary,
-                          ),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Informe seu e-mail';
-                          }
-                          if (!v.contains('@') || !v.contains('.')) {
-                            return 'Informe um e-mail válido';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: _isSavingProfile
-                                ? null
-                                : _cancelEditingProfile,
-                            child: Text(
-                              'Cancelar',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 12.5,
-                                color: textSecondary,
+                    ],
+
+                    Divider(color: borderColor),
+                    const SizedBox(height: 16),
+
+                    // Formulário de Edição Interativo ou Dados Readonly
+                    if (_isEditingProfile) ...[
+                      Form(
+                        key: _profileFormKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Atualizar Informações e Preferências',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: textPrimary,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              foregroundColor: onPrimaryColor,
-                              shape: const RoundedRectangleBorder(
-                                borderRadius: AppRadius.borderPill,
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _nameEditController,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 13.5,
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 22,
-                                vertical: 12,
+                              decoration: InputDecoration(
+                                labelText: 'Nome Completo',
+                                hintText: 'Ex: Taui Silva Lima',
+                                prefixIcon: Icon(
+                                  LucideIcons.idCard,
+                                  size: 16,
+                                  color: textSecondary,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Informe seu nome completo';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _usernameEditController,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 13.5,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Nome de Usuário',
+                                hintText: 'Ex: tauilima',
+                                prefixIcon: Icon(
+                                  LucideIcons.user,
+                                  size: 16,
+                                  color: textSecondary,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Informe seu nome de usuário';
+                                }
+                                if (v.trim().contains(' ')) {
+                                  return 'Nome de usuário não pode conter espaços';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _emailEditController,
+                              keyboardType: TextInputType.emailAddress,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 13.5,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'E-mail',
+                                hintText: 'Ex: tauisilva@gmail.com',
+                                prefixIcon: Icon(
+                                  LucideIcons.mail,
+                                  size: 16,
+                                  color: textSecondary,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Informe seu e-mail';
+                                }
+                                if (!v.contains('@') || !v.contains('.')) {
+                                  return 'Informe um e-mail válido';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _customStatusEditController,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 13.5,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Status Customizado (Mensagem)',
+                                hintText: 'Ex: Desenvolvendo com Flutter 🚀',
+                                prefixIcon: Icon(
+                                  LucideIcons.sparkles,
+                                  size: 16,
+                                  color: textSecondary,
+                                ),
                               ),
                             ),
-                            onPressed: _isSavingProfile ? null : _saveProfile,
-                            child: _isSavingProfile
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    'Salvar Alterações',
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _bioEditController,
+                              maxLines: 3,
+                              maxLength: 300,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 13.5,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Sobre Mim (Bio)',
+                                hintText: 'Conte um pouco sobre você...',
+                                alignLabelWithHint: true,
+                                prefixIcon: Padding(
+                                  padding: const EdgeInsets.only(bottom: 40),
+                                  child: Icon(
+                                    LucideIcons.fileText,
+                                    size: 16,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: _isSavingProfile
+                                      ? null
+                                      : _cancelEditingProfile,
+                                  child: Text(
+                                    'Cancelar',
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
+                                      color: textSecondary,
                                     ),
                                   ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    foregroundColor: onPrimaryColor,
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: AppRadius.borderPill,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 22,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  onPressed: _isSavingProfile
+                                      ? null
+                                      : _saveProfile,
+                                  child: _isSavingProfile
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          'Salvar Alterações',
+                                          style: GoogleFonts.jetBrainsMono(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      _buildAccountRow(isDark, 'Nome Completo', displayName),
+                      const SizedBox(height: 14),
+                      _buildAccountRow(isDark, 'Nome de Usuário', '@$username'),
+                      const SizedBox(height: 14),
+                      _buildAccountRow(isDark, 'E-mail Cadastrado', email),
+                      const SizedBox(height: 14),
+                      _buildAccountRow(
+                        isDark,
+                        strings.currentStatus,
+                        currentDropdownStatus == 'online'
+                            ? strings.currentStatusOnline
+                            : (currentDropdownStatus == 'idle'
+                                ? strings.idle
+                                : strings.dnd),
+                        action: DropdownButton<String>(
+                          value: currentDropdownStatus,
+                          dropdownColor: cardBg,
+                          underline: const SizedBox(),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: textPrimary,
                           ),
-                        ],
+                          items: [
+                            DropdownMenuItem(
+                              value: 'online',
+                              child: Text('🟢 ${strings.online}'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'idle',
+                              child: Text('🟡 ${strings.idle}'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'dnd',
+                              child: Text('🔴 ${strings.dnd}'),
+                            ),
+                          ],
+                          onChanged: (val) async {
+                            if (val != null) {
+                              setState(() => _userStatus = val);
+                              await ref
+                                  .read(authControllerProvider.notifier)
+                                  .updateStatus(val);
+                            }
+                          },
+                        ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ] else ...[
-                _buildAccountRow(isDark, 'Nome Completo', displayName),
-                const SizedBox(height: 14),
-                _buildAccountRow(isDark, 'Nome de Usuário', '@$username'),
-                const SizedBox(height: 14),
-                _buildAccountRow(isDark, 'E-mail Cadastrado', email),
-                const SizedBox(height: 14),
-                _buildAccountRow(
-                  isDark,
-                  strings.currentStatus,
-                  _userStatus == 'online'
-                      ? strings.currentStatusOnline
-                      : strings.currentStatusAway,
-                  action: DropdownButton<String>(
-                    value: _userStatus,
-                    dropdownColor: cardBg,
-                    underline: const SizedBox(),
-                    style: GoogleFonts.inter(fontSize: 12, color: textPrimary),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'online',
-                        child: Text('🟢 ${strings.online}'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'idle',
-                        child: Text('🟡 ${strings.idle}'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'dnd',
-                        child: Text('🔴 ${strings.dnd}'),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) setState(() => _userStatus = val);
-                    },
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
         ),

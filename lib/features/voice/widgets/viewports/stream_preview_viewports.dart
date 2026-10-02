@@ -328,7 +328,7 @@ class AndroidStudioStreamViewport extends StatelessWidget {
                             'import \'package:flutter_riverpod/flutter_riverpod.dart\';',
                             const Color(0xFFCC7832)),
                         _buildCodeLine(
-                            'import \'package:projectnbx/features/home/screens/home_screen.dart\';',
+                            'import \'package:justtalking/features/home/screens/home_screen.dart\';',
                             const Color(0xFFCC7832)),
                         _buildCodeLine('', Colors.transparent),
                         _buildCodeLine(

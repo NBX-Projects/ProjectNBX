@@ -3,24 +3,24 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:projectnbx/core/config/app_config.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/network/api_status_controller.dart';
-import 'package:projectnbx/core/network/websocket_client.dart';
-import 'package:projectnbx/core/shortcuts/models/app_shortcut_action.dart';
-import 'package:projectnbx/core/shortcuts/services/keyboard_shortcuts_service.dart';
-import 'package:projectnbx/core/theme/app_theme.dart';
-import 'package:projectnbx/core/theme/theme_controller.dart';
-import 'package:projectnbx/core/updater/update_controller.dart';
-import 'package:projectnbx/core/widgets/api_offline_screen.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/auth/screens/login_screen.dart';
-import 'package:projectnbx/features/home/screens/home_screen.dart';
-import 'package:projectnbx/features/servers/widgets/create_server_dialog.dart';
-import 'package:projectnbx/features/settings/screens/settings_screen.dart';
-import 'package:projectnbx/features/voice/controllers/audio_settings_controller.dart';
-import 'package:projectnbx/features/voice/controllers/voice_state_controller.dart';
-import 'package:projectnbx/features/voice/widgets/quick_audio_device_menu.dart';
+import 'package:justtalking/core/config/app_config.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
+import 'package:justtalking/core/shortcuts/models/app_shortcut_action.dart';
+import 'package:justtalking/core/shortcuts/services/keyboard_shortcuts_service.dart';
+import 'package:justtalking/core/theme/app_theme.dart';
+import 'package:justtalking/core/theme/theme_controller.dart';
+import 'package:justtalking/core/updater/update_controller.dart';
+import 'package:justtalking/core/widgets/api_offline_screen.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/auth/screens/login_screen.dart';
+import 'package:justtalking/features/home/screens/home_screen.dart';
+import 'package:justtalking/features/servers/widgets/create_server_dialog.dart';
+import 'package:justtalking/features/settings/screens/settings_screen.dart';
+import 'package:justtalking/features/voice/controllers/audio_settings_controller.dart';
+import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
+import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -41,7 +41,7 @@ void main() async {
         center: true,
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
-        title: 'ProjectNBX',
+        title: 'Just Talking',
         titleBarStyle: TitleBarStyle.hidden,
       );
 
@@ -126,7 +126,9 @@ class _ProjectNBXAppState extends ConsumerState<ProjectNBXApp> {
     });
 
     shortcuts.registerHandler(AppShortcutAction.checkForUpdates, () {
-      ref.read(updateControllerProvider.notifier).checkForUpdates(silent: false);
+      ref
+          .read(updateControllerProvider.notifier)
+          .checkForUpdates(silent: false);
     });
 
     shortcuts.registerHandler(AppShortcutAction.logout, () {
@@ -153,7 +155,7 @@ class _ProjectNBXAppState extends ConsumerState<ProjectNBXApp> {
 
     return MaterialApp(
       navigatorKey: rootNavigatorKey,
-      title: 'ProjectNBX',
+      title: 'Just Talking',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
@@ -163,8 +165,8 @@ class _ProjectNBXAppState extends ConsumerState<ProjectNBXApp> {
       home: apiStatus.isOffline
           ? const ApiOfflineScreen()
           : (authState.isAuthenticated
-              ? const HomeScreen()
-              : const LoginScreen()),
+                ? const HomeScreen()
+                : const LoginScreen()),
     );
   }
 }

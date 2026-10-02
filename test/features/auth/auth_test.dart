@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:justtalking/core/network/api_client.dart';
+import 'package:justtalking/core/theme/app_theme.dart';
+import 'package:justtalking/features/auth/controllers/auth_controller.dart';
+import 'package:justtalking/features/auth/models/user_model.dart';
+import 'package:justtalking/features/auth/screens/login_screen.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:projectnbx/core/network/api_client.dart';
-import 'package:projectnbx/core/theme/app_theme.dart';
-import 'package:projectnbx/features/auth/controllers/auth_controller.dart';
-import 'package:projectnbx/features/auth/models/user_model.dart';
-import 'package:projectnbx/features/auth/screens/login_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeApiClient extends ApiClient {
@@ -53,17 +53,38 @@ class FakeApiClient extends ApiClient {
 
   @override
   Future<UserModel> updateProfile({
-    required String name,
-    required String username,
-    required String email,
+    String? name,
+    String? username,
+    String? email,
+    String? avatarUrl,
+    String? bannerUrl,
+    String? bio,
+    String? customStatus,
+    String? status,
   }) async {
     if (shouldFail) throw Exception(failureMessage);
     return UserModel(
       id: 'u-1',
-      name: name,
-      username: username,
-      email: email,
-      status: 'online',
+      name: name ?? 'Default Name',
+      username: username ?? 'default',
+      email: email ?? 'default@example.com',
+      avatarUrl: avatarUrl,
+      bannerUrl: bannerUrl,
+      bio: bio,
+      customStatus: customStatus,
+      status: status ?? 'online',
+    );
+  }
+
+  @override
+  Future<UserModel> updateStatus(String status) async {
+    if (shouldFail) throw Exception(failureMessage);
+    return UserModel(
+      id: 'u-1',
+      name: 'Default Name',
+      username: 'default',
+      email: 'default@example.com',
+      status: status,
     );
   }
 
@@ -289,14 +310,13 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verifica branding e campos
-      expect(find.text('ProjectNBX'), findsOneWidget);
+      expect(find.text('NBX Projects'), findsOneWidget);
       expect(find.byType(TextFormField), findsNWidgets(2)); // Email, Senha
       expect(find.text('ACESSAR'), findsOneWidget);
 
-      // Preenche credenciais de demonstração clicando no botão Demo
-      final demoBtn = find.textContaining('Preencher credenciais');
-      expect(demoBtn, findsOneWidget);
-      await tester.tap(demoBtn);
+      // Preenche credenciais nos campos
+      await tester.enterText(find.byType(TextFormField).first, 'demo@justtalking.com');
+      await tester.enterText(find.byType(TextFormField).last, 'password123');
       await tester.pumpAndSettle();
 
       // Alterna visibilidade da senha
