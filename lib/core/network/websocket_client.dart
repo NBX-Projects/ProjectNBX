@@ -9,6 +9,29 @@ import 'package:justtalking/features/auth/controllers/auth_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+final websocketConnectedProvider =
+    StateNotifierProvider<WebSocketConnectedNotifier, bool>((ref) {
+  final client = ref.watch(websocketClientProvider);
+  return WebSocketConnectedNotifier(client);
+});
+
+class WebSocketConnectedNotifier extends StateNotifier<bool> {
+  final WebSocketClient _client;
+  StreamSubscription<bool>? _sub;
+
+  WebSocketConnectedNotifier(this._client) : super(_client.isConnected) {
+    _sub = _client.onConnectionChanged.listen((connected) {
+      state = connected;
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+}
+
 final websocketClientProvider = Provider<WebSocketClient>((ref) {
   final apiClient = ref.watch<ApiClient>(apiClientProvider);
   final client = WebSocketClient(apiClient, ref);
@@ -62,11 +85,22 @@ class WebSocketClient {
 
   final List<String> _pendingOutgoingQueue = [];
   final _eventController = StreamController<Map<String, dynamic>>.broadcast();
+  final _connectionController = StreamController<bool>.broadcast();
 
   WebSocketClient(this._apiClient, [this._ref]);
 
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
+  Stream<bool> get onConnectionChanged => _connectionController.stream;
   bool get isConnected => _isConnected && _channel != null;
+
+  void _setConnected(bool value) {
+    if (_isConnected != value) {
+      _isConnected = value;
+      if (!_isDisposed && !_connectionController.isClosed) {
+        _connectionController.add(value);
+      }
+    }
+  }
 
   Future<void> connect({String? serverId}) async {
     if (_isDisposed) return;
@@ -127,10 +161,10 @@ class WebSocketClient {
       final channel = WebSocketChannel.connect(wsUri);
       _channel = channel;
       _isConnecting = false;
-      _isConnected = true;
+      _setConnected(true);
 
       channel.ready.then((_) {
-        _isConnected = true;
+        _setConnected(true);
         _flushPendingQueue();
       }).catchError((Object e) {
         debugPrint('[WebSocket] Erro na verificação ready do socket: $e');
@@ -139,7 +173,7 @@ class WebSocketClient {
       _subscription = channel.stream.listen(
         (data) {
           _isConnecting = false;
-          _isConnected = true;
+          _setConnected(true);
           try {
             final decoded = jsonDecode(data.toString());
             if (decoded is Map) {
@@ -152,13 +186,13 @@ class WebSocketClient {
         },
         onError: (Object error) {
           _isConnecting = false;
-          _isConnected = false;
+          _setConnected(false);
           debugPrint('[WebSocket] Erro na conexão: $error');
           _handleDisconnect();
         },
         onDone: () {
           _isConnecting = false;
-          _isConnected = false;
+          _setConnected(false);
           debugPrint('[WebSocket] Conexão encerrada');
           _handleDisconnect();
         },
@@ -168,7 +202,7 @@ class WebSocketClient {
       _startPing();
     } catch (e) {
       _isConnecting = false;
-      _isConnected = false;
+      _setConnected(false);
       debugPrint('[WebSocket] Falha ao conectar: $e');
       _handleDisconnect();
     }
@@ -258,7 +292,7 @@ class WebSocketClient {
 
   void _disconnectInternal({bool silent = false}) {
     _pingTimer?.cancel();
-    _isConnected = false;
+    _setConnected(false);
     if (!silent) {
       _isConnecting = false;
     }
@@ -272,5 +306,6 @@ class WebSocketClient {
     _isDisposed = true;
     disconnect();
     _eventController.close();
+    _connectionController.close();
   }
 }

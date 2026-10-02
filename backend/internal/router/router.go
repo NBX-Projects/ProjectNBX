@@ -313,6 +313,25 @@ func (r *Router) handleHealthCheck(w http.ResponseWriter, req *http.Request) {
 		dbLatencyMs = float64(time.Since(startPing).Microseconds()) / 1000.0
 	}
 
+	liveKitStatus := "configured"
+	var liveKitLatencyMs float64
+	if strings.TrimSpace(r.cfg.LiveKitURL) != "" {
+		lkTarget := r.cfg.LiveKitURL
+		if strings.HasPrefix(lkTarget, "ws://") {
+			lkTarget = "http://" + strings.TrimPrefix(lkTarget, "ws://")
+		} else if strings.HasPrefix(lkTarget, "wss://") {
+			lkTarget = "https://" + strings.TrimPrefix(lkTarget, "wss://")
+		}
+		startLK := time.Now()
+		client := &http.Client{Timeout: 1500 * time.Millisecond}
+		lkResp, err := client.Get(lkTarget)
+		if err == nil {
+			_ = lkResp.Body.Close()
+			liveKitStatus = "online"
+			liveKitLatencyMs = float64(time.Since(startLK).Microseconds()) / 1000.0
+		}
+	}
+
 	overallStatus := "healthy"
 	httpStatusCode := http.StatusOK
 	if dbStatus == "down" {
@@ -332,7 +351,10 @@ func (r *Router) handleHealthCheck(w http.ResponseWriter, req *http.Request) {
 				"status":     dbStatus,
 				"latency_ms": dbLatencyMs,
 			},
-			"livekit": map[string]interface{}{"status": "configured"},
+			"livekit": map[string]interface{}{
+				"status":     liveKitStatus,
+				"latency_ms": liveKitLatencyMs,
+			},
 			"websocket": map[string]interface{}{
 				"status": "active",
 			},

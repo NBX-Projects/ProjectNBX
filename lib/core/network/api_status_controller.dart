@@ -14,6 +14,13 @@ class ApiStatusState {
   final bool isApiOffline;
   final bool isWsOffline;
   final bool isLiveKitOffline;
+  final int? apiLatencyMs;
+  final String databaseStatus;
+  final double? databaseLatencyMs;
+  final String livekitStatus;
+  final double? livekitLatencyMs;
+  final String websocketServerStatus;
+  final String? uptime;
 
   const ApiStatusState({
     this.isOffline = false,
@@ -24,6 +31,13 @@ class ApiStatusState {
     this.isApiOffline = false,
     this.isWsOffline = false,
     this.isLiveKitOffline = false,
+    this.apiLatencyMs,
+    this.databaseStatus = 'unknown',
+    this.databaseLatencyMs,
+    this.livekitStatus = 'unknown',
+    this.livekitLatencyMs,
+    this.websocketServerStatus = 'unknown',
+    this.uptime,
   });
 
   String get apiStatusText {
@@ -50,6 +64,13 @@ class ApiStatusState {
     bool? isApiOffline,
     bool? isWsOffline,
     bool? isLiveKitOffline,
+    int? apiLatencyMs,
+    String? databaseStatus,
+    double? databaseLatencyMs,
+    String? livekitStatus,
+    double? livekitLatencyMs,
+    String? websocketServerStatus,
+    String? uptime,
     bool clearError = false,
   }) {
     final offline = isOffline ?? this.isOffline;
@@ -63,6 +84,14 @@ class ApiStatusState {
       isWsOffline: isWsOffline ?? (offline ? true : this.isWsOffline),
       isLiveKitOffline:
           isLiveKitOffline ?? (offline ? true : this.isLiveKitOffline),
+      apiLatencyMs: apiLatencyMs ?? this.apiLatencyMs,
+      databaseStatus: databaseStatus ?? this.databaseStatus,
+      databaseLatencyMs: databaseLatencyMs ?? this.databaseLatencyMs,
+      livekitStatus: livekitStatus ?? this.livekitStatus,
+      livekitLatencyMs: livekitLatencyMs ?? this.livekitLatencyMs,
+      websocketServerStatus:
+          websocketServerStatus ?? this.websocketServerStatus,
+      uptime: uptime ?? this.uptime,
     );
   }
 }
@@ -87,6 +116,9 @@ class ApiStatusNotifier extends StateNotifier<ApiStatusState> {
       errorMessage:
           message ?? 'O servidor da API está temporariamente offline.',
       lastChecked: DateTime.now(),
+      databaseStatus: 'down',
+      livekitStatus: 'offline',
+      websocketServerStatus: 'offline',
     );
   }
 
@@ -102,21 +134,43 @@ class ApiStatusNotifier extends StateNotifier<ApiStatusState> {
 
   Future<bool> checkStatus() async {
     state = state.copyWith(isChecking: true);
-    final isHealthy = await _apiClient.checkHealth();
-    if (isHealthy) {
+    final report = await _apiClient.getHealthReport();
+    if (report.isReachable) {
+      final isDbUp = report.databaseStatus == 'up';
+      final isLkUp = report.livekitStatus == 'online' ||
+          report.livekitStatus == 'configured';
+      final isWsUp = report.websocketServerStatus == 'active';
+
       state = state.copyWith(
         isOffline: false,
         isChecking: false,
         clearError: true,
         lastChecked: DateTime.now(),
+        isApiOffline: !isDbUp,
+        isWsOffline: !isWsUp,
+        isLiveKitOffline: !isLkUp,
+        apiLatencyMs: report.apiLatencyMs,
+        databaseStatus: report.databaseStatus,
+        databaseLatencyMs: report.databaseLatencyMs,
+        livekitStatus: report.livekitStatus,
+        livekitLatencyMs: report.livekitLatencyMs,
+        websocketServerStatus: report.websocketServerStatus,
+        uptime: report.uptime,
       );
       return true;
     } else {
       state = state.copyWith(
         isOffline: true,
         isChecking: false,
+        isApiOffline: true,
+        isWsOffline: true,
+        isLiveKitOffline: true,
         errorMessage: 'Não foi possível conectar ao servidor backend.',
         lastChecked: DateTime.now(),
+        databaseStatus: 'down',
+        livekitStatus: 'offline',
+        websocketServerStatus: 'offline',
+        apiLatencyMs: report.apiLatencyMs,
       );
       return false;
     }

@@ -11,6 +11,43 @@ import 'package:justtalking/features/servers/models/public_server_model.dart';
 import 'package:justtalking/features/servers/models/server_join_request_model.dart';
 import 'package:justtalking/features/servers/models/server_role_model.dart';
 
+class ServerHealthReport {
+  final bool isReachable;
+  final int apiLatencyMs;
+  final String status;
+  final String databaseStatus;
+  final double? databaseLatencyMs;
+  final String livekitStatus;
+  final double? livekitLatencyMs;
+  final String websocketServerStatus;
+  final String? uptime;
+  final String? version;
+
+  const ServerHealthReport({
+    required this.isReachable,
+    required this.apiLatencyMs,
+    required this.status,
+    required this.databaseStatus,
+    this.databaseLatencyMs,
+    required this.livekitStatus,
+    this.livekitLatencyMs,
+    required this.websocketServerStatus,
+    this.uptime,
+    this.version,
+  });
+
+  factory ServerHealthReport.offline([int latency = 0]) {
+    return ServerHealthReport(
+      isReachable: false,
+      apiLatencyMs: latency,
+      status: 'offline',
+      databaseStatus: 'down',
+      livekitStatus: 'offline',
+      websocketServerStatus: 'offline',
+    );
+  }
+}
+
 class ApiClient {
   static String? _customBaseUrl;
 
@@ -70,26 +107,77 @@ class ApiClient {
     }
   }
 
-  Future<bool> checkHealth() async {
+  Future<ServerHealthReport> getHealthReport() async {
+    final sw = Stopwatch()..start();
     try {
       final url = Uri.parse('$baseUrl/health');
-      final response = await _client
-          .get(url)
-          .timeout(const Duration(seconds: 4));
+      final response = await _client.get(url).timeout(const Duration(seconds: 4));
+      sw.stop();
+      final latency = sw.elapsedMilliseconds;
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return true;
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          final components = decoded['components'] as Map<String, dynamic>? ?? {};
+          final db = components['database'] as Map<String, dynamic>? ?? {};
+          final lk = components['livekit'] as Map<String, dynamic>? ?? {};
+          final ws = components['websocket'] as Map<String, dynamic>? ?? {};
+
+          return ServerHealthReport(
+            isReachable: true,
+            apiLatencyMs: latency,
+            status: decoded['status'] as String? ?? 'healthy',
+            databaseStatus: db['status'] as String? ?? 'up',
+            databaseLatencyMs: (db['latency_ms'] as num?)?.toDouble(),
+            livekitStatus: lk['status'] as String? ?? 'configured',
+            livekitLatencyMs: (lk['latency_ms'] as num?)?.toDouble(),
+            websocketServerStatus: ws['status'] as String? ?? 'active',
+            uptime: decoded['uptime'] as String?,
+            version: decoded['version'] as String?,
+          );
+        }
       }
     } catch (_) {}
 
     try {
+      sw.reset();
+      sw.start();
       final altUrl = Uri.parse('$baseUrl/api/health');
-      final altResp = await _client
-          .get(altUrl)
-          .timeout(const Duration(seconds: 4));
-      return altResp.statusCode >= 200 && altResp.statusCode < 300;
-    } catch (_) {
-      return false;
-    }
+      final altResp = await _client.get(altUrl).timeout(const Duration(seconds: 4));
+      sw.stop();
+      final latency = sw.elapsedMilliseconds;
+
+      if (altResp.statusCode >= 200 && altResp.statusCode < 300) {
+        final decoded = jsonDecode(altResp.body);
+        if (decoded is Map<String, dynamic>) {
+          final components = decoded['components'] as Map<String, dynamic>? ?? {};
+          final db = components['database'] as Map<String, dynamic>? ?? {};
+          final lk = components['livekit'] as Map<String, dynamic>? ?? {};
+          final ws = components['websocket'] as Map<String, dynamic>? ?? {};
+
+          return ServerHealthReport(
+            isReachable: true,
+            apiLatencyMs: latency,
+            status: decoded['status'] as String? ?? 'healthy',
+            databaseStatus: db['status'] as String? ?? 'up',
+            databaseLatencyMs: (db['latency_ms'] as num?)?.toDouble(),
+            livekitStatus: lk['status'] as String? ?? 'configured',
+            livekitLatencyMs: (lk['latency_ms'] as num?)?.toDouble(),
+            websocketServerStatus: ws['status'] as String? ?? 'active',
+            uptime: decoded['uptime'] as String?,
+            version: decoded['version'] as String?,
+          );
+        }
+      }
+    } catch (_) {}
+
+    sw.stop();
+    return ServerHealthReport.offline(sw.elapsedMilliseconds);
+  }
+
+  Future<bool> checkHealth() async {
+    final report = await getHealthReport();
+    return report.isReachable;
   }
 
   Future<AuthResponse> login(String login, String password) async {

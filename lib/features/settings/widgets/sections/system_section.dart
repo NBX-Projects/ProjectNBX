@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:justtalking/core/config/app_config.dart';
 import 'package:justtalking/core/localization/app_strings.dart';
+import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
 import 'package:justtalking/core/theme/app_colors.dart';
 import 'package:justtalking/core/theme/app_radius.dart';
 import 'package:justtalking/core/updater/update_controller.dart';
@@ -11,7 +13,7 @@ import 'package:justtalking/core/updater/widgets/update_dialog.dart';
 import 'package:justtalking/features/settings/widgets/section_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class SystemSection extends ConsumerWidget {
+class SystemSection extends ConsumerStatefulWidget {
   final bool isDark;
   final AppStrings strings;
   final bool isMobile;
@@ -24,10 +26,32 @@ class SystemSection extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SystemSection> createState() => _SystemSectionState();
+}
+
+class _SystemSectionState extends ConsumerState<SystemSection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(apiStatusProvider.notifier).checkStatus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final strings = widget.strings;
+    final isMobile = widget.isMobile;
+
     final updateState = ref.watch(updateControllerProvider);
     final isChecking = updateState.status == UpdateStatus.checking;
     final hasUpdate = updateState.status == UpdateStatus.available;
+
+    final apiStatus = ref.watch(apiStatusProvider);
+    final wsConnected = ref.watch(websocketConnectedProvider) ||
+        (apiStatus.websocketServerStatus == 'active' && !apiStatus.isOffline);
+    final isCheckingHealth = apiStatus.isChecking;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,50 +437,130 @@ class SystemSection extends ConsumerWidget {
 
         const SizedBox(height: 20),
 
-        Text(
-          'INFRAESTRUTURA DE SERVIÇOS',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'INFRAESTRUTURA DE SERVIÇOS',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: isCheckingHealth
+                  ? null
+                  : () => ref.read(apiStatusProvider.notifier).checkStatus(),
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Row(
+                  children: [
+                    if (isCheckingHealth)
+                      SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: isDark
+                              ? AppColors.darkPrimary
+                              : AppColors.lightPrimary,
+                        ),
+                      )
+                    else
+                      Icon(
+                        LucideIcons.refreshCw,
+                        size: 11,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Testar Conexão',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
+        // 1. Banco de Dados & Storage
         _buildServiceStatusCard(
           isDark: isDark,
           serviceName: 'Banco de Dados & Storage',
           endpoint: 'Armazenamento seguro de canais, contas e servidores',
-          status: 'ONLINE & SINCRONIZADO',
+          status: isCheckingHealth
+              ? 'VERIFICANDO...'
+              : (!apiStatus.isOffline && apiStatus.databaseStatus == 'up')
+                  ? 'ONLINE (${apiStatus.databaseLatencyMs != null ? '${apiStatus.databaseLatencyMs!.toStringAsFixed(1)}ms' : '< 5ms'})'
+                  : 'OFFLINE / INDISPONÍVEL',
           icon: LucideIcons.database,
-          accentColor: isDark ? AppColors.darkSage : AppColors.lightSage,
+          accentColor: isCheckingHealth
+              ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+              : (!apiStatus.isOffline && apiStatus.databaseStatus == 'up')
+                  ? (isDark ? AppColors.darkSage : AppColors.lightSage)
+                  : (isDark ? AppColors.darkDanger : AppColors.lightDanger),
           isMobile: isMobile,
         ),
         const SizedBox(height: 12),
 
+        // 2. Servidor de Voz & Transmissão
         _buildServiceStatusCard(
           isDark: isDark,
           serviceName: 'Servidor de Voz & Transmissão',
           endpoint:
               'Áudio cristalino de alta fidelidade com latência ultrabaixa',
-          status: 'PRONTO (< 50ms)',
+          status: isCheckingHealth
+              ? 'VERIFICANDO...'
+              : (!apiStatus.isOffline &&
+                      (apiStatus.livekitStatus == 'online' ||
+                          apiStatus.livekitStatus == 'configured'))
+                  ? 'OPERACIONAL (${apiStatus.livekitLatencyMs != null && apiStatus.livekitLatencyMs! > 0 ? '${apiStatus.livekitLatencyMs!.toStringAsFixed(0)}ms' : '< 50ms'})'
+                  : 'OFFLINE / INDISPONÍVEL',
           icon: LucideIcons.radio,
-          accentColor: isDark
-              ? AppColors.darkLavender
-              : AppColors.lightLavender,
+          accentColor: isCheckingHealth
+              ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+              : (!apiStatus.isOffline &&
+                      (apiStatus.livekitStatus == 'online' ||
+                          apiStatus.livekitStatus == 'configured'))
+                  ? (isDark ? AppColors.darkLavender : AppColors.lightLavender)
+                  : (isDark ? AppColors.darkDanger : AppColors.lightDanger),
           isMobile: isMobile,
         ),
         const SizedBox(height: 12),
 
+        // 3. API Gateway & WebSocket Hub
         _buildServiceStatusCard(
           isDark: isDark,
           serviceName: 'API Gateway & WebSocket Hub',
           endpoint:
               'Sincronização em tempo real de mensagens e status de presença',
-          status: 'CONECTADO',
+          status: isCheckingHealth
+              ? 'VERIFICANDO...'
+              : (!apiStatus.isOffline && wsConnected)
+                  ? 'CONECTADO (${apiStatus.apiLatencyMs != null ? '${apiStatus.apiLatencyMs}ms' : 'Ativo'})'
+                  : 'DESCONECTADO',
           icon: LucideIcons.server,
-          accentColor: isDark ? AppColors.darkPrimary : AppColors.lightPrimary,
+          accentColor: isCheckingHealth
+              ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+              : (!apiStatus.isOffline && wsConnected)
+                  ? (isDark ? AppColors.darkPrimary : AppColors.lightPrimary)
+                  : (isDark ? AppColors.darkDanger : AppColors.lightDanger),
           isMobile: isMobile,
         ),
       ],
