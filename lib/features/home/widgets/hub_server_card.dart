@@ -9,11 +9,7 @@ class HubServerCard extends StatefulWidget {
   final ServerModel server;
   final VoidCallback? onTap;
 
-  const HubServerCard({
-    super.key,
-    required this.server,
-    this.onTap,
-  });
+  const HubServerCard({super.key, required this.server, this.onTap});
 
   @override
   State<HubServerCard> createState() => _HubServerCardState();
@@ -31,19 +27,27 @@ class _HubServerCardState extends State<HubServerCard> {
       return server.category.toUpperCase();
     }
     final lower = server.name.toLowerCase();
-    if (lower.contains('apex') || lower.contains('game') || lower.contains('jogos')) {
+    if (lower.contains('apex') ||
+        lower.contains('game') ||
+        lower.contains('jogos')) {
       return 'GAMING';
     }
-    if (lower.contains('dev') || lower.contains('code') || lower.contains('tech')) {
+    if (lower.contains('dev') ||
+        lower.contains('code') ||
+        lower.contains('tech')) {
       return 'PROGRAMAÇÃO';
     }
-    if (lower.contains('mans') || lower.contains('race') || lower.contains('sim')) {
+    if (lower.contains('mans') ||
+        lower.contains('race') ||
+        lower.contains('sim')) {
       return 'RACING SIM';
     }
     if (lower.contains('study') || lower.contains('estudo')) {
       return 'ESTUDO';
     }
-    if (lower.contains('cs2') || lower.contains('fps') || lower.contains('valorant')) {
+    if (lower.contains('cs2') ||
+        lower.contains('fps') ||
+        lower.contains('valorant')) {
       return 'FPS';
     }
     return 'GERAL';
@@ -51,16 +55,26 @@ class _HubServerCardState extends State<HubServerCard> {
 
   IconData _getCategoryWatermarkIcon(ServerModel server) {
     final lower = '${server.category} ${server.name}'.toLowerCase();
-    if (lower.contains('apex') || lower.contains('game') || lower.contains('jogos')) {
+    if (lower.contains('apex') ||
+        lower.contains('game') ||
+        lower.contains('jogos')) {
       return LucideIcons.gamepad2;
     }
-    if (lower.contains('dev') || lower.contains('code') || lower.contains('tech') || lower.contains('prog')) {
+    if (lower.contains('dev') ||
+        lower.contains('code') ||
+        lower.contains('tech') ||
+        lower.contains('prog')) {
       return LucideIcons.code;
     }
-    if (lower.contains('race') || lower.contains('sim') || lower.contains('mans') || lower.contains('car')) {
+    if (lower.contains('race') ||
+        lower.contains('sim') ||
+        lower.contains('mans') ||
+        lower.contains('car')) {
       return LucideIcons.gauge;
     }
-    if (lower.contains('fps') || lower.contains('cs2') || lower.contains('valorant')) {
+    if (lower.contains('fps') ||
+        lower.contains('cs2') ||
+        lower.contains('valorant')) {
       return LucideIcons.crosshair;
     }
     if (lower.contains('study') || lower.contains('estudo')) {
@@ -88,7 +102,11 @@ class _HubServerCardState extends State<HubServerCard> {
     );
   }
 
-  Widget _buildServerAvatar(ServerModel server, Color accentColor, bool isDark) {
+  Widget _buildServerAvatar(
+    ServerModel server,
+    Color accentColor,
+    bool isDark,
+  ) {
     final iconUrl = server.iconUrl?.trim();
     final hasCustomIcon = iconUrl != null && iconUrl.isNotEmpty;
 
@@ -113,22 +131,22 @@ class _HubServerCardState extends State<HubServerCard> {
       child: ClipOval(
         child: hasCustomIcon
             ? (iconUrl.startsWith('assets/')
-                ? Image.asset(
-                    iconUrl,
-                    fit: BoxFit.cover,
-                    width: 44,
-                    height: 44,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _buildAvatarFallback(server, accentColor),
-                  )
-                : Image.network(
-                    iconUrl,
-                    fit: BoxFit.cover,
-                    width: 44,
-                    height: 44,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _buildAvatarFallback(server, accentColor),
-                  ))
+                  ? Image.asset(
+                      iconUrl,
+                      fit: BoxFit.cover,
+                      width: 44,
+                      height: 44,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _buildAvatarFallback(server, accentColor),
+                    )
+                  : Image.network(
+                      iconUrl,
+                      fit: BoxFit.cover,
+                      width: 44,
+                      height: 44,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _buildAvatarFallback(server, accentColor),
+                    ))
             : _buildAvatarFallback(server, accentColor),
       ),
     );
@@ -141,7 +159,9 @@ class _HubServerCardState extends State<HubServerCard> {
     final server = widget.server;
     final category = _getCategoryForServer(server);
     final gradient = _getGradientForServer(server);
-    final accentColor = Color(server.accentColor != 0 ? server.accentColor : 0xFFF5CBA7);
+    final accentColor = Color(
+      server.accentColor != 0 ? server.accentColor : 0xFFF5CBA7,
+    );
     final isLightAccent = accentColor.computeLuminance() > 0.5;
 
     return MouseRegion(
@@ -173,7 +193,9 @@ class _HubServerCardState extends State<HubServerCard> {
                   ]
                 : [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.18 : 0.05,
+                      ),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -197,6 +219,34 @@ class _HubServerCardState extends State<HubServerCard> {
                 ),
                 child: Stack(
                   children: [
+                    if (server.bannerUrl != null &&
+                        server.bannerUrl!.trim().isNotEmpty) ...[
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: AppRadius.topLg,
+                          child: Image.network(
+                            server.bannerUrl!.trim(),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: AppRadius.topLg,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.15),
+                                Colors.black.withValues(alpha: 0.65),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     Positioned(
                       right: -8,
                       bottom: -8,

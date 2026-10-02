@@ -33,9 +33,7 @@ class ServerActiveCallBanner extends StatelessWidget {
 
     for (final ch in channels) {
       final participants =
-          voiceParticipants[ch.id]?.values
-              .where((p) => p.isInVoice)
-              .toList() ??
+          voiceParticipants[ch.id]?.values.where((p) => p.isInVoice).toList() ??
           [];
       if (participants.isNotEmpty) {
         callChannel = ch;

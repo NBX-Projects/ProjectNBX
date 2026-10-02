@@ -66,8 +66,8 @@ class ServersNotifier extends StateNotifier<ServersState> {
   final Ref? _ref;
 
   ServersNotifier(this._apiClient, {Ref? ref, bool autoLoad = true})
-      : _ref = ref,
-        super(const ServersState()) {
+    : _ref = ref,
+      super(const ServersState()) {
     if (autoLoad) {
       loadServers();
     }
@@ -85,11 +85,16 @@ class ServersNotifier extends StateNotifier<ServersState> {
         final customJson = prefs.getString('server_customization_${server.id}');
         if (customJson != null) {
           try {
-            final customMap = Map<String, dynamic>.from(jsonDecode(customJson) as Map);
+            final customMap = Map<String, dynamic>.from(
+              jsonDecode(customJson) as Map,
+            );
             return server.copyWith(
-              bannerPreset: customMap['bannerPreset'] as int? ?? server.bannerPreset,
-              accentColor: customMap['accentColor'] as int? ?? server.accentColor,
+              bannerPreset:
+                  customMap['bannerPreset'] as int? ?? server.bannerPreset,
+              accentColor:
+                  customMap['accentColor'] as int? ?? server.accentColor,
               category: customMap['category'] as String? ?? server.category,
+              bannerUrl: customMap['bannerUrl'] as String? ?? server.bannerUrl,
             );
           } catch (_) {
             return server;
@@ -103,22 +108,19 @@ class ServersNotifier extends StateNotifier<ServersState> {
         selectedServerId: parsed.isNotEmpty
             ? (state.selectedServerId ?? parsed.first.id)
             : null,
-        selectedChannelId: (parsed.isNotEmpty && parsed.first.channels.isNotEmpty)
+        selectedChannelId:
+            (parsed.isNotEmpty && parsed.first.channels.isNotEmpty)
             ? (state.selectedChannelId ?? parsed.first.channels.first.id)
             : null,
         isLoading: false,
       );
     } catch (e) {
       if (e is ApiOfflineException) {
-        _ref?.read(apiStatusProvider.notifier).markOffline(
-          message: e.message,
-          statusCode: e.statusCode,
-        );
+        _ref
+            ?.read(apiStatusProvider.notifier)
+            .markOffline(message: e.message, statusCode: e.statusCode);
       }
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
@@ -154,6 +156,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
     int? bannerPreset,
     int? accentColor,
     String? category,
+    String? bannerUrl,
   }) async {
     final updatedServers = state.servers.map((s) {
       if (s.id == serverId) {
@@ -161,6 +164,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
           bannerPreset: bannerPreset ?? s.bannerPreset,
           accentColor: accentColor ?? s.accentColor,
           category: category ?? s.category,
+          bannerUrl: bannerUrl ?? s.bannerUrl,
         );
       }
       return s;
@@ -180,17 +184,28 @@ class ServersNotifier extends StateNotifier<ServersState> {
       if (category != null) {
         customMap['category'] = category;
       }
+      if (bannerUrl != null) {
+        customMap['bannerUrl'] = bannerUrl;
+      }
 
       final existingJson = prefs.getString('server_customization_$serverId');
       if (existingJson != null) {
         try {
-          final existing = Map<String, dynamic>.from(jsonDecode(existingJson) as Map);
+          final existing = Map<String, dynamic>.from(
+            jsonDecode(existingJson) as Map,
+          );
           existing.addAll(customMap);
-          await prefs.setString('server_customization_$serverId', jsonEncode(existing));
+          await prefs.setString(
+            'server_customization_$serverId',
+            jsonEncode(existing),
+          );
           return;
         } catch (_) {}
       }
-      await prefs.setString('server_customization_$serverId', jsonEncode(customMap));
+      await prefs.setString(
+        'server_customization_$serverId',
+        jsonEncode(customMap),
+      );
     } catch (_) {}
   }
 
@@ -198,6 +213,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
     String serverId, {
     String? name,
     String? iconUrl,
+    String? bannerUrl,
     bool? isPublic,
     String? description,
     String? category,
@@ -207,6 +223,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
         serverId,
         name: name,
         iconUrl: iconUrl,
+        bannerUrl: bannerUrl,
         isPublic: isPublic,
         description: description,
         category: category,
@@ -218,6 +235,11 @@ class ServersNotifier extends StateNotifier<ServersState> {
             return s.copyWith(
               name: updatedServer.name,
               iconUrl: updatedServer.iconUrl,
+              bannerUrl:
+                  updatedServer.bannerUrl ??
+                  (bannerUrl != null
+                      ? (bannerUrl.isEmpty ? '' : bannerUrl)
+                      : s.bannerUrl),
               isPublic: updatedServer.isPublic,
               description: updatedServer.description,
               category: updatedServer.category,
@@ -237,6 +259,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
   Future<bool> createServer(
     String name, {
     String? iconUrl,
+    String? bannerUrl,
     String? category,
     int? bannerPreset,
     int? accentColor,
@@ -248,6 +271,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
       final res = await _apiClient.createServer(
         name,
         iconUrl: iconUrl,
+        bannerUrl: bannerUrl,
         isPublic: isPublic,
         description: description,
         category: category,
@@ -287,10 +311,7 @@ class ServersNotifier extends StateNotifier<ServersState> {
         return false;
       }
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
@@ -341,4 +362,3 @@ final serversControllerProvider =
       final apiClient = ref.watch(apiClientProvider);
       return ServersNotifier(apiClient, ref: ref);
     });
-

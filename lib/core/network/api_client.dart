@@ -329,6 +329,7 @@ class ApiClient {
   Future<Map<String, dynamic>?> createServer(
     String name, {
     String? iconUrl,
+    String? bannerUrl,
     bool isPublic = false,
     String? description,
     String? category,
@@ -340,6 +341,7 @@ class ApiClient {
       body: jsonEncode({
         'name': name,
         'icon_url': iconUrl ?? '',
+        'banner_url': bannerUrl ?? '',
         'is_public': isPublic,
         'description': description ?? '',
         'category': category ?? 'Comunidade Geral',
@@ -363,6 +365,7 @@ class ApiClient {
     String serverId, {
     String? name,
     String? iconUrl,
+    String? bannerUrl,
     bool? isPublic,
     String? description,
     String? category,
@@ -371,6 +374,7 @@ class ApiClient {
     final payload = <String, dynamic>{};
     if (name != null) payload['name'] = name.trim();
     if (iconUrl != null) payload['icon_url'] = iconUrl.trim();
+    if (bannerUrl != null) payload['banner_url'] = bannerUrl.trim();
     if (isPublic != null) payload['is_public'] = isPublic;
     if (description != null) payload['description'] = description.trim();
     if (category != null) payload['category'] = category.trim();

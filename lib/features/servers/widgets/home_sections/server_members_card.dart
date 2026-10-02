@@ -229,12 +229,12 @@ class ServerMembersCard extends StatelessWidget {
                                     displayName.isNotEmpty
                                         ? displayName[0].toUpperCase()
                                         : '?',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: selectedAccentColor,
-                                      ),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: selectedAccentColor,
                                     ),
+                                  ),
                                 ),
                         ),
                       ),
@@ -282,7 +282,9 @@ class ServerMembersCard extends StatelessWidget {
                             vertical: 1.5,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF5CBA7).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFF5CBA7,
+                            ).withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(

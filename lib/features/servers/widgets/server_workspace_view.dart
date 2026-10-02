@@ -328,7 +328,9 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
   Future<void> _connectToLiveKitVoice(String channelId) async {
     try {
       final audioSettings = ref.read(audioSettingsProvider);
-      await WindowsAudioDuckingService.setDuckingOptOut(audioSettings.disableWindowsDucking);
+      await WindowsAudioDuckingService.setDuckingOptOut(
+        audioSettings.disableWindowsDucking,
+      );
 
       final voiceState = ref.read(voiceStateProvider);
       final prevServerId =
@@ -2422,12 +2424,20 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
 
-    final effectiveChannels = widget.server.channels.isNotEmpty
-        ? widget.server.channels
+    final serversState = ref.watch(serversControllerProvider);
+    final liveServer =
+        serversState.servers.cast<ServerModel?>().firstWhere(
+          (s) => s?.id == widget.server.id,
+          orElse: () => null,
+        ) ??
+        widget.server;
+
+    final effectiveChannels = liveServer.channels.isNotEmpty
+        ? liveServer.channels
         : [
             ChannelModel(
               id: 'chn_geral',
-              serverId: widget.server.id,
+              serverId: liveServer.id,
               name: 'geral',
               type: ChannelType.hybrid,
             ),
@@ -2435,7 +2445,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
 
     final stageWidget = _viewMode == ServerViewMode.home
         ? ServerHomeView(
-            server: widget.server,
+            server: liveServer,
             isDark: isDark,
             username: username,
             channels: effectiveChannels,

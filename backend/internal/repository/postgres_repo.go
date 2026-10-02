@@ -224,13 +224,14 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 	}
 
 	query := `
-	INSERT INTO servers (id, name, icon_url, owner_id, member_count, is_public, description, category, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+	INSERT INTO servers (id, name, icon_url, banner_url, owner_id, member_count, is_public, description, category, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	_, err := r.db.Exec(query,
 		server.ID,
 		server.Name,
 		server.IconURL,
+		server.BannerURL,
 		server.OwnerID,
 		server.MemberCount,
 		server.IsPublic,
@@ -251,7 +252,7 @@ func (r *PostgresRepository) CreateServer(server *models.Server) error {
 
 func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
 	query := `
-	SELECT id, name, COALESCE(icon_url, ''), owner_id, member_count, COALESCE(is_public, FALSE), COALESCE(description, ''), COALESCE(category, 'Comunidade Geral'), created_at
+	SELECT id, name, COALESCE(icon_url, ''), COALESCE(banner_url, ''), owner_id, member_count, COALESCE(is_public, FALSE), COALESCE(description, ''), COALESCE(category, 'Comunidade Geral'), created_at
 	FROM servers WHERE id = $1`
 
 	srv := &models.Server{}
@@ -259,6 +260,7 @@ func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
 		&srv.ID,
 		&srv.Name,
 		&srv.IconURL,
+		&srv.BannerURL,
 		&srv.OwnerID,
 		&srv.MemberCount,
 		&srv.IsPublic,
@@ -282,7 +284,7 @@ func (r *PostgresRepository) GetServerByID(id string) (*models.Server, error) {
 
 func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 	query := `
-	SELECT id, name, COALESCE(icon_url, ''), owner_id, member_count, COALESCE(is_public, FALSE), COALESCE(description, ''), COALESCE(category, 'Comunidade Geral'), created_at
+	SELECT id, name, COALESCE(icon_url, ''), COALESCE(banner_url, ''), owner_id, member_count, COALESCE(is_public, FALSE), COALESCE(description, ''), COALESCE(category, 'Comunidade Geral'), created_at
 	FROM servers ORDER BY created_at ASC`
 
 	rows, err := r.db.Query(query)
@@ -298,6 +300,7 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 			&srv.ID,
 			&srv.Name,
 			&srv.IconURL,
+			&srv.BannerURL,
 			&srv.OwnerID,
 			&srv.MemberCount,
 			&srv.IsPublic,
@@ -320,7 +323,7 @@ func (r *PostgresRepository) ListServers() ([]*models.Server, error) {
 
 func (r *PostgresRepository) ListServersByUserID(userID string) ([]*models.Server, error) {
 	query := `
-	SELECT s.id, s.name, COALESCE(s.icon_url, ''), s.owner_id, s.member_count, COALESCE(s.is_public, FALSE), COALESCE(s.description, ''), COALESCE(s.category, 'Comunidade Geral'), s.created_at
+	SELECT s.id, s.name, COALESCE(s.icon_url, ''), COALESCE(s.banner_url, ''), s.owner_id, s.member_count, COALESCE(s.is_public, FALSE), COALESCE(s.description, ''), COALESCE(s.category, 'Comunidade Geral'), s.created_at
 	FROM servers s
 	INNER JOIN server_members sm ON sm.server_id = s.id
 	WHERE sm.user_id = $1
@@ -340,6 +343,7 @@ func (r *PostgresRepository) ListServersByUserID(userID string) ([]*models.Serve
 			&srv.ID,
 			&srv.Name,
 			&srv.IconURL,
+			&srv.BannerURL,
 			&srv.OwnerID,
 			&srv.MemberCount,
 			&srv.IsPublic,
@@ -414,10 +418,10 @@ func (r *PostgresRepository) listChannelsByServerIDs(serverIDs []string) (map[st
 func (r *PostgresRepository) UpdateServer(server *models.Server) error {
 	query := `
 	UPDATE servers
-	SET name = $1, icon_url = $2, is_public = $3, description = $4, category = $5
-	WHERE id = $6`
+	SET name = $1, icon_url = $2, banner_url = $3, is_public = $4, description = $5, category = $6
+	WHERE id = $7`
 
-	result, err := r.db.Exec(query, server.Name, server.IconURL, server.IsPublic, server.Description, server.Category, server.ID)
+	result, err := r.db.Exec(query, server.Name, server.IconURL, server.BannerURL, server.IsPublic, server.Description, server.Category, server.ID)
 	if err != nil {
 		return err
 	}
@@ -1117,7 +1121,7 @@ func (r *PostgresRepository) Ping(ctx context.Context) error {
 
 func (r *PostgresRepository) ListPublicServers(userID string) ([]*models.PublicServerDTO, error) {
 	query := `
-	SELECT s.id, s.name, COALESCE(s.icon_url, ''), s.owner_id, s.member_count, s.is_public,
+	SELECT s.id, s.name, COALESCE(s.icon_url, ''), COALESCE(s.banner_url, ''), s.owner_id, s.member_count, s.is_public,
 	       COALESCE(s.description, ''), COALESCE(s.category, 'Comunidade Geral'), s.created_at,
 	       EXISTS(SELECT 1 FROM server_members sm WHERE sm.server_id = s.id AND sm.user_id = $1) as is_member,
 	       COALESCE((SELECT jr.status FROM server_join_requests jr WHERE jr.server_id = s.id AND jr.user_id = $1 ORDER BY jr.created_at DESC LIMIT 1), 'none') as join_request_status
@@ -1138,6 +1142,7 @@ func (r *PostgresRepository) ListPublicServers(userID string) ([]*models.PublicS
 			&dto.ID,
 			&dto.Name,
 			&dto.IconURL,
+			&dto.BannerURL,
 			&dto.OwnerID,
 			&dto.MemberCount,
 			&dto.IsPublic,

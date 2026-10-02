@@ -80,6 +80,7 @@ func (r *MemoryRepository) seedInitialData() {
 		ID          string
 		Name        string
 		Banner      string
+		Icon        string
 		IsPublic    bool
 		Category    string
 		Description string
@@ -192,7 +193,8 @@ func (r *MemoryRepository) seedInitialData() {
 		srv := &models.Server{
 			ID:          sData.ID,
 			Name:        sData.Name,
-			IconURL:     sData.Banner,
+			IconURL:     sData.Icon,
+			BannerURL:   sData.Banner,
 			OwnerID:     adminUser.ID,
 			IsPublic:    sData.IsPublic,
 			Category:    sData.Category,
@@ -439,6 +441,7 @@ func (r *MemoryRepository) UpdateServer(server *models.Server) error {
 	}
 	srv.Name = server.Name
 	srv.IconURL = server.IconURL
+	srv.BannerURL = server.BannerURL
 	srv.IsPublic = server.IsPublic
 	srv.Description = server.Description
 	srv.Category = server.Category

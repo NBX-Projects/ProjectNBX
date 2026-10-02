@@ -73,7 +73,10 @@ class ServerPendingRequestsCard extends StatelessWidget {
                   onRequestsChanged: onRequestsChanged,
                 ),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   foregroundColor: const Color(0xFF22C55E),
@@ -98,20 +101,26 @@ class ServerPendingRequestsCard extends StatelessWidget {
               final req = pendingRequests[index];
               final displayName = req.userName ?? 'Usuário';
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF141520) : Colors.white,
                   borderRadius: AppRadius.borderMd,
                   border: Border.all(
-                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
                   ),
                 ),
                 child: Row(
                   children: [
                     CircleAvatar(
                       radius: 13,
-                      backgroundColor:
-                          const Color(0xFF22C55E).withValues(alpha: 0.2),
+                      backgroundColor: const Color(
+                        0xFF22C55E,
+                      ).withValues(alpha: 0.2),
                       child: Text(
                         displayName.isNotEmpty
                             ? displayName[0].toUpperCase()
@@ -164,8 +173,10 @@ class ServerPendingRequestsCard extends StatelessWidget {
                       ),
                       tooltip: 'Recusar pedido',
                       padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
                       onPressed: () => onRejectRequest(req),
                     ),
                     const SizedBox(width: 4),

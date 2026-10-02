@@ -251,139 +251,166 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
       color: widget.isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          isMobile ? 12 : 20,
-          isMobile ? 12 : 16,
-          isMobile ? 12 : 20,
+          isMobile ? 0 : 20,
+          0,
+          isMobile ? 0 : 20,
           isMobile ? (bottomInset > 0 ? bottomInset + 16.0 : 20.0) : 20.0,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hero Banner com Personalização, Badges e Paleta
-            ServerHeroBanner(
-              server: widget.server,
-              isMobile: isMobile,
-              selectedBannerPreset: widget.selectedBannerPreset,
-              selectedAccentColor: widget.selectedAccentColor,
-              bannerPresets: widget.bannerPresets,
-              accentPalette: widget.accentPalette,
-              isCustomizingBanner: widget.isCustomizingBanner,
-              onToggleCustomizeBanner: widget.onToggleCustomizeBanner,
-              onSelectBannerPreset: widget.onSelectBannerPreset,
-              onSelectAccentColor: widget.onSelectAccentColor,
-              onSaveCustomization: widget.onSaveCustomization,
-              memberCount: memberCount,
-            ),
-
-            const SizedBox(height: 14),
-
-            // Chamada Ativa (quando houver pessoas em voz ao vivo)
-            if (totalMembersInCall > 0) ...[
-              ServerActiveCallBanner(
-                isMobile: isMobile,
-                isDark: widget.isDark,
-                channels: widget.channels,
-                voiceParticipants: widget.voiceParticipants,
-                connectedVoiceChannelId: widget.connectedVoiceChannelId,
-                onOpenChannel: widget.onOpenChannel,
-                onJoinVoice: widget.onJoinVoice,
-              ),
-              const SizedBox(height: 14),
-            ],
-
-            // Pedidos de Entrada Pendentes
-            if (_canAcceptJoinRequests && _pendingRequests.isNotEmpty) ...[
-              ServerPendingRequestsCard(
-                isMobile: isMobile,
-                isDark: widget.isDark,
-                server: widget.server,
-                pendingRequests: _pendingRequests,
-                onRequestsChanged: _loadExtraData,
-                onAcceptRequest: _acceptRequest,
-                onRejectRequest: _rejectRequest,
-              ),
-              const SizedBox(height: 14),
-            ],
-
-            // Layout Responsivo: Membros, Cargos e Informações do Servidor
-            if (isMobile) ...[
-              ServerMembersCard(
-                isMobile: true,
-                isDark: widget.isDark,
-                server: widget.server,
-                members: _members,
-                isLoading: _isLoadingData,
-                selectedAccentColor: widget.selectedAccentColor,
-              ),
-              const SizedBox(height: 14),
-              if (_canManageRoles) ...[
-                ServerRolesCard(
-                  isMobile: true,
-                  isDark: widget.isDark,
-                  server: widget.server,
-                  roles: _roles,
-                  selectedAccentColor: widget.selectedAccentColor,
-                  onRolesUpdated: _loadExtraData,
-                ),
-                const SizedBox(height: 14),
-              ],
-              ServerInfoCard(
-                isMobile: true,
-                isDark: widget.isDark,
-                server: widget.server,
-                rolesCount: _roles.length,
-                pendingRequestsCount: _pendingRequests.length,
-                selectedAccentColor: widget.selectedAccentColor,
-                onMembersUpdated: _loadExtraData,
-              ),
-            ] else ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1320),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    flex: 3,
-                    child: ServerMembersCard(
-                      isMobile: false,
-                      isDark: widget.isDark,
-                      server: widget.server,
-                      members: _members,
-                      isLoading: _isLoadingData,
-                      selectedAccentColor: widget.selectedAccentColor,
-                    ),
+                  // Hero Banner com Personalização, Badges e Paleta (100% width no mobile)
+                  ServerHeroBanner(
+                    server: widget.server,
+                    isMobile: isMobile,
+                    isDark: widget.isDark,
+                    selectedBannerPreset: widget.selectedBannerPreset,
+                    selectedAccentColor: widget.selectedAccentColor,
+                    bannerPresets: widget.bannerPresets,
+                    accentPalette: widget.accentPalette,
+                    isCustomizingBanner: widget.isCustomizingBanner,
+                    onToggleCustomizeBanner: widget.onToggleCustomizeBanner,
+                    onSelectBannerPreset: widget.onSelectBannerPreset,
+                    onSelectAccentColor: widget.onSelectAccentColor,
+                    onSaveCustomization: widget.onSaveCustomization,
+                    memberCount: memberCount,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 2,
+
+                  const SizedBox(height: 14),
+
+                  // Cards e Seções de Conteúdo (com margem lateral de 12px no mobile)
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 12 : 0,
+                    ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (_canManageRoles) ...[
-                          ServerRolesCard(
-                            isMobile: false,
+                        // Chamada Ativa (quando houver pessoas em voz ao vivo)
+                        if (totalMembersInCall > 0) ...[
+                          ServerActiveCallBanner(
+                            isMobile: isMobile,
                             isDark: widget.isDark,
-                            server: widget.server,
-                            roles: _roles,
-                            selectedAccentColor: widget.selectedAccentColor,
-                            onRolesUpdated: _loadExtraData,
+                            channels: widget.channels,
+                            voiceParticipants: widget.voiceParticipants,
+                            connectedVoiceChannelId:
+                                widget.connectedVoiceChannelId,
+                            onOpenChannel: widget.onOpenChannel,
+                            onJoinVoice: widget.onJoinVoice,
                           ),
                           const SizedBox(height: 14),
                         ],
-                        ServerInfoCard(
-                          isMobile: false,
-                          isDark: widget.isDark,
-                          server: widget.server,
-                          rolesCount: _roles.length,
-                          pendingRequestsCount: _pendingRequests.length,
-                          selectedAccentColor: widget.selectedAccentColor,
-                          onMembersUpdated: _loadExtraData,
-                        ),
+
+                        // Pedidos de Entrada Pendentes
+                        if (_canAcceptJoinRequests &&
+                            _pendingRequests.isNotEmpty) ...[
+                          ServerPendingRequestsCard(
+                            isMobile: isMobile,
+                            isDark: widget.isDark,
+                            server: widget.server,
+                            pendingRequests: _pendingRequests,
+                            onRequestsChanged: _loadExtraData,
+                            onAcceptRequest: _acceptRequest,
+                            onRejectRequest: _rejectRequest,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Layout Responsivo: Membros, Cargos e Informações do Servidor
+                        if (isMobile) ...[
+                          ServerMembersCard(
+                            isMobile: true,
+                            isDark: widget.isDark,
+                            server: widget.server,
+                            members: _members,
+                            isLoading: _isLoadingData,
+                            selectedAccentColor: widget.selectedAccentColor,
+                          ),
+                          const SizedBox(height: 14),
+                          if (_canManageRoles) ...[
+                            ServerRolesCard(
+                              isMobile: true,
+                              isDark: widget.isDark,
+                              server: widget.server,
+                              roles: _roles,
+                              selectedAccentColor: widget.selectedAccentColor,
+                              onRolesUpdated: _loadExtraData,
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          ServerInfoCard(
+                            isMobile: true,
+                            isDark: widget.isDark,
+                            server: widget.server,
+                            rolesCount: _roles.length,
+                            pendingRequestsCount: _pendingRequests.length,
+                            selectedAccentColor: widget.selectedAccentColor,
+                            onMembersUpdated: _loadExtraData,
+                          ),
+                        ] else ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: ServerMembersCard(
+                                  isMobile: false,
+                                  isDark: widget.isDark,
+                                  server: widget.server,
+                                  members: _members,
+                                  isLoading: _isLoadingData,
+                                  selectedAccentColor:
+                                      widget.selectedAccentColor,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (_canManageRoles) ...[
+                                      ServerRolesCard(
+                                        isMobile: false,
+                                        isDark: widget.isDark,
+                                        server: widget.server,
+                                        roles: _roles,
+                                        selectedAccentColor:
+                                            widget.selectedAccentColor,
+                                        onRolesUpdated: _loadExtraData,
+                                      ),
+                                      const SizedBox(height: 14),
+                                    ],
+                                    ServerInfoCard(
+                                      isMobile: false,
+                                      isDark: widget.isDark,
+                                      server: widget.server,
+                                      rolesCount: _roles.length,
+                                      pendingRequestsCount:
+                                          _pendingRequests.length,
+                                      selectedAccentColor:
+                                          widget.selectedAccentColor,
+                                      onMembersUpdated: _loadExtraData,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );

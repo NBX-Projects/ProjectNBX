@@ -15,6 +15,7 @@ class ServerModel {
   final String id;
   final String name;
   final String? iconUrl;
+  final String? bannerUrl;
   final String ownerId;
   final List<ChannelModel> channels;
   final int memberCount;
@@ -28,6 +29,7 @@ class ServerModel {
     required this.id,
     required this.name,
     this.iconUrl,
+    this.bannerUrl,
     required this.ownerId,
     this.channels = const [],
     this.memberCount = 1,
@@ -48,6 +50,7 @@ class ServerModel {
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       iconUrl: json['icon_url'] as String?,
+      bannerUrl: (json['banner_url'] ?? json['bannerUrl']) as String?,
       ownerId: json['owner_id'] as String? ?? '',
       channels: rawChannels
           .map((c) => ChannelModel.fromJson(c as Map<String, dynamic>))
@@ -66,6 +69,7 @@ class ServerModel {
       'id': id,
       'name': name,
       'icon_url': iconUrl,
+      'banner_url': bannerUrl,
       'owner_id': ownerId,
       'channels': channels.map((c) => c.toJson()).toList(),
       'member_count': memberCount,
@@ -81,6 +85,7 @@ class ServerModel {
     String? id,
     String? name,
     String? iconUrl,
+    String? bannerUrl,
     String? ownerId,
     List<ChannelModel>? channels,
     int? memberCount,
@@ -94,6 +99,7 @@ class ServerModel {
       id: id ?? this.id,
       name: name ?? this.name,
       iconUrl: iconUrl ?? this.iconUrl,
+      bannerUrl: bannerUrl ?? this.bannerUrl,
       ownerId: ownerId ?? this.ownerId,
       channels: channels ?? this.channels,
       memberCount: memberCount ?? this.memberCount,

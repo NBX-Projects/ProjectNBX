@@ -109,6 +109,7 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 	server := &models.Server{
 		Name:        req.Name,
 		IconURL:     req.IconURL,
+		BannerURL:   req.BannerURL,
 		OwnerID:     userID,
 		IsPublic:    req.IsPublic,
 		Description: req.Description,
@@ -215,6 +216,9 @@ func (h *ServerHandler) UpdateServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.IconURL != nil {
 		server.IconURL = strings.TrimSpace(*req.IconURL)
+	}
+	if req.BannerURL != nil {
+		server.BannerURL = strings.TrimSpace(*req.BannerURL)
 	}
 	if req.IsPublic != nil {
 		server.IsPublic = *req.IsPublic
@@ -396,13 +400,11 @@ func (h *ServerHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 		ChannelID: channelID,
 		ServerID:  serverID,
 		Content:   req.Content,
+		AuthorID:  existing.AuthorID,
+		Author:    existing.Author,
 		IsEdited:  true,
+		CreatedAt: existing.CreatedAt,
 		UpdatedAt: time.Now(),
-	}
-	if existing != nil {
-		updatedMsg.AuthorID = existing.AuthorID
-		updatedMsg.Author = existing.Author
-		updatedMsg.CreatedAt = existing.CreatedAt
 	}
 
 	payloadBytes, _ := json.Marshal(updatedMsg)
@@ -447,7 +449,7 @@ func (h *ServerHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove o anexo somente após a mensagem sair do banco
-	if existing != nil && existing.MediaURL != "" {
+	if existing.MediaURL != "" {
 		h.deleteMessageMedia(existing)
 	}
 

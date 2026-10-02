@@ -80,8 +80,18 @@ void main() {
         name: 'Server 1',
         ownerId: 'u1',
         channels: [
-          ChannelModel(id: 'c1', serverId: 's1', name: 'chat', type: ChannelType.text),
-          ChannelModel(id: 'c2', serverId: 's1', name: 'voice', type: ChannelType.voice),
+          ChannelModel(
+            id: 'c1',
+            serverId: 's1',
+            name: 'chat',
+            type: ChannelType.text,
+          ),
+          ChannelModel(
+            id: 'c2',
+            serverId: 's1',
+            name: 'voice',
+            type: ChannelType.voice,
+          ),
         ],
       );
       const s2 = ServerModel(
@@ -89,12 +99,21 @@ void main() {
         name: 'Server 2',
         ownerId: 'u1',
         channels: [
-          ChannelModel(id: 'c3', serverId: 's2', name: 'general', type: ChannelType.text),
+          ChannelModel(
+            id: 'c3',
+            serverId: 's2',
+            name: 'general',
+            type: ChannelType.text,
+          ),
         ],
       );
 
       final notifier = ServersNotifier(ApiClient(), autoLoad: false);
-      notifier.state = const ServersState(servers: [s1, s2], selectedServerId: 's1', selectedChannelId: 'c1');
+      notifier.state = const ServersState(
+        servers: [s1, s2],
+        selectedServerId: 's1',
+        selectedChannelId: 'c1',
+      );
 
       expect(notifier.state.selectedServer?.id, 's1');
       expect(notifier.state.selectedChannel?.id, 'c1');
@@ -117,45 +136,51 @@ void main() {
       expect(clearedState.error, isNull);
     });
 
-    test('updateServerCustomization persists to state and preferences', () async {
-      const s1 = ServerModel(id: 's1', name: 'Server 1', ownerId: 'u1');
-      final notifier = ServersNotifier(ApiClient(), autoLoad: false);
-      notifier.state = const ServersState(servers: [s1]);
+    test(
+      'updateServerCustomization persists to state and preferences',
+      () async {
+        const s1 = ServerModel(id: 's1', name: 'Server 1', ownerId: 'u1');
+        final notifier = ServersNotifier(ApiClient(), autoLoad: false);
+        notifier.state = const ServersState(servers: [s1]);
 
-      await notifier.updateServerCustomization(
-        's1',
-        bannerPreset: 3,
-        accentColor: 0xFFAABBCC,
-        category: 'Tech',
-      );
+        await notifier.updateServerCustomization(
+          's1',
+          bannerPreset: 3,
+          accentColor: 0xFFAABBCC,
+          category: 'Tech',
+        );
 
-      final updated = notifier.state.servers.first;
-      expect(updated.bannerPreset, 3);
-      expect(updated.accentColor, 0xFFAABBCC);
-      expect(updated.category, 'Tech');
-    });
+        final updated = notifier.state.servers.first;
+        expect(updated.bannerPreset, 3);
+        expect(updated.accentColor, 0xFFAABBCC);
+        expect(updated.category, 'Tech');
+      },
+    );
 
-    test('loadServers populates state and applies cached customizations', () async {
-      SharedPreferences.setMockInitialValues({
-        'server_customization_s1': jsonEncode({
-          'bannerPreset': 4,
-          'accentColor': 0xFF112233,
-          'category': 'DevOps',
-        }),
-      });
+    test(
+      'loadServers populates state and applies cached customizations',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'server_customization_s1': jsonEncode({
+            'bannerPreset': 4,
+            'accentColor': 0xFF112233,
+            'category': 'DevOps',
+          }),
+        });
 
-      final fakeApi = FakeServersApiClient();
-      final notifier = ServersNotifier(fakeApi, autoLoad: false);
-      await notifier.loadServers();
+        final fakeApi = FakeServersApiClient();
+        final notifier = ServersNotifier(fakeApi, autoLoad: false);
+        await notifier.loadServers();
 
-      expect(notifier.state.servers.length, 1);
-      final s = notifier.state.servers.first;
-      expect(s.id, 's1');
-      expect(s.bannerPreset, 4);
-      expect(s.accentColor, 0xFF112233);
-      expect(s.category, 'DevOps');
-      expect(notifier.state.selectedServerId, 's1');
-    });
+        expect(notifier.state.servers.length, 1);
+        final s = notifier.state.servers.first;
+        expect(s.id, 's1');
+        expect(s.bannerPreset, 4);
+        expect(s.accentColor, 0xFF112233);
+        expect(s.category, 'DevOps');
+        expect(notifier.state.selectedServerId, 's1');
+      },
+    );
 
     test('createServer success and error handling', () async {
       final fakeApi = FakeServersApiClient();
@@ -205,9 +230,9 @@ class FakeServersApiClient extends ApiClient {
         'name': 'Servidor Carregado',
         'owner_id': 'u1',
         'channels': [
-          {'id': 'c1', 'server_id': 's1', 'name': 'geral', 'type': 'text'}
+          {'id': 'c1', 'server_id': 's1', 'name': 'geral', 'type': 'text'},
         ],
-      }
+      },
     ];
   }
 
@@ -215,6 +240,7 @@ class FakeServersApiClient extends ApiClient {
   Future<Map<String, dynamic>?> createServer(
     String name, {
     String? iconUrl,
+    String? bannerUrl,
     bool isPublic = false,
     String? description,
     String? category,
@@ -223,6 +249,8 @@ class FakeServersApiClient extends ApiClient {
     return {
       'id': 's-created',
       'name': name,
+      'icon_url': iconUrl,
+      'banner_url': bannerUrl,
       'owner_id': 'u1',
       'channels': <dynamic>[],
       'is_public': isPublic,

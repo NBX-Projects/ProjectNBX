@@ -25,6 +25,7 @@ type Server struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	IconURL     string     `json:"icon_url,omitempty"`
+	BannerURL   string     `json:"banner_url,omitempty"`
 	OwnerID     string     `json:"owner_id"`
 	Channels    []*Channel `json:"channels,omitempty"`
 	MemberCount int        `json:"member_count"`
@@ -38,6 +39,7 @@ type Server struct {
 type CreateServerRequest struct {
 	Name        string `json:"name"`
 	IconURL     string `json:"icon_url,omitempty"`
+	BannerURL   string `json:"banner_url,omitempty"`
 	IsPublic    bool   `json:"is_public"`
 	Description string `json:"description,omitempty"`
 	Category    string `json:"category,omitempty"`
@@ -47,6 +49,7 @@ type CreateServerRequest struct {
 type UpdateServerRequest struct {
 	Name        *string `json:"name,omitempty"`
 	IconURL     *string `json:"icon_url,omitempty"`
+	BannerURL   *string `json:"banner_url,omitempty"`
 	IsPublic    *bool   `json:"is_public,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Category    *string `json:"category,omitempty"`
@@ -113,4 +116,3 @@ type PublicServerDTO struct {
 	IsMember          bool   `json:"is_member"`
 	JoinRequestStatus string `json:"join_request_status"` // "none", "pending", "approved", "rejected"
 }
-

@@ -47,8 +47,9 @@ class ServerInfoCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
               fontSize: 11.5,
-              color:
-                  isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              color: isDark
+                  ? AppColors.darkTextMuted
+                  : AppColors.lightTextMuted,
             ),
           ),
         ),
@@ -92,8 +93,9 @@ class ServerInfoCard extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
-              color:
-                  isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              color: isDark
+                  ? AppColors.darkTextMuted
+                  : AppColors.lightTextMuted,
             ),
           ),
           const SizedBox(height: 12),
@@ -111,12 +113,7 @@ class ServerInfoCard extends StatelessWidget {
             server.isPublic ? 'Público' : 'Privado',
           ),
           const SizedBox(height: 8),
-          _buildInfoRow(
-            context,
-            LucideIcons.shield,
-            'Cargos',
-            '$rolesCount',
-          ),
+          _buildInfoRow(context, LucideIcons.shield, 'Cargos', '$rolesCount'),
           if (server.isPublic) ...[
             const SizedBox(height: 8),
             _buildInfoRow(
