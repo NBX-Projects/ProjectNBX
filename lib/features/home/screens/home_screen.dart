@@ -550,14 +550,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        int crossAxisCount = 4;
-        if (constraints.maxWidth < 600) {
-          crossAxisCount = 1;
-        } else if (constraints.maxWidth < 900) {
-          crossAxisCount = 2;
-        } else if (constraints.maxWidth < 1200) {
-          crossAxisCount = 3;
-        }
+        final availableWidth = constraints.maxWidth;
+        final isMobile = availableWidth < 600;
+        final crossAxisCount = isMobile
+            ? 1
+            : (availableWidth / 310).floor().clamp(2, 8);
 
         return GridView.builder(
           shrinkWrap: true,

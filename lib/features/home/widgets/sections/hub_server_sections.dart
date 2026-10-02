@@ -47,16 +47,15 @@ class HubServerSections extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        int crossAxisCount = 3;
-        if (constraints.maxWidth < 650) {
-          crossAxisCount = 1;
-        } else if (constraints.maxWidth < 1050) {
-          crossAxisCount = 2;
-        } else if (constraints.maxWidth < 1440) {
-          crossAxisCount = 3;
-        } else {
-          crossAxisCount = 4;
-        }
+        final availableWidth = constraints.maxWidth;
+        final isMobile = availableWidth < 600;
+
+        // Mobile (celular): 100% da largura (1 coluna).
+        // Telas maiores (tablets, desktop, 4K): cards com largura estável/fixa (~300px a 340px)
+        // para nunca se esticarem horizontalmente.
+        final crossAxisCount = isMobile
+            ? 1
+            : (availableWidth / 310).floor().clamp(2, 8);
 
         return GridView.builder(
           shrinkWrap: true,
@@ -66,7 +65,7 @@ class HubServerSections extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 14,
             mainAxisSpacing: 14,
-            mainAxisExtent: 226,
+            mainAxisExtent: 238,
           ),
           itemBuilder: (context, index) {
             final server = list[index];
@@ -85,13 +84,23 @@ class HubServerSections extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (servers.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle(isDark, 'MEUS SERVIDORES', 0),
-          const SizedBox(height: 12),
-          const CreateServerCard(),
-        ],
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionTitle(isDark, 'MEUS SERVIDORES', 0),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isMobile ? double.infinity : 320,
+                ),
+                child: const CreateServerCard(),
+              ),
+            ],
+          );
+        },
       );
     }
 
