@@ -38,6 +38,7 @@ class ServerRightSidebar extends StatefulWidget {
   final VoidCallback? onToggleTransmission;
   final double? width;
   final ServerSidebarTab initialTab;
+  final VoidCallback? onToggleCollapse;
 
   const ServerRightSidebar({
     super.key,
@@ -65,6 +66,7 @@ class ServerRightSidebar extends StatefulWidget {
     this.onToggleTransmission,
     this.width,
     this.initialTab = ServerSidebarTab.canais,
+    this.onToggleCollapse,
   });
 
   @override
@@ -93,13 +95,17 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
     final activeCh = widget.activeChannel;
 
     // Conexão de voz ativa caso o estado do Provider ou o canal conectado estejam setados
-    final hasActiveVoice = widget.isInVoice ||
+    final hasActiveVoice =
+        widget.isInVoice ||
         widget.voiceState.isConnected ||
         widget.connectedVoiceChannelId != null;
 
     final channelName = widget.channels
         .firstWhere(
-          (c) => c.id == (widget.connectedVoiceChannelId ?? widget.voiceState.connectedChannelId),
+          (c) =>
+              c.id ==
+              (widget.connectedVoiceChannelId ??
+                  widget.voiceState.connectedChannelId),
           orElse: () => activeCh ?? widget.channels.first,
         )
         .name;
@@ -108,11 +114,6 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
       width: widget.width ?? (isMobile ? double.infinity : 260),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141520) : const Color(0xFFFAF9F6),
-        border: Border(
-          left: BorderSide(
-            color: isDark ? const Color(0xFF202234) : const Color(0xFFE2E8F0),
-          ),
-        ),
       ),
       child: Column(
         children: [
@@ -120,15 +121,6 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
           Container(
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: isDark
-                      ? const Color(0xFF202234)
-                      : const Color(0xFFE2E8F0),
-                ),
-              ),
-            ),
             child: Row(
               children: [
                 _buildTabButton(
@@ -197,7 +189,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
             color: isSelected
                 ? (isDark ? const Color(0xFF25283E) : const Color(0xFFE2E8F0))
                 : Colors.transparent,
-            borderRadius: AppRadius.borderSm,
+            borderRadius: AppRadius.borderXs,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -251,7 +243,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
             ? _getChannelVoiceParticipants(activeCh.id)
             : <VoiceParticipantInfo>[];
 
-        final isConnectedToActiveVoice = activeCh != null &&
+        final isConnectedToActiveVoice =
+            activeCh != null &&
             widget.isInVoice &&
             (widget.connectedVoiceChannelId == activeCh.id ||
                 (widget.connectedVoiceChannelId == null &&
@@ -268,7 +261,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                   color: isDark
                       ? const Color(0xFF1E2034)
                       : const Color(0xFFFFFFFF),
-                  borderRadius: AppRadius.borderMd,
+                  borderRadius: AppRadius.borderXs,
                   border: Border.all(
                     color: isDark
                         ? const Color(0xFF333758)
@@ -309,15 +302,18 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 child: Row(
                                   children: [
                                     Icon(
-                                      isConnectedToActiveVoice || activeParticipants.isNotEmpty
+                                      isConnectedToActiveVoice ||
+                                              activeParticipants.isNotEmpty
                                           ? LucideIcons.volume2
                                           : LucideIcons.hash,
                                       size: 15,
-                                      color: isConnectedToActiveVoice || activeParticipants.isNotEmpty
+                                      color:
+                                          isConnectedToActiveVoice ||
+                                              activeParticipants.isNotEmpty
                                           ? const Color(0xFF22C55E)
                                           : (isDark
-                                              ? Colors.white70
-                                              : const Color(0xFF0F172A)),
+                                                ? Colors.white70
+                                                : const Color(0xFF0F172A)),
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
@@ -341,9 +337,10 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                           vertical: 1.5,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFF14532D,
-                                          ).withValues(alpha: isDark ? 0.6 : 0.15),
+                                          color: const Color(0xFF14532D)
+                                              .withValues(
+                                                alpha: isDark ? 0.6 : 0.15,
+                                              ),
                                           borderRadius: AppRadius.borderPill,
                                         ),
                                         child: Text(
@@ -365,8 +362,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                             message: isConnectedToActiveVoice
                                 ? 'Você está nesta chamada (clique para sair)'
                                 : (widget.isInVoice
-                                    ? 'Mudar voz para #${activeCh.name}'
-                                    : 'Entrar na chamada de #${activeCh.name}'),
+                                      ? 'Mudar voz para #${activeCh.name}'
+                                      : 'Entrar na chamada de #${activeCh.name}'),
                             child: InkWell(
                               onTap: () {
                                 if (isConnectedToActiveVoice) {
@@ -381,13 +378,21 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 padding: const EdgeInsets.all(5),
                                 decoration: BoxDecoration(
                                   color: isConnectedToActiveVoice
-                                      ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                                      : const Color(0xFF22C55E).withValues(alpha: 0.12),
+                                      ? const Color(
+                                          0xFFEF4444,
+                                        ).withValues(alpha: 0.15)
+                                      : const Color(
+                                          0xFF22C55E,
+                                        ).withValues(alpha: 0.12),
                                   borderRadius: AppRadius.borderSm,
                                   border: Border.all(
                                     color: isConnectedToActiveVoice
-                                        ? const Color(0xFFEF4444).withValues(alpha: 0.4)
-                                        : const Color(0xFF22C55E).withValues(alpha: 0.3),
+                                        ? const Color(
+                                            0xFFEF4444,
+                                          ).withValues(alpha: 0.4)
+                                        : const Color(
+                                            0xFF22C55E,
+                                          ).withValues(alpha: 0.3),
                                     width: 0.8,
                                   ),
                                 ),
@@ -395,8 +400,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                   isConnectedToActiveVoice
                                       ? LucideIcons.phoneOff
                                       : (widget.isInVoice
-                                          ? LucideIcons.phoneForwarded
-                                          : LucideIcons.phoneCall),
+                                            ? LucideIcons.phoneForwarded
+                                            : LucideIcons.phoneCall),
                                   size: 13,
                                   color: isConnectedToActiveVoice
                                       ? const Color(0xFFEF4444)
@@ -429,8 +434,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                             final devLabel = p.device == 'mobile'
                                 ? ' (Celular)'
                                 : p.device == 'desktop'
-                                    ? ' (Desktop)'
-                                    : '';
+                                ? ' (Desktop)'
+                                : '';
                             final displayName =
                                 '${p.username}$devLabel${isMe ? " (Você)" : ""}';
                             return InkWell(
@@ -461,7 +466,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
             // 2. Real Other Channels from Server
             ...otherChannels.map((c) {
               final chParticipants = _getChannelVoiceParticipants(c.id);
-              final isConnectedToThisChannel = widget.isInVoice &&
+              final isConnectedToThisChannel =
+                  widget.isInVoice &&
                   (widget.connectedVoiceChannelId == c.id ||
                       (widget.connectedVoiceChannelId == null &&
                           widget.voiceState.connectedChannelId == c.id));
@@ -486,15 +492,18 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                               child: Row(
                                 children: [
                                   Icon(
-                                    isConnectedToThisChannel || chParticipants.isNotEmpty
+                                    isConnectedToThisChannel ||
+                                            chParticipants.isNotEmpty
                                         ? LucideIcons.volume2
                                         : LucideIcons.hash,
                                     size: 14,
-                                    color: isConnectedToThisChannel || chParticipants.isNotEmpty
+                                    color:
+                                        isConnectedToThisChannel ||
+                                            chParticipants.isNotEmpty
                                         ? const Color(0xFF22C55E)
                                         : (isDark
-                                            ? Colors.white54
-                                            : const Color(0xFF64748B)),
+                                              ? Colors.white54
+                                              : const Color(0xFF64748B)),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
@@ -508,8 +517,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                         color: isConnectedToThisChannel
                                             ? const Color(0xFF22C55E)
                                             : (isDark
-                                                ? Colors.white70
-                                                : const Color(0xFF334155)),
+                                                  ? Colors.white70
+                                                  : const Color(0xFF334155)),
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -523,7 +532,9 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF14532D)
-                                            .withValues(alpha: isDark ? 0.6 : 0.15),
+                                            .withValues(
+                                              alpha: isDark ? 0.6 : 0.15,
+                                            ),
                                         borderRadius: AppRadius.borderPill,
                                       ),
                                       child: Text(
@@ -545,8 +556,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                           message: isConnectedToThisChannel
                               ? 'Você está nesta chamada (clique para sair)'
                               : (widget.isInVoice
-                                  ? 'Mudar voz para #${c.name}'
-                                  : 'Entrar na chamada de #${c.name}'),
+                                    ? 'Mudar voz para #${c.name}'
+                                    : 'Entrar na chamada de #${c.name}'),
                           child: InkWell(
                             onTap: () {
                               if (isConnectedToThisChannel) {
@@ -561,17 +572,25 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
                                 color: isConnectedToThisChannel
-                                    ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                                    ? const Color(
+                                        0xFFEF4444,
+                                      ).withValues(alpha: 0.15)
                                     : (chParticipants.isNotEmpty
-                                        ? const Color(0xFF22C55E).withValues(alpha: 0.12)
-                                        : Colors.transparent),
+                                          ? const Color(
+                                              0xFF22C55E,
+                                            ).withValues(alpha: 0.12)
+                                          : Colors.transparent),
                                 borderRadius: AppRadius.borderSm,
                                 border: Border.all(
                                   color: isConnectedToThisChannel
-                                      ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                                      ? const Color(
+                                          0xFFEF4444,
+                                        ).withValues(alpha: 0.4)
                                       : (chParticipants.isNotEmpty
-                                          ? const Color(0xFF22C55E).withValues(alpha: 0.3)
-                                          : Colors.transparent),
+                                            ? const Color(
+                                                0xFF22C55E,
+                                              ).withValues(alpha: 0.3)
+                                            : Colors.transparent),
                                   width: 0.8,
                                 ),
                               ),
@@ -579,14 +598,16 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                                 isConnectedToThisChannel
                                     ? LucideIcons.phoneOff
                                     : (widget.isInVoice
-                                        ? LucideIcons.phoneForwarded
-                                        : LucideIcons.phoneCall),
+                                          ? LucideIcons.phoneForwarded
+                                          : LucideIcons.phoneCall),
                                 size: 13,
                                 color: isConnectedToThisChannel
                                     ? const Color(0xFFEF4444)
                                     : (chParticipants.isNotEmpty
-                                        ? const Color(0xFF22C55E)
-                                        : (isDark ? Colors.white38 : const Color(0xFF94A3B8))),
+                                          ? const Color(0xFF22C55E)
+                                          : (isDark
+                                                ? Colors.white38
+                                                : const Color(0xFF94A3B8))),
                               ),
                             ),
                           ),
@@ -612,8 +633,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                             final devLabel = p.device == 'mobile'
                                 ? ' (Celular)'
                                 : p.device == 'desktop'
-                                    ? ' (Desktop)'
-                                    : '';
+                                ? ' (Desktop)'
+                                : '';
                             return InkWell(
                               onTap: () {
                                 if (p.isTransmitting && !isMe) {
@@ -652,7 +673,7 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
                   'user': {
                     'username': widget.username.isNotEmpty
                         ? widget.username
-                        : 'Você'
+                        : 'Você',
                   },
                   'role': 'owner',
                 },
@@ -724,7 +745,8 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
 
             ...membersList.map((m) {
               final user = m['user'] as Map<String, dynamic>? ?? {};
-              final uName = user['username'] ?? m['username'] ?? widget.username;
+              final uName =
+                  user['username'] ?? m['username'] ?? widget.username;
               final role = m['role'] ?? 'member';
               final isOwner = role == 'owner';
 
@@ -743,7 +765,9 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
         );
 
       case ServerSidebarTab.resumo:
-        final allParticipants = widget.voiceParticipants.values.expand((m) => m.values);
+        final allParticipants = widget.voiceParticipants.values.expand(
+          (m) => m.values,
+        );
         final membersInCall = widget.voiceParticipants.values.fold<int>(
           0,
           (sum, m) => sum + m.values.where((p) => p.isInVoice).length,

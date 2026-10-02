@@ -13,7 +13,7 @@ import 'package:justtalking/core/theme/theme_controller.dart';
 import 'package:justtalking/core/updater/update_controller.dart';
 import 'package:justtalking/core/updater/widgets/update_banner.dart';
 import 'package:justtalking/features/auth/controllers/auth_controller.dart';
-import 'package:justtalking/features/home/widgets/hub_left_rail.dart';
+// import 'package:justtalking/features/home/widgets/hub_left_rail.dart';
 import 'package:justtalking/features/home/widgets/hub_right_panel.dart';
 import 'package:justtalking/features/home/widgets/public_server_card.dart';
 import 'package:justtalking/features/home/widgets/sections/hub_header.dart';
@@ -23,11 +23,11 @@ import 'package:justtalking/features/servers/controllers/servers_controller.dart
 import 'package:justtalking/features/servers/models/public_server_model.dart';
 import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:justtalking/features/servers/widgets/create_server_dialog.dart';
+import 'package:justtalking/features/servers/widgets/invite_member_dialog.dart';
 import 'package:justtalking/features/servers/widgets/server_workspace_view.dart';
 import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -43,22 +43,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  static const String _prefRightSidebarKey = 'nbx_right_sidebar_visible';
   bool _isServerRightSidebarVisible = false;
+  bool _isServerWorkspaceSidebarVisible = true;
   List<PublicServerModel> _publicServers = [];
   bool _isLoadingPublicServers = false;
 
   @override
   void initState() {
     super.initState();
-    SharedPreferences.getInstance().then((prefs) {
-      if (mounted) {
-        final saved = prefs.getBool(_prefRightSidebarKey);
-        if (saved != null) {
-          setState(() => _isServerRightSidebarVisible = saved);
-        }
-      }
-    });
+    _isServerRightSidebarVisible = false;
     _searchController.addListener(() {
       if (mounted) {
         setState(() => _searchQuery = _searchController.text);
@@ -146,13 +139,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _handleToggleSidebar() {
-    if (mounted && _activeTab == 'home') {
+    if (!mounted) return;
+    if (_activeTab == 'home') {
       setState(
         () => _isServerRightSidebarVisible = !_isServerRightSidebarVisible,
       );
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setBool(_prefRightSidebarKey, _isServerRightSidebarVisible);
-      });
+    } else {
+      setState(
+        () => _isServerWorkspaceSidebarVisible =
+            !_isServerWorkspaceSidebarVisible,
+      );
     }
   }
 
@@ -252,52 +248,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onOpenSearch: _handleQuickSearch,
               topMicKey: _topMicKey,
               topHeadphonesKey: _topHeadphonesKey,
-              isRightSidebarVisible: _isServerRightSidebarVisible,
+              isRightSidebarVisible: _activeTab == 'home'
+                  ? _isServerRightSidebarVisible
+                  : _isServerWorkspaceSidebarVisible,
               onToggleRightSidebar: _handleToggleSidebar,
+              server: selectedServer,
+              onBackToHome: () => setState(() {
+                _activeTab = 'home';
+                _isServerRightSidebarVisible = false;
+              }),
+              onInviteMembers: selectedServer != null
+                  ? () => InviteMemberDialog.show(
+                        context,
+                        selectedServer,
+                        onMembersUpdated: () => ref
+                            .read(serversControllerProvider.notifier)
+                            .loadServers(),
+                      )
+                  : null,
             ),
 
             // Notification banner se houver atualização disponível
             const UpdateBanner(),
 
-            // Layout Principal (Left Rail + Workspace / Hub)
+            // Layout Principal (Workspace / Hub)
             Expanded(
               child: isMobile && selectedServer != null
                   ? ServerWorkspaceView(
                       server: selectedServer,
-                      onBackToHome: () => setState(() => _activeTab = 'home'),
-                      onRightSidebarVisibilityChanged: (visible) => setState(
-                        () => _isServerRightSidebarVisible = visible,
-                      ),
+                      isRightSidebarVisible: _isServerWorkspaceSidebarVisible,
+                      onToggleRightSidebar: _handleToggleSidebar,
+                      onBackToHome: () => setState(() {
+                        _activeTab = 'home';
+                        _isServerRightSidebarVisible = false;
+                      }),
                     )
                   : Row(
                       children: [
-                        HubLeftRail(
-                          servers: userJoinedServers,
-                          activeTab: _activeTab,
-                          onTabChanged: (tab) {
-                            setState(() => _activeTab = tab);
-                            final isServer =
-                                userJoinedServers.any((s) => s.id == tab);
-                            if (isServer) {
-                              ref
-                                  .read(serversControllerProvider.notifier)
-                                  .selectServer(tab);
-                            }
-                          },
-                        ),
+                        // DESABILITADO: Não teremos mais barra na esquerda no Hub
+                        // HubLeftRail(
+                        //   servers: userJoinedServers,
+                        //   activeTab: _activeTab,
+                        //   onTabChanged: (tab) {
+                        //     setState(() {
+                        //       _activeTab = tab;
+                        //       if (tab == 'home') {
+                        //         _isServerRightSidebarVisible = false;
+                        //       }
+                        //     });
+                        //     final isServer =
+                        //         userJoinedServers.any((s) => s.id == tab);
+                        //     if (isServer) {
+                        //       ref
+                        //           .read(serversControllerProvider.notifier)
+                        //           .selectServer(tab);
+                        //     }
+                        //   },
+                        // ),
 
                         // MAIN HUB CONTENT OR ACTIVE SERVER WORKSPACE
                         Expanded(
                           child: selectedServer != null
                               ? ServerWorkspaceView(
                                   server: selectedServer,
-                                  onBackToHome: () =>
-                                      setState(() => _activeTab = 'home'),
-                                  onRightSidebarVisibilityChanged: (visible) =>
-                                      setState(
-                                        () => _isServerRightSidebarVisible =
-                                            visible,
-                                      ),
+                                  isRightSidebarVisible:
+                                      _isServerWorkspaceSidebarVisible,
+                                  onToggleRightSidebar: _handleToggleSidebar,
+                                  onBackToHome: () => setState(() {
+                                    _activeTab = 'home';
+                                    _isServerRightSidebarVisible = false;
+                                  }),
                                 )
                               : Row(
                                   crossAxisAlignment:
@@ -349,7 +369,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                       )
                                                       .selectServer(serverId);
                                                   setState(
-                                                    () => _activeTab = serverId,
+                                                    () {
+                                                      _activeTab = serverId;
+                                                      _isServerWorkspaceSidebarVisible =
+                                                          true;
+                                                    },
                                                   );
                                                 },
                                               ),

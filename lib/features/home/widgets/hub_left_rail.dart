@@ -69,31 +69,31 @@ class HubLeftRail extends ConsumerWidget {
 
     final navItems = [
       {'id': 'home', 'icon': LucideIcons.house, 'tooltip': strings.navHome},
-      {
-        'id': 'favorites',
-        'icon': LucideIcons.star,
-        'tooltip': 'Servidores Favoritos',
-      },
-      {
-        'id': 'friends',
-        'icon': LucideIcons.user,
-        'tooltip': 'Amigos & Mensagens Diretas',
-      },
-      {
-        'id': 'explore',
-        'icon': LucideIcons.compass,
-        'tooltip': 'Explorar Comunidades',
-      },
-      {
-        'id': 'trending',
-        'icon': LucideIcons.flame,
-        'tooltip': 'Em Alta & Ao Vivo',
-      },
-      {
-        'id': 'tools',
-        'icon': LucideIcons.slidersHorizontal,
-        'tooltip': 'Ferramentas & Personalização',
-      },
+      // {
+      //   'id': 'favorites',
+      //   'icon': LucideIcons.star,
+      //   'tooltip': 'Servidores Favoritos',
+      // },
+      // {
+      //   'id': 'friends',
+      //   'icon': LucideIcons.user,
+      //   'tooltip': 'Amigos & Mensagens Diretas',
+      // },
+      // {
+      //   'id': 'explore',
+      //   'icon': LucideIcons.compass,
+      //   'tooltip': 'Explorar Comunidades',
+      // },
+      // {
+      //   'id': 'trending',
+      //   'icon': LucideIcons.flame,
+      //   'tooltip': 'Em Alta & Ao Vivo',
+      // },
+      // {
+      //   'id': 'tools',
+      //   'icon': LucideIcons.slidersHorizontal,
+      //   'tooltip': 'Ferramentas & Personalização',
+      // },
     ];
 
     return Container(
@@ -121,12 +121,12 @@ class HubLeftRail extends ConsumerWidget {
             );
           }),
 
-          const SizedBox(height: 6),
-          Divider(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-            indent: 14,
-            endIndent: 14,
-          ),
+          // const SizedBox(height: 6),
+          // Divider(
+          //   color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          //   indent: 14,
+          //   endIndent: 14,
+          // ),
           const SizedBox(height: 6),
 
           // 2. Real Servers List from PostgreSQL

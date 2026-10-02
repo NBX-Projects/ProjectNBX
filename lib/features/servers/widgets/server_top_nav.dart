@@ -55,7 +55,10 @@ class ServerTopNav extends StatelessWidget {
     final isMobile = screenWidth < 768;
 
     final isConnectedToThisChannel =
-        isInVoice && connectedVoiceChannelId != null && activeChannel != null && connectedVoiceChannelId == activeChannel!.id;
+        isInVoice &&
+        connectedVoiceChannelId != null &&
+        activeChannel != null &&
+        connectedVoiceChannelId == activeChannel!.id;
     final isConnectedToOtherChannel =
         isInVoice &&
         connectedVoiceChannelId != null &&
@@ -67,20 +70,13 @@ class ServerTopNav extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141522) : const Color(0xFFF8FAFC),
-        border: Border(
-          bottom: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          ),
-        ),
       ),
       child: Row(
         children: [
           // Back Button
           IconButton(
             icon: const Icon(LucideIcons.arrowLeft, size: 18),
-            tooltip: viewMode == ServerViewMode.channel
-                ? 'Voltar ao Início do Servidor'
-                : 'Voltar ao Hub Principal',
+            tooltip: 'Voltar',
             color: isDark
                 ? AppColors.darkTextSecondary
                 : AppColors.lightTextSecondary,
@@ -158,15 +154,15 @@ class ServerTopNav extends StatelessWidget {
                     color: isTransmitting
                         ? const Color(0xFFEF4444).withValues(alpha: 0.15)
                         : (isDark
-                            ? const Color(0xFF1E2030)
-                            : const Color(0xFFE2E8F0)),
+                              ? const Color(0xFF1E2030)
+                              : const Color(0xFFE2E8F0)),
                     borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isTransmitting
                           ? const Color(0xFFEF4444).withValues(alpha: 0.5)
                           : (isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder),
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder),
                     ),
                   ),
                   child: Icon(
@@ -177,8 +173,8 @@ class ServerTopNav extends StatelessWidget {
                     color: isTransmitting
                         ? const Color(0xFFEF4444)
                         : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary),
                   ),
                 ),
               ),
@@ -194,10 +190,10 @@ class ServerTopNav extends StatelessWidget {
               message: isConnectingVoice
                   ? 'Conectando ao LiveKit...'
                   : (isConnectedToThisChannel
-                      ? 'Desconectar da voz (#${activeChannel!.name})'
-                      : (isConnectedToOtherChannel
-                          ? 'Mudar voz para #${activeChannel!.name}'
-                          : 'Conectar voz em #${activeChannel!.name}')),
+                        ? 'Desconectar da voz (#${activeChannel!.name})'
+                        : (isConnectedToOtherChannel
+                              ? 'Mudar voz para #${activeChannel!.name}'
+                              : 'Conectar voz em #${activeChannel!.name}')),
               child: InkWell(
                 onTap: onToggleVoiceChannel,
                 mouseCursor: SystemMouseCursors.click,
@@ -211,19 +207,27 @@ class ServerTopNav extends StatelessWidget {
                     color: isConnectingVoice
                         ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
                         : (isConnectedToThisChannel
-                            ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                            : (isConnectedToOtherChannel
-                                ? const Color(0xFF3B82F6).withValues(alpha: 0.15)
-                                : const Color(0xFF10B981).withValues(alpha: 0.15))),
+                              ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                              : (isConnectedToOtherChannel
+                                    ? const Color(
+                                        0xFF3B82F6,
+                                      ).withValues(alpha: 0.15)
+                                    : const Color(
+                                        0xFF10B981,
+                                      ).withValues(alpha: 0.15))),
                     borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: isConnectingVoice
                           ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
                           : (isConnectedToThisChannel
-                              ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                              : (isConnectedToOtherChannel
-                                  ? const Color(0xFF3B82F6).withValues(alpha: 0.5)
-                                  : const Color(0xFF10B981).withValues(alpha: 0.5))),
+                                ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                                : (isConnectedToOtherChannel
+                                      ? const Color(
+                                          0xFF3B82F6,
+                                        ).withValues(alpha: 0.5)
+                                      : const Color(
+                                          0xFF10B981,
+                                        ).withValues(alpha: 0.5))),
                     ),
                   ),
                   child: Row(
@@ -243,16 +247,16 @@ class ServerTopNav extends StatelessWidget {
                           isConnectedToThisChannel
                               ? LucideIcons.phoneOff
                               : (isConnectedToOtherChannel
-                                  ? LucideIcons.phoneForwarded
-                                  : LucideIcons.phoneCall),
+                                    ? LucideIcons.phoneForwarded
+                                    : LucideIcons.phoneCall),
                           size: 15,
                           color: isConnectingVoice
                               ? const Color(0xFFF59E0B)
                               : (isConnectedToThisChannel
-                                  ? const Color(0xFFEF4444)
-                                  : (isConnectedToOtherChannel
-                                      ? const Color(0xFF60A5FA)
-                                      : const Color(0xFF10B981))),
+                                    ? const Color(0xFFEF4444)
+                                    : (isConnectedToOtherChannel
+                                          ? const Color(0xFF60A5FA)
+                                          : const Color(0xFF10B981))),
                         ),
                       if (!isMobile) ...[
                         const SizedBox(width: 6),
@@ -260,20 +264,20 @@ class ServerTopNav extends StatelessWidget {
                           isConnectingVoice
                               ? 'Conectando...'
                               : (isConnectedToThisChannel
-                                  ? 'Desconectar'
-                                  : (isConnectedToOtherChannel
-                                      ? 'Mudar para cá'
-                                      : 'Conectar Voz')),
+                                    ? 'Desconectar'
+                                    : (isConnectedToOtherChannel
+                                          ? 'Mudar para cá'
+                                          : 'Conectar Voz')),
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: isConnectingVoice
                                 ? const Color(0xFFF59E0B)
                                 : (isConnectedToThisChannel
-                                    ? const Color(0xFFEF4444)
-                                    : (isConnectedToOtherChannel
-                                        ? const Color(0xFF60A5FA)
-                                        : const Color(0xFF10B981))),
+                                      ? const Color(0xFFEF4444)
+                                      : (isConnectedToOtherChannel
+                                            ? const Color(0xFF60A5FA)
+                                            : const Color(0xFF10B981))),
                           ),
                         ),
                       ],
@@ -298,18 +302,12 @@ class ServerTopNav extends StatelessWidget {
               decoration: BoxDecoration(
                 color: accentColor.withValues(alpha: 0.15),
                 borderRadius: AppRadius.borderSm,
-                border: Border.all(
-                  color: accentColor.withValues(alpha: 0.5),
-                ),
+                border: Border.all(color: accentColor.withValues(alpha: 0.5)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    LucideIcons.userPlus,
-                    size: 13,
-                    color: accentColor,
-                  ),
+                  Icon(LucideIcons.userPlus, size: 13, color: accentColor),
                   if (!isMobile) ...[
                     const SizedBox(width: 6),
                     Text(
@@ -342,8 +340,8 @@ class ServerTopNav extends StatelessWidget {
                     color: totalInVoice > 0
                         ? const Color(0xFF22C55E)
                         : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary),
                   ),
                   tooltip: 'Canais e Membros',
                   onPressed: onOpenMobileChannelsSheet,
@@ -361,12 +359,16 @@ class ServerTopNav extends StatelessWidget {
                         color: const Color(0xFF22C55E),
                         borderRadius: AppRadius.borderPill,
                         border: Border.all(
-                          color: isDark ? const Color(0xFF141522) : Colors.white,
+                          color: isDark
+                              ? const Color(0xFF141522)
+                              : Colors.white,
                           width: 1.5,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF22C55E).withValues(alpha: 0.5),
+                            color: const Color(
+                              0xFF22C55E,
+                            ).withValues(alpha: 0.5),
                             blurRadius: 6,
                           ),
                         ],

@@ -22,10 +22,8 @@ import 'package:justtalking/features/servers/controllers/servers_controller.dart
 import 'package:justtalking/features/servers/models/channel_model.dart';
 import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:justtalking/features/servers/models/server_workspace_enums.dart';
-import 'package:justtalking/features/servers/widgets/invite_member_dialog.dart';
 import 'package:justtalking/features/servers/widgets/server_home_view.dart';
 import 'package:justtalking/features/servers/widgets/server_right_sidebar.dart';
-import 'package:justtalking/features/servers/widgets/server_top_nav.dart';
 import 'package:justtalking/features/voice/controllers/audio_devices_controller.dart';
 import 'package:justtalking/features/voice/controllers/audio_settings_controller.dart';
 import 'package:justtalking/features/voice/controllers/screen_share_controller.dart';
@@ -47,12 +45,16 @@ class ServerWorkspaceView extends ConsumerStatefulWidget {
   final ServerModel server;
   final VoidCallback onBackToHome;
   final ValueChanged<bool>? onRightSidebarVisibilityChanged;
+  final bool? isRightSidebarVisible;
+  final VoidCallback? onToggleRightSidebar;
 
   const ServerWorkspaceView({
     super.key,
     required this.server,
     required this.onBackToHome,
     this.onRightSidebarVisibilityChanged,
+    this.isRightSidebarVisible,
+    this.onToggleRightSidebar,
   });
 
   @override
@@ -2464,101 +2466,135 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
             voiceNotifier,
           );
 
-    final topNavWidget = ServerTopNav(
-      server: widget.server,
-      isDark: isDark,
-      viewMode: _viewMode,
-      activeChannel: _activeChannel,
-      accentColor: _selectedAccentColor,
-      isRightSidebarVisible: _isRightSidebarVisible,
-      isTransmitting: _isTransmitting,
-      isInVoice: _isInVoice,
-      isConnectingVoice: _isConnectingLiveKit,
-      connectedVoiceChannelId: _connectedVoiceChannelId,
-      onToggleTransmission: _toggleTransmission,
-      onToggleVoiceChannel: () {
-        if (_activeChannel == null) return;
-        if (_isInVoice && _connectedVoiceChannelId == _activeChannel!.id) {
-          _leaveVoice();
-        } else {
-          _openHybridChannel(_activeChannel!, joinVoice: true);
-        }
-      },
-      totalInVoice: _voiceParticipants.values.fold<int>(
-        0,
-        (sum, m) => sum + m.values.where((p) => p.isInVoice).length,
-      ),
-      onBackToHome: () {
-        if (_viewMode == ServerViewMode.channel) {
-          setState(() => _viewMode = ServerViewMode.home);
-          _setWatchingRemoteStream(null);
-        } else {
-          widget.onBackToHome();
-        }
-      },
-      onGoToHub: widget.onBackToHome,
-      onInviteMembers: () => InviteMemberDialog.show(
-        context,
-        widget.server,
-        onMembersUpdated: _loadServerMembers,
-      ),
-      onToggleRightSidebar: () =>
-          setState(() => _isRightSidebarVisible = !_isRightSidebarVisible),
-      onOpenMobileChannelsSheet: () => _showMobileChannelsBottomSheet(
-        context,
-        isDark,
-        effectiveChannels,
-        username,
-      ),
-    );
+    final effectiveSidebarVisible =
+        widget.isRightSidebarVisible ?? _isRightSidebarVisible;
+
+    void toggleSidebar() {
+      if (widget.onToggleRightSidebar != null) {
+        widget.onToggleRightSidebar!();
+      } else {
+        setState(() => _isRightSidebarVisible = !_isRightSidebarVisible);
+      }
+    }
 
     if (isMobile) {
-      return Column(
+      return Stack(
         children: [
-          topNavWidget,
-          Expanded(child: stageWidget),
+          stageWidget,
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton.small(
+              backgroundColor: _selectedAccentColor,
+              foregroundColor: Colors.black,
+              tooltip: 'Canais e Membros',
+              onPressed: () => _showMobileChannelsBottomSheet(
+                context,
+                isDark,
+                effectiveChannels,
+                username,
+              ),
+              child: const Icon(LucideIcons.layers, size: 18),
+            ),
+          ),
         ],
       );
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: [
-        // 1. Palco Principal: TopNav no topo + Conteúdo/Chat abaixo
-        Expanded(
-          child: Column(
-            children: [
-              topNavWidget,
-              Expanded(child: stageWidget),
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Palco Principal: Conteúdo/Chat
+            Expanded(child: stageWidget),
+
+            // 2. Barra Lateral Direita: Estende-se até o topo junto à TopBar
+            if (effectiveSidebarVisible)
+              ServerRightSidebar(
+                isDark: isDark,
+                server: widget.server,
+                channels: effectiveChannels,
+                activeChannel: _activeChannel,
+                username: username,
+                accentColor: _selectedAccentColor,
+                clientSessionId: _clientSessionId,
+                voiceParticipants: _voiceParticipants,
+                serverMembers: _serverMembers,
+                voiceState: voiceState,
+                voiceNotifier: voiceNotifier,
+                isInVoice: _isInVoice,
+                onChannelSelected: (c) => _openHybridChannel(c),
+                onJoinVoiceChannel: (c) =>
+                    _openHybridChannel(c, joinVoice: true),
+                onWatchStream: (p) => _setWatchingRemoteStream(p),
+                onLeaveVoice: _leaveVoice,
+                onMembersUpdated: _loadServerMembers,
+                onToggleMic: _handleMicToggle,
+                onToggleDeafened: _handleDeafenToggle,
+                isTransmitting: _isTransmitting,
+                onToggleTransmission: _toggleTransmission,
+                connectedVoiceChannelId: _connectedVoiceChannelId,
+                onToggleCollapse: toggleSidebar,
+              ),
+          ],
         ),
 
-        // 2. Barra Lateral Direita: Estende-se até o topo junto à TopBar
-        if (_isRightSidebarVisible)
-          ServerRightSidebar(
-            isDark: isDark,
-            server: widget.server,
-            channels: effectiveChannels,
-            activeChannel: _activeChannel,
-            username: username,
-            accentColor: _selectedAccentColor,
-            clientSessionId: _clientSessionId,
-            voiceParticipants: _voiceParticipants,
-            serverMembers: _serverMembers,
-            voiceState: voiceState,
-            voiceNotifier: voiceNotifier,
-            isInVoice: _isInVoice,
-            onChannelSelected: (c) => _openHybridChannel(c),
-            onJoinVoiceChannel: (c) => _openHybridChannel(c, joinVoice: true),
-            onWatchStream: (p) => _setWatchingRemoteStream(p),
-            onLeaveVoice: _leaveVoice,
-            onMembersUpdated: _loadServerMembers,
-            onToggleMic: _handleMicToggle,
-            onToggleDeafened: _handleDeafenToggle,
-            isTransmitting: _isTransmitting,
-            onToggleTransmission: _toggleTransmission,
-            connectedVoiceChannelId: _connectedVoiceChannelId,
+        // Botão flutuante retrátil para expandir a barra lateral quando estiver recolhida
+        if (!effectiveSidebarVisible)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Tooltip(
+              message: 'Mostrar canais e membros (Ctrl + B)',
+              child: InkWell(
+                onTap: toggleSidebar,
+                borderRadius: AppRadius.borderSm,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E2030) : Colors.white,
+                    borderRadius: AppRadius.borderSm,
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.panelRightOpen,
+                        size: 15,
+                        color: _selectedAccentColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Canais e Membros',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
       ],
     );

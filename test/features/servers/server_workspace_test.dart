@@ -328,14 +328,14 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Top nav is rendered
-      expect(find.byType(ServerTopNav), findsOneWidget);
+      // Server workspace and right sidebar are rendered
+      expect(find.byType(ServerWorkspaceView), findsOneWidget);
       expect(find.text('Dev Hub Workspace'), findsAtLeastNWidgets(1));
 
       // Right sidebar is rendered
       expect(find.byType(ServerRightSidebar), findsOneWidget);
 
-      // Go to Hub via Início button
+      // Go to Hub via Início button if present
       final hubPill = find.text('Início');
       if (hubPill.evaluate().isNotEmpty) {
         await tester.tap(hubPill.first);

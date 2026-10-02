@@ -11,6 +11,7 @@ import 'package:justtalking/core/theme/app_radius.dart';
 import 'package:justtalking/core/widgets/window_controls.dart';
 import 'package:justtalking/features/auth/models/user_model.dart';
 import 'package:justtalking/features/home/widgets/topbar/user_status_chip.dart';
+import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -28,6 +29,10 @@ class HubTopBar extends ConsumerWidget {
   final GlobalKey topHeadphonesKey;
   final bool isRightSidebarVisible;
   final VoidCallback? onToggleRightSidebar;
+  final ServerModel? server;
+  final VoidCallback? onBackToHome;
+  final VoidCallback? onInviteMembers;
+  final Color? accentColor;
 
   const HubTopBar({
     super.key,
@@ -42,6 +47,10 @@ class HubTopBar extends ConsumerWidget {
     required this.topHeadphonesKey,
     this.isRightSidebarVisible = false,
     this.onToggleRightSidebar,
+    this.server,
+    this.onBackToHome,
+    this.onInviteMembers,
+    this.accentColor,
   });
 
   @override
@@ -102,52 +111,115 @@ class HubTopBar extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // 1. Esquerda: Na Home -> Logo + "Just Talking" / No Servidor -> Botão Home com Logo + Nome do Servidor
           Flexible(
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 68,
-                  child: Center(
-                    child: SvgPicture.asset(
-                      isDark
-                          ? 'assets/brand/nbx-projects-symbol-dark.svg'
-                          : 'assets/brand/nbx-projects-symbol.svg',
-                      width: 32,
-                      height: 32,
-                      semanticsLabel: 'Símbolo do Just Talking',
+                if (server == null) ...[
+                  SizedBox(
+                    width: 68,
+                    child: Center(
+                      child: SvgPicture.asset(
+                        isDark
+                            ? 'assets/brand/nbx-projects-symbol-dark.svg'
+                            : 'assets/brand/nbx-projects-symbol.svg',
+                        width: 32,
+                        height: 32,
+                        semanticsLabel: 'Símbolo do Just Talking',
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  strings.appTitle,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
+                  const SizedBox(width: 4),
+                  Text(
+                    strings.appTitle,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
                   ),
-                ),
-
-                // TODO: IMPLEMENTAÇÃO FUTURA - Campo de busca rápida e status de voz extraídos
-                // para o componente [HubTopBarSearchSection], temporariamente oculto da barra superior.
-                // if (!isMobile && onOpenSearch != null)
-                //   HubTopBarSearchSection(
-                //     isDark: isDark,
-                //     onOpenSearch: onOpenSearch!,
-                //     totalInVoice: totalInVoice,
-                //   ),
+                ] else ...[
+                  // Modo Servidor: Logo com ícone clicável para "Home"
+                  Tooltip(
+                    message: 'Home',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: InkWell(
+                        onTap: onBackToHome,
+                        mouseCursor: SystemMouseCursors.click,
+                        borderRadius: AppRadius.borderSm,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          margin: const EdgeInsets.only(left: 14),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : Colors.black.withValues(alpha: 0.04),
+                            borderRadius: AppRadius.borderSm,
+                            border: Border.all(
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                LucideIcons.home,
+                                size: 16,
+                                color: isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      server!.name,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
 
-          // 2. Ações à Direita: Áudio, AFK, Atividade, Usuário e Controles de Janela
+          // 2. Ações à Direita: Convidar, Áudio, Painel Lateral, Usuário e Controles de Janela
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Botão Convidar (ao lado do microfone, quando dentro de um servidor)
+              if (server != null && onInviteMembers != null) ...[
+                _TopBarInviteButton(
+                  isDark: isDark,
+                  accentColor: accentColor ?? const Color(0xFFF5CBA7),
+                  onTap: onInviteMembers!,
+                ),
+                const SizedBox(width: 8),
+              ],
+
               for (final action in actions) ...[
                 _TopBarIconButton(
                   key: action.key,
@@ -382,6 +454,82 @@ class HubTopBarSearchSection extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _TopBarInviteButton extends StatefulWidget {
+  final bool isDark;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  const _TopBarInviteButton({
+    required this.isDark,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  @override
+  State<_TopBarInviteButton> createState() => _TopBarInviteButtonState();
+}
+
+class _TopBarInviteButtonState extends State<_TopBarInviteButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Tooltip(
+        message: 'Convidar Membros',
+        child: InkWell(
+          onTap: widget.onTap,
+          mouseCursor: SystemMouseCursors.click,
+          borderRadius: AppRadius.borderXs,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 10,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? widget.accentColor.withValues(alpha: 0.22)
+                  : widget.accentColor.withValues(alpha: 0.12),
+              borderRadius: AppRadius.borderXs,
+              border: Border.all(
+                color: _isHovered
+                    ? widget.accentColor.withValues(alpha: 0.7)
+                    : widget.accentColor.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.userPlus, size: 14, color: widget.accentColor),
+                if (!isMobile) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    'Convidar',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: widget.isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
