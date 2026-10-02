@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:justtalking/core/localization/locale_controller.dart';
 import 'package:justtalking/core/theme/app_colors.dart';
 import 'package:justtalking/core/theme/app_radius.dart';
+import 'package:justtalking/core/updater/update_controller.dart';
+import 'package:justtalking/core/updater/widgets/top_bar_update_button.dart';
 import 'package:justtalking/core/widgets/window_controls.dart';
 import 'package:justtalking/features/auth/models/user_model.dart';
 import 'package:justtalking/features/home/widgets/topbar/user_status_chip.dart';
@@ -225,6 +227,14 @@ class HubTopBar extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
               ],
+
+              // Botão de Atualização (ao lado do botão de microfone, visível quando há update)
+              TopBarUpdateButton(
+                isDark: isDark,
+                accentColor: accentColor,
+              ),
+              if (ref.watch(updateControllerProvider).isUpdateAvailable)
+                const SizedBox(width: 8),
 
               for (final action in actions) ...[
                 _TopBarIconButton(

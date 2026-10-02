@@ -28,7 +28,7 @@ void main() {
 
     await tester.pumpWidget(
       const ProviderScope(
-        child: ProjectNBXApp(),
+        child: ProjectNBXApp(initialBootComplete: true),
       ),
     );
     await tester.pumpAndSettle();
@@ -74,7 +74,7 @@ void main() {
               ..state = const ServersState(servers: []),
           ),
         ],
-        child: const ProjectNBXApp(),
+        child: const ProjectNBXApp(initialBootComplete: true),
       ),
     );
     await tester.pumpAndSettle();
@@ -143,7 +143,7 @@ void main() {
               ),
           ),
         ],
-        child: const ProjectNBXApp(),
+        child: const ProjectNBXApp(initialBootComplete: true),
       ),
     );
     await tester.pumpAndSettle();
@@ -175,7 +175,7 @@ void main() {
                 ),
             ),
           ],
-          child: const ProjectNBXApp(),
+          child: const ProjectNBXApp(initialBootComplete: true),
         ),
       );
       await tester.pumpAndSettle();
@@ -208,7 +208,7 @@ void main() {
                 ),
             ),
           ],
-          child: const ProjectNBXApp(),
+          child: const ProjectNBXApp(initialBootComplete: true),
         ),
       );
       await tester.pumpAndSettle();
@@ -247,7 +247,7 @@ void main() {
                 ),
             ),
           ],
-          child: const ProjectNBXApp(),
+          child: const ProjectNBXApp(initialBootComplete: true),
         ),
       );
       await tester.pumpAndSettle();

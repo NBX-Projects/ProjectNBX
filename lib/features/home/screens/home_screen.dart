@@ -11,7 +11,6 @@ import 'package:justtalking/core/theme/app_colors.dart';
 import 'package:justtalking/core/theme/app_radius.dart';
 import 'package:justtalking/core/theme/theme_controller.dart';
 import 'package:justtalking/core/updater/update_controller.dart';
-import 'package:justtalking/core/updater/widgets/update_banner.dart';
 import 'package:justtalking/features/auth/controllers/auth_controller.dart';
 // import 'package:justtalking/features/home/widgets/hub_left_rail.dart';
 import 'package:justtalking/features/home/widgets/hub_right_panel.dart';
@@ -272,9 +271,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   : null,
               isMobile: isMobile,
             ),
-
-            // Notification banner se houver atualização disponível
-            const UpdateBanner(),
 
             // Layout Principal (Workspace / Hub)
             Expanded(

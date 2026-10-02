@@ -70,8 +70,8 @@ class UpdateController extends StateNotifier<UpdateState> {
     }
   }
 
-  /// Inicia o fluxo de download e instalação
-  Future<void> downloadAndInstall({bool silentInstaller = false}) async {
+  /// Inicia o download da atualização em segundo plano com acompanhamento de progresso
+  Future<void> startDownload() async {
     final release = state.latestRelease;
     if (release == null) return;
 
@@ -96,7 +96,8 @@ class UpdateController extends StateNotifier<UpdateState> {
           downloadUrl: asset.downloadUrl,
           filename: asset.name,
           onProgress: (received, total) {
-            final progress = total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
+            final progress =
+                total > 0 ? (received / total).clamp(0.0, 1.0) : 0.0;
             state = state.copyWith(
               downloadProgress: progress,
               bytesDownloaded: received,
@@ -107,13 +108,8 @@ class UpdateController extends StateNotifier<UpdateState> {
 
         state = state.copyWith(
           status: UpdateStatus.readyToInstall,
+          downloadProgress: 1.0,
           downloadedFilePath: filePath,
-        );
-
-        // Executa o instalador do Windows
-        await _service.launchWindowsInstaller(
-          filePath,
-          silent: silentInstaller,
         );
       } catch (e) {
         debugPrint('[UpdateController] Erro ao baixar atualização: $e');
@@ -132,6 +128,31 @@ class UpdateController extends StateNotifier<UpdateState> {
     } else {
       // Web ou outras plataformas: abre a página de release
       await openReleasePage();
+    }
+  }
+
+  /// Aplica a atualização já baixada (executa o instalador do Windows)
+  Future<void> applyUpdate({bool silent = true}) async {
+    final filePath = state.downloadedFilePath;
+    if (filePath == null) {
+      // Se ainda não tiver o binário baixado, executa o fluxo completo
+      await downloadAndInstall(silentInstaller: silent);
+      return;
+    }
+
+    if (!kIsWeb && Platform.isWindows) {
+      await _service.launchWindowsInstaller(
+        filePath,
+        silent: silent,
+      );
+    }
+  }
+
+  /// Inicia o fluxo completo de download e instalação imediata
+  Future<void> downloadAndInstall({bool silentInstaller = true}) async {
+    await startDownload();
+    if (state.status == UpdateStatus.readyToInstall) {
+      await applyUpdate(silent: silentInstaller);
     }
   }
 

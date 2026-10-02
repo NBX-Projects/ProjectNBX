@@ -64,17 +64,50 @@ class ServersState {
 class ServersNotifier extends StateNotifier<ServersState> {
   final ApiClient _apiClient;
   final Ref? _ref;
+  static const String _keyCachedServers = 'cached_servers_list';
 
   ServersNotifier(this._apiClient, {Ref? ref, bool autoLoad = true})
     : _ref = ref,
       super(const ServersState()) {
+    _loadCachedServers();
     if (autoLoad) {
       loadServers();
     }
   }
 
+  Future<void> _loadCachedServers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString(_keyCachedServers);
+      if (cachedJson != null && state.servers.isEmpty) {
+        final list = (jsonDecode(cachedJson) as List)
+            .whereType<Map<String, dynamic>>()
+            .map(ServerModel.fromJson)
+            .toList();
+        if (list.isNotEmpty && state.servers.isEmpty) {
+          state = state.copyWith(
+            servers: list,
+            selectedServerId: state.selectedServerId ?? list.first.id,
+            selectedChannelId: (list.first.channels.isNotEmpty)
+                ? (state.selectedChannelId ?? list.first.channels.first.id)
+                : null,
+            isLoading: false,
+          );
+        }
+      }
+    } catch (_) {
+      // Ignora erro de leitura do cache local
+    }
+  }
+
   Future<void> loadServers() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    // Se já temos servidores vindos do cache, não bloqueia a UI com spinner
+    if (state.servers.isEmpty) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    } else {
+      state = state.copyWith(clearError: true);
+    }
+
     try {
       final rawList = await _apiClient.getServers();
       _ref?.read(apiStatusProvider.notifier).markOnline();
@@ -102,6 +135,14 @@ class ServersNotifier extends StateNotifier<ServersState> {
         }
         return server;
       }).toList();
+
+      // Salva no cache local para carregamento instantâneo nas próximas aberturas
+      try {
+        await prefs.setString(
+          _keyCachedServers,
+          jsonEncode(parsed.map((s) => s.toJson()).toList()),
+        );
+      } catch (_) {}
 
       state = state.copyWith(
         servers: parsed,

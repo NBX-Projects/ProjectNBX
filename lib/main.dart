@@ -13,6 +13,7 @@ import 'package:justtalking/core/theme/app_theme.dart';
 import 'package:justtalking/core/theme/theme_controller.dart';
 import 'package:justtalking/core/updater/update_controller.dart';
 import 'package:justtalking/core/widgets/api_offline_screen.dart';
+import 'package:justtalking/core/widgets/app_splash_screen.dart';
 import 'package:justtalking/features/auth/controllers/auth_controller.dart';
 import 'package:justtalking/features/auth/screens/login_screen.dart';
 import 'package:justtalking/features/home/screens/home_screen.dart';
@@ -67,16 +68,24 @@ void main() async {
 }
 
 class ProjectNBXApp extends ConsumerStatefulWidget {
-  const ProjectNBXApp({super.key});
+  final bool initialBootComplete;
+
+  const ProjectNBXApp({
+    super.key,
+    this.initialBootComplete = false,
+  });
 
   @override
   ConsumerState<ProjectNBXApp> createState() => _ProjectNBXAppState();
 }
 
 class _ProjectNBXAppState extends ConsumerState<ProjectNBXApp> {
+  late bool _isBootComplete;
+
   @override
   void initState() {
     super.initState();
+    _isBootComplete = widget.initialBootComplete;
     _setupGlobalShortcuts();
   }
 
@@ -162,11 +171,19 @@ class _ProjectNBXAppState extends ConsumerState<ProjectNBXApp> {
       themeMode: themeMode,
       themeAnimationDuration: const Duration(milliseconds: 300),
       themeAnimationCurve: Curves.easeInOut,
-      home: apiStatus.isOffline
-          ? const ApiOfflineScreen()
-          : (authState.isAuthenticated
-                ? const HomeScreen()
-                : const LoginScreen()),
+      home: !_isBootComplete
+          ? AppSplashScreen(
+              onComplete: () {
+                if (mounted) {
+                  setState(() => _isBootComplete = true);
+                }
+              },
+            )
+          : (apiStatus.isOffline
+              ? const ApiOfflineScreen()
+              : (authState.isAuthenticated
+                    ? const HomeScreen()
+                    : const LoginScreen())),
     );
   }
 }

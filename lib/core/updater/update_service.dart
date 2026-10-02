@@ -142,11 +142,13 @@ class UpdateService {
   /// Executa o instalador do Windows em modo desanexado e encerra a aplicação atual
   Future<void> launchWindowsInstaller(
     String installerPath, {
-    bool silent = false,
+    bool silent = true,
   }) async {
     if (!Platform.isWindows) return;
 
-    final args = silent ? ['/SILENT', '/NORESTART'] : <String>[];
+    final args = silent
+        ? ['/SILENT', '/CLOSEAPPLICATIONS', '/FORCECLOSEAPPLICATIONS']
+        : <String>[];
     debugPrint(
       '[UpdateService] Disparando instalador Windows: $installerPath com args: $args',
     );
