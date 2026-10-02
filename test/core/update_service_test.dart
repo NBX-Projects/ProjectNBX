@@ -70,6 +70,31 @@ void main() {
       expect(apkAsset, isNotNull);
       expect(apkAsset!.name, equals('ProjectNBX-v1.2.0-android.apk'));
     });
+
+    test('Parses JustTalking asset naming correctly', () {
+      final json = {
+        'tag_name': 'v1.3.0',
+        'name': 'Release 1.3.0',
+        'body': 'Novidades',
+        'html_url': 'https://github.com/NBX-Projects/ProjectNBX/releases/tag/v1.3.0',
+        'assets': [
+          {
+            'name': 'JustTalking-Setup-v1.3.0-windows.exe',
+            'browser_download_url': 'https://github.com/download/setup.exe',
+            'size': 45000000,
+          },
+          {
+            'name': 'JustTalking-v1.3.0-android.apk',
+            'browser_download_url': 'https://github.com/download/app.apk',
+            'size': 32000000,
+          },
+        ],
+      };
+
+      final release = ReleaseInfo.fromJson(json);
+      expect(release.windowsInstallerAsset?.name, equals('JustTalking-Setup-v1.3.0-windows.exe'));
+      expect(release.androidApkAsset?.name, equals('JustTalking-v1.3.0-android.apk'));
+    });
   });
 
   group('UpdateController Tests', () {

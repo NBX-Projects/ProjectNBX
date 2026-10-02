@@ -52,7 +52,7 @@ jobs:
 
           @"
           APP_ENV=production
-          APP_NAME=ProjectNBX
+          APP_NAME=Just Talking
           API_BASE_URL=$env:PROD_API_BASE_URL
           WS_BASE_URL=$env:PROD_WS_BASE_URL
           LIVEKIT_URL=$env:PROD_LIVEKIT_URL
@@ -79,15 +79,58 @@ jobs:
           }
           & $isccPath /DAppVersion=$env:RELEASE_VERSION windows/installer/projectnbx_setup.iss
 
+      - name: Assinar Executáveis Windows (Authenticode)
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $releaseExe = "build/windows/x64/runner/Release/justtalking.exe"
+          if (!(Test-Path $releaseExe)) {
+            $releaseExe = (Get-ChildItem -Path "build/windows/x64/runner/Release/*.exe" | Select-Object -First 1).FullName
+          }
+          $installer = Get-ChildItem -Path build/windows/installer -Filter "*.exe" | Select-Object -First 1
+
+          if (![string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
+            Write-Host "Certificado de Code Signing comercial encontrado em Secrets. Assinando..."
+            $pfxBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
+            $pfxPath = "$env:TEMP\codesign.pfx"
+            [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+            $secPass = ConvertTo-SecureString $env:CERT_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $secPass
+
+            if (Test-Path $releaseExe) {
+              Set-AuthenticodeSignature -FilePath $releaseExe -Certificate $cert -TimestampServer "http://timestamp.digicert.com" -HashAlgorithm SHA256
+            }
+            if ($installer) {
+              Set-AuthenticodeSignature -FilePath $installer.FullName -Certificate $cert -TimestampServer "http://timestamp.digicert.com" -HashAlgorithm SHA256
+            }
+            Remove-Item -Force $pfxPath
+          } else {
+            Write-Host "Gerando certificado de assinatura de integridade NBX Projects..."
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Just Talking, O=NBX Projects" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(5)
+            if (Test-Path $releaseExe) {
+              Set-AuthenticodeSignature -FilePath $releaseExe -Certificate $cert -TimestampServer "http://timestamp.digicert.com" -HashAlgorithm SHA256
+            }
+            if ($installer) {
+              Set-AuthenticodeSignature -FilePath $installer.FullName -Certificate $cert -TimestampServer "http://timestamp.digicert.com" -HashAlgorithm SHA256
+            }
+          }
+
       - name: Preparar Arquivos de Distribuição
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist
           $installer = Get-ChildItem -Path build/windows/installer -Filter "*.exe" | Select-Object -First 1
           if ($installer) {
+            Copy-Item $installer.FullName "dist/JustTalking-Setup-$env:RELEASE_VERSION-windows.exe"
             Copy-Item $installer.FullName "dist/ProjectNBX-Setup-$env:RELEASE_VERSION-windows.exe"
           }
-          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/ProjectNBX-$env:RELEASE_VERSION-windows-portable.zip" -Force
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/JustTalking-$env:RELEASE_VERSION-windows-portable.zip" -Force
+          Copy-Item "dist/JustTalking-$env:RELEASE_VERSION-windows-portable.zip" "dist/ProjectNBX-$env:RELEASE_VERSION-windows-portable.zip"
+
+          # Gerar checksums SHA-256 de integridade
+          Get-FileHash -Algorithm SHA256 dist/* | ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } | Out-File -FilePath dist/SHA256SUMS.txt -Encoding ascii
 
       - name: Upload Artifact (Ações do GitHub)
         uses: actions/upload-artifact@v4
@@ -103,7 +146,10 @@ jobs:
           tag_name: ${{ env.RELEASE_VERSION }}
           name: ${{ env.RELEASE_VERSION }}
           files: |
+            dist/JustTalking-Setup-*-windows.exe
+            dist/JustTalking-*-windows-portable.zip
             dist/ProjectNBX-Setup-*-windows.exe
             dist/ProjectNBX-*-windows-portable.zip
+            dist/SHA256SUMS.txt
           draft: false
           prerelease: false

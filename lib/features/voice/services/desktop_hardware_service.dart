@@ -130,8 +130,10 @@ class DesktopHardwareService {
             final appLower = app.toLowerCase();
             final titleLower = title.toLowerCase();
 
-            // 1. Never capture ProjectNBX itself (current process / app)
-            if ((pid != null && pid == io.pid) || appLower == 'projectnbx.exe') {
+            // 1. Never capture Just Talking / ProjectNBX itself (current process / app)
+            if ((pid != null && pid == io.pid) ||
+                appLower == 'justtalking.exe' ||
+                appLower == 'projectnbx.exe') {
               continue;
             }
 

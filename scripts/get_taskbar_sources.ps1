@@ -168,8 +168,8 @@ public class NativeSourceDetector {
                         } catch {}
 
                         string appLower = app.ToLower();
-                        // Filter out ProjectNBX itself (only the exact projectnbx.exe process, preserving IDEs/terminals/editors working on projectNBX)
-                        if (appLower == "projectnbx.exe") return true;
+                        // Filter out Just Talking / ProjectNBX itself (only the exact process, preserving IDEs/terminals/editors working on projectNBX)
+                        if (appLower == "projectnbx.exe" || appLower == "justtalking.exe") return true;
 
                         // Filter out Windows internal background/system hosts
                         if (appLower.Contains("textinputhost") ||

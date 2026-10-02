@@ -131,7 +131,7 @@ class UpdateBanner extends ConsumerWidget {
                   ),
                 ] else ...[
                   Text(
-                    'Uma versão atualizada do ProjectNBX está pronta para download.',
+                    'Uma versão atualizada do Just Talking está pronta para download.',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: isDark

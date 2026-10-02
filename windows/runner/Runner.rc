@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "projectnbx" "\0"
+            VALUE "CompanyName", "NBX Projects" "\0"
+            VALUE "FileDescription", "Just Talking" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "projectnbx" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "projectnbx.exe" "\0"
-            VALUE "ProductName", "projectnbx" "\0"
+            VALUE "InternalName", "justtalking" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 NBX Projects. All rights reserved." "\0"
+            VALUE "OriginalFilename", "justtalking.exe" "\0"
+            VALUE "ProductName", "Just Talking" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

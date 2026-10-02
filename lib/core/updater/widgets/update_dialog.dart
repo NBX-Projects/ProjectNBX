@@ -92,7 +92,7 @@ class UpdateDialog extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Atualização do ProjectNBX',
+                          'Atualização do Just Talking',
                           style: GoogleFonts.spaceGrotesk(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,

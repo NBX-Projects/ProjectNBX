@@ -306,7 +306,7 @@ enum AppShortcutAction {
   checkForUpdates(
     id: 'system.check_updates',
     title: 'Verificar Atualizações do Sistema',
-    description: 'Consulta o servidor em busca de novas versões do ProjectNBX.',
+    description: 'Consulta o servidor em busca de novas versões do Just Talking.',
     category: ShortcutCategory.system,
     icon: LucideIcons.refreshCw,
     defaultCombination: ShortcutCombination(

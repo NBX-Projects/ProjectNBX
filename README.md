@@ -18,6 +18,7 @@
 - 🌍 **Versão de Navegador (GitHub Pages):** [https://nbx-projects.github.io/ProjectNBX/](https://nbx-projects.github.io/ProjectNBX/)
 - 🪟 **Instalador Windows (`.exe`):** Baixe em [Releases](https://github.com/NBX-Projects/ProjectNBX/releases/latest) (com auto-atualizador integrado)
 - 📱 **Instalador Android (`.apk`):** Baixe em [Releases](https://github.com/NBX-Projects/ProjectNBX/releases/latest)
+- 🔏 **Assinatura de Código:** Assinatura digital gratuita fornecida pela [SignPath Foundation](https://signpath.org) (*Free code signing provided by the SignPath Foundation*).
 
 ---
 
@@ -131,8 +132,8 @@ flutter build web --release --base-href "/ProjectNBX/" --dart-define-from-file=.
 
 ### 🏷️ Distribuição Automatizada (GitHub Actions)
 Ao criar e enviar uma tag Git (ex: `v1.0.1`), três workflows independentes no GitHub Actions geram e publicam automaticamente os artefatos:
-- **Windows (`build-windows.yml`)**: Gera o instalador unificado `ProjectNBX-Setup-<tag>-windows.exe` (via Inno Setup) e zip portátil.
-- **Android (`build-android.yml`)**: Gera o APK `ProjectNBX-<tag>-android.apk`.
+- **Windows (`build-windows.yml`)**: Gera o instalador oficial `JustTalking-Setup-<tag>-windows.exe` (via Inno Setup), pacote portátil `.zip` e checksums SHA-256.
+- **Android (`build-android.yml`)**: Gera o APK oficial `JustTalking-<tag>-android.apk`.
 - **Web (`deploy-web.yml`)**: Compila e faz deploy automático no **GitHub Pages**.
 
 ---
