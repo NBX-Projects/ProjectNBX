@@ -717,11 +717,29 @@ func (h *Hub) ClearRoomVoiceStates(serverID, channelID string) {
 // UpdateParticipantTransmitting atualiza se o usuário está transmitindo tela (capturado via track LiveKit)
 func (h *Hub) UpdateParticipantTransmitting(serverID, channelID, userID string, isTransmitting bool) {
 	h.mu.Lock()
-	sessionID := userID
 	var updated *models.VoiceParticipantState
 	if sMap, ok := h.voiceStates[serverID]; ok {
-		if st, exists := sMap[sessionID]; exists {
-			st.IsTransmitting = isTransmitting
+		for _, st := range sMap {
+			if st.UserID == userID || st.SessionID == userID {
+				st.IsTransmitting = isTransmitting
+				if channelID != "" {
+					st.ChannelID = channelID
+				}
+				copyState := *st
+				updated = &copyState
+				break
+			}
+		}
+		if updated == nil && isTransmitting {
+			st := &models.VoiceParticipantState{
+				SessionID:      userID,
+				UserID:         userID,
+				ServerID:       serverID,
+				ChannelID:      channelID,
+				IsInVoice:      true,
+				IsTransmitting: true,
+			}
+			sMap[userID] = st
 			copyState := *st
 			updated = &copyState
 		}
@@ -738,3 +756,4 @@ func (h *Hub) UpdateParticipantTransmitting(serverID, channelID, userID string, 
 		})
 	}
 }
+

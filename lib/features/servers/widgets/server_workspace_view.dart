@@ -550,7 +550,12 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         } else if (event is TrackUnsubscribedEvent) {
           if (event.track is RemoteVideoTrack) {
             final uid = event.participant.identity;
-            if (uid.isNotEmpty && _voiceParticipants[channelId]?[uid] != null) {
+            final stillHasVideo = event.participant.videoTrackPublications.any(
+              (p) => p.kind == TrackType.VIDEO && !p.muted && p.track != null,
+            );
+            if (!stillHasVideo &&
+                uid.isNotEmpty &&
+                _voiceParticipants[channelId]?[uid] != null) {
               _voiceParticipants[channelId]![uid] =
                   _voiceParticipants[channelId]![uid]!.copyWith(
                     isTransmitting: false,
@@ -741,24 +746,46 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
     if (uid.isEmpty) return;
     final uname = participant.name.isNotEmpty ? participant.name : uid;
     setState(() {
+      VoiceParticipantInfo? existing;
+      final chMap = _voiceParticipants.putIfAbsent(channelId, () => {});
+      existing = chMap[uid];
+      if (existing == null) {
+        for (final m in _voiceParticipants.values) {
+          if (m.containsKey(uid)) {
+            existing = m[uid];
+            break;
+          }
+        }
+      }
+
       _removeParticipantFromAllVoiceChannels(
         uid,
         participant.sid.isNotEmpty ? participant.sid : null,
       );
       if (joined) {
-        final chMap = _voiceParticipants.putIfAbsent(channelId, () => {});
+        final hasVideoTrack = participant.videoTrackPublications.any(
+          (pub) => pub.kind == TrackType.VIDEO && !pub.muted,
+        );
+        final isSharingScreen = participant.isScreenShareEnabled();
+        final isTransmitting = (existing?.isTransmitting ?? false) ||
+            hasVideoTrack ||
+            isSharingScreen;
+
         chMap[uid] = VoiceParticipantInfo(
           sessionId: participant.sid.isNotEmpty ? participant.sid : uid,
           userId: uid,
           username: uname,
           serverId: widget.server.id,
           channelId: channelId,
-          device: 'desktop',
+          device: existing?.device ?? 'desktop',
           isInVoice: true,
           isConnecting: false,
-          isTransmitting: false,
+          isTransmitting: isTransmitting,
+          streamTitle: existing?.streamTitle,
+          previewType: existing?.previewType,
+          thumbnail: existing?.thumbnail,
           isMuted: participant.isMuted,
-          isDeafened: false,
+          isDeafened: existing?.isDeafened ?? false,
           isSpeaking: participant.isSpeaking,
           updatedAt: DateTime.now(),
         );
@@ -1319,6 +1346,17 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
               isTransmitting: true,
               sessionId: sId.isNotEmpty ? sId : existing.sessionId,
             );
+          } else {
+            chMap[bId] = VoiceParticipantInfo(
+              sessionId: sId.isNotEmpty ? sId : bId,
+              userId: bId,
+              username: 'Transmitindo',
+              serverId: widget.server.id,
+              channelId: cId,
+              isInVoice: true,
+              isTransmitting: true,
+              updatedAt: DateTime.now(),
+            );
           }
         });
       }
@@ -1727,6 +1765,13 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       );
       _connectToLiveKitVoice(channel.id);
     }
+    try {
+      ref.read(websocketClientProvider).sendEvent(
+        'VOICE_SYNC',
+        <String, dynamic>{},
+        serverId: widget.server.id,
+      );
+    } catch (_) {}
     ref.read(serversControllerProvider.notifier).selectChannel(channel.id);
     _loadChannelFromApi(channel.id);
   }
