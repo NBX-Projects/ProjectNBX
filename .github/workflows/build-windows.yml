@@ -133,7 +133,8 @@ jobs:
           Copy-Item "dist/JustTalking-$env:RELEASE_VERSION-windows-portable.zip" "dist/ProjectNBX-$env:RELEASE_VERSION-windows-portable.zip"
 
           # Gerar checksums SHA-256 de integridade
-          Get-FileHash -Algorithm SHA256 dist/* | ForEach-Object { "$($_.Hash)  $([System.IO.Path]::GetFileName($_.Path))" } | Out-File -FilePath dist/SHA256SUMS.txt -Encoding ascii
+          $hashes = Get-ChildItem -Path dist -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" }
+          $hashes | Out-File -FilePath dist/SHA256SUMS.txt -Encoding ascii
 
       - name: Upload Artifact (Ações do GitHub)
         uses: actions/upload-artifact@v4
