@@ -227,15 +227,12 @@ class HubTopBar extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
               ],
-
               // Botão de Atualização (ao lado do botão de microfone, visível quando há update)
-              TopBarUpdateButton(
-                isDark: isDark,
-                accentColor: accentColor,
-              ),
-              if (ref.watch(updateControllerProvider).isUpdateAvailable)
-                const SizedBox(width: 8),
-
+              if (isDesktopPlatform) ...[
+                TopBarUpdateButton(isDark: isDark, accentColor: accentColor),
+                if (ref.watch(updateControllerProvider).isUpdateAvailable)
+                  const SizedBox(width: 8),
+              ],
               for (final action in actions) ...[
                 _TopBarIconButton(
                   key: action.key,

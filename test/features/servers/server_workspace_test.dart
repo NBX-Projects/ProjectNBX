@@ -50,7 +50,9 @@ void main() {
   );
 
   group('Server Components Tests', () {
-    testWidgets('ServerTopNav renders server name and triggers callbacks', (tester) async {
+    testWidgets('ServerTopNav renders server name and triggers callbacks', (
+      tester,
+    ) async {
       var backPressed = false;
       var goToHubPressed = false;
       var invitePressed = false;
@@ -116,54 +118,57 @@ void main() {
       }
     });
 
-    testWidgets('ServerTopNav renders minimalist transmission and voice icons in channel view', (tester) async {
-      var transmitToggled = false;
-      var voiceToggled = false;
+    testWidgets(
+      'ServerTopNav renders minimalist transmission and voice icons in channel view',
+      (tester) async {
+        var transmitToggled = false;
+        var voiceToggled = false;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ServerTopNav(
-              server: testServer,
-              isDark: true,
-              viewMode: ServerViewMode.channel,
-              activeChannel: testChannels.first,
-              accentColor: Colors.blue,
-              isRightSidebarVisible: false,
-              isTransmitting: false,
-              isInVoice: false,
-              isConnectingVoice: false,
-              onToggleTransmission: () => transmitToggled = true,
-              onToggleVoiceChannel: () => voiceToggled = true,
-              onBackToHome: () {},
-              onInviteMembers: () {},
-              onToggleRightSidebar: () {},
-              onOpenMobileChannelsSheet: () {},
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ServerTopNav(
+                server: testServer,
+                isDark: true,
+                viewMode: ServerViewMode.channel,
+                activeChannel: testChannels.first,
+                accentColor: Colors.blue,
+                isRightSidebarVisible: false,
+                isTransmitting: false,
+                isInVoice: false,
+                isConnectingVoice: false,
+                onToggleTransmission: () => transmitToggled = true,
+                onToggleVoiceChannel: () => voiceToggled = true,
+                onBackToHome: () {},
+                onInviteMembers: () {},
+                onToggleRightSidebar: () {},
+                onOpenMobileChannelsSheet: () {},
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      final screenShareFinder = find.byIcon(LucideIcons.screenShare);
-      expect(screenShareFinder, findsOneWidget);
-      await tester.tap(screenShareFinder);
-      expect(transmitToggled, isTrue);
+        final screenShareFinder = find.byIcon(LucideIcons.screenShare);
+        expect(screenShareFinder, findsOneWidget);
+        await tester.tap(screenShareFinder);
+        expect(transmitToggled, isTrue);
 
-      final phoneFinder = find.byIcon(LucideIcons.phoneCall);
-      expect(phoneFinder, findsOneWidget);
-      await tester.tap(phoneFinder);
-      expect(voiceToggled, isTrue);
-    });
+        final phoneFinder = find.byIcon(LucideIcons.phoneCall);
+        expect(phoneFinder, findsOneWidget);
+        await tester.tap(phoneFinder);
+        expect(voiceToggled, isTrue);
+      },
+    );
 
-    testWidgets('ServerHomeView renders hero banner and channels', (tester) async {
+    testWidgets('ServerHomeView renders hero banner and channels', (
+      tester,
+    ) async {
       final fakeApi = FakeWorkspaceApiClient();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            apiClientProvider.overrideWithValue(fakeApi),
-          ],
+          overrides: [apiClientProvider.overrideWithValue(fakeApi)],
           child: MaterialApp(
             home: Scaffold(
               body: ServerHomeView(
@@ -189,7 +194,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Dev Hub Workspace'), findsOneWidget);
-      expect(find.text('MEMBROS DO SERVIDOR'), findsOneWidget);
+      expect(find.text('MEMBROS DO SERVIDOR'), findsNothing);
     });
 
     testWidgets('ServerRightSidebar renders and toggles tabs', (tester) async {
@@ -233,7 +238,9 @@ void main() {
       }
     });
 
-    testWidgets('DockedVoiceFooter renders active connection and actions', (tester) async {
+    testWidgets('DockedVoiceFooter renders active connection and actions', (
+      tester,
+    ) async {
       final voiceNotifier = VoiceStateNotifier();
       var leftVoice = false;
       var toggledScreenShare = false;
@@ -245,7 +252,10 @@ void main() {
               isDark: true,
               channelName: 'Lounge SFU',
               serverName: 'Dev Hub',
-              voiceState: const VoiceState(isMicMuted: false, isDeafened: false),
+              voiceState: const VoiceState(
+                isMicMuted: false,
+                isDeafened: false,
+              ),
               voiceNotifier: voiceNotifier,
               onLeaveVoice: () {
                 leftVoice = true;
@@ -278,7 +288,9 @@ void main() {
       }
     });
 
-    testWidgets('ServerWorkspaceView integration renders full workspace', (tester) async {
+    testWidgets('ServerWorkspaceView integration renders full workspace', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -292,15 +304,16 @@ void main() {
           overrides: [
             apiClientProvider.overrideWithValue(fakeApi),
             authControllerProvider.overrideWith(
-              (ref) => AuthNotifier(fakeApi, restore: false)
-                ..state = const AuthState(
-                  user: UserModel(
-                    id: 'usr-1',
-                    username: 'Tester',
-                    email: 'test@example.com',
-                  ),
-                  token: 'dummy-token',
-                ),
+              (ref) =>
+                  AuthNotifier(fakeApi, restore: false)
+                    ..state = const AuthState(
+                      user: UserModel(
+                        id: 'usr-1',
+                        username: 'Tester',
+                        email: 'test@example.com',
+                      ),
+                      token: 'dummy-token',
+                    ),
             ),
             websocketClientProvider.overrideWith(
               (ref) => FakeWebSocketClient(fakeApi),
@@ -343,115 +356,117 @@ void main() {
       }
     });
 
-    testWidgets('ServerWorkspaceView opens channel, interacts with chat and toggles features', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'ServerWorkspaceView opens channel, interacts with chat and toggles features',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      final fakeApi = FakeWorkspaceApiClient();
+        final fakeApi = FakeWorkspaceApiClient();
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            apiClientProvider.overrideWithValue(fakeApi),
-            websocketClientProvider.overrideWith(
-              (ref) => FakeWebSocketClient(fakeApi),
-            ),
-            authControllerProvider.overrideWith(
-              (ref) => AuthNotifier(fakeApi, restore: false)
-                ..state = const AuthState(
-                  user: UserModel(
-                    id: 'usr-1',
-                    username: 'Tester',
-                    email: 'test@example.com',
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              apiClientProvider.overrideWithValue(fakeApi),
+              websocketClientProvider.overrideWith(
+                (ref) => FakeWebSocketClient(fakeApi),
+              ),
+              authControllerProvider.overrideWith(
+                (ref) =>
+                    AuthNotifier(fakeApi, restore: false)
+                      ..state = const AuthState(
+                        user: UserModel(
+                          id: 'usr-1',
+                          username: 'Tester',
+                          email: 'test@example.com',
+                        ),
+                        token: 'dummy-token',
+                      ),
+              ),
+              serversControllerProvider.overrideWith(
+                (ref) => ServersNotifier(fakeApi, autoLoad: false)
+                  ..state = const ServersState(
+                    servers: [testServer],
+                    selectedServerId: 'srv-1',
                   ),
-                  token: 'dummy-token',
+              ),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: ServerWorkspaceView(
+                  server: testServer,
+                  onBackToHome: () {},
                 ),
-            ),
-            serversControllerProvider.overrideWith(
-              (ref) => ServersNotifier(fakeApi, autoLoad: false)
-                ..state = const ServersState(
-                  servers: [testServer],
-                  selectedServerId: 'srv-1',
-                ),
-            ),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: ServerWorkspaceView(
-                server: testServer,
-                onBackToHome: () {},
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      // Clica no canal 'geral' para abrir a sala híbrida (Chat + Voz)
-      final channelTile = find.text('geral');
-      expect(channelTile, findsAtLeastNWidgets(1));
-      await tester.tap(channelTile.first);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Verifica se a mensagem existente foi carregada
-      expect(find.text('Mensagem inicial do canal'), findsOneWidget);
-
-      // Envia uma nova mensagem pelo input de chat
-      final chatInput = find.byType(TextField).first;
-      await tester.enterText(chatInput, 'Testando envio de mensagem!');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // Mensagem aparece no histórico
-      expect(find.text('Testando envio de mensagem!'), findsOneWidget);
-
-      // Edita a mensagem recém enviada
-      final editBtn = find.byIcon(LucideIcons.pencil);
-      if (editBtn.evaluate().isNotEmpty) {
-        await tester.tap(editBtn.first);
+        // Clica no canal 'geral' para abrir a sala híbrida (Chat + Voz)
+        final channelTile = find.text('geral');
+        expect(channelTile, findsAtLeastNWidgets(1));
+        await tester.tap(channelTile.first);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        // Encontra o botão Salvar da edição
-        final saveBtn = find.text('Salvar');
-        if (saveBtn.evaluate().isNotEmpty) {
-          await tester.tap(saveBtn.first);
+        // Verifica se a mensagem existente foi carregada
+        expect(find.text('Mensagem inicial do canal'), findsOneWidget);
+
+        // Envia uma nova mensagem pelo input de chat
+        final chatInput = find.byType(TextField).first;
+        await tester.enterText(chatInput, 'Testando envio de mensagem!');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // Mensagem aparece no histórico
+        expect(find.text('Testando envio de mensagem!'), findsOneWidget);
+
+        // Edita a mensagem recém enviada
+        final editBtn = find.byIcon(LucideIcons.pencil);
+        if (editBtn.evaluate().isNotEmpty) {
+          await tester.tap(editBtn.first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+
+          // Encontra o botão Salvar da edição
+          final saveBtn = find.text('Salvar');
+          if (saveBtn.evaluate().isNotEmpty) {
+            await tester.tap(saveBtn.first);
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 300));
+          }
+        }
+
+        // Exclui a mensagem
+        final deleteBtn = find.byIcon(LucideIcons.trash2);
+        if (deleteBtn.evaluate().isNotEmpty) {
+          await tester.tap(deleteBtn.first);
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 300));
         }
-      }
 
-      // Exclui a mensagem
-      final deleteBtn = find.byIcon(LucideIcons.trash2);
-      if (deleteBtn.evaluate().isNotEmpty) {
-        await tester.tap(deleteBtn.first);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-      }
+        // Alterna visibilidade da sidebar lateral direita pelo botão de toggle
+        final toggleSidebarIcon = find.byIcon(LucideIcons.panelRightClose);
+        if (toggleSidebarIcon.evaluate().isNotEmpty) {
+          await tester.tap(toggleSidebarIcon.first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
 
-      // Alterna visibilidade da sidebar lateral direita pelo botão de toggle
-      final toggleSidebarIcon = find.byIcon(LucideIcons.panelRightClose);
-      if (toggleSidebarIcon.evaluate().isNotEmpty) {
-        await tester.tap(toggleSidebarIcon.first);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-      }
-
-      // Desconecta da chamada de voz clicando no botão do footer de voz
-      final leaveVoiceBtn = find.byIcon(LucideIcons.phoneOff);
-      if (leaveVoiceBtn.evaluate().isNotEmpty) {
-        await tester.tap(leaveVoiceBtn.first);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-      }
-    });
+        // Desconecta da chamada de voz clicando no botão do footer de voz
+        final leaveVoiceBtn = find.byIcon(LucideIcons.phoneOff);
+        if (leaveVoiceBtn.evaluate().isNotEmpty) {
+          await tester.tap(leaveVoiceBtn.first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+      },
+    );
 
     testWidgets('ServerWorkspaceView customizes banner and saves changes', (
       tester,
@@ -471,15 +486,16 @@ void main() {
               (ref) => FakeWebSocketClient(fakeApi),
             ),
             authControllerProvider.overrideWith(
-              (ref) => AuthNotifier(fakeApi, restore: false)
-                ..state = const AuthState(
-                  user: UserModel(
-                    id: 'usr-1',
-                    username: 'Tester',
-                    email: 'test@example.com',
-                  ),
-                  token: 'dummy-token',
-                ),
+              (ref) =>
+                  AuthNotifier(fakeApi, restore: false)
+                    ..state = const AuthState(
+                      user: UserModel(
+                        id: 'usr-1',
+                        username: 'Tester',
+                        email: 'test@example.com',
+                      ),
+                      token: 'dummy-token',
+                    ),
             ),
             serversControllerProvider.overrideWith(
               (ref) => ServersNotifier(fakeApi, autoLoad: false)
@@ -517,201 +533,198 @@ void main() {
       }
     });
 
-    testWidgets('ServerWorkspaceView handles WS events, channel changes and sidebar interactions', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'ServerWorkspaceView handles WS events, channel changes and sidebar interactions',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      final fakeApi = FakeWorkspaceApiClient();
-      final fakeWs = FakeWebSocketClient(fakeApi);
-      addTearDown(fakeWs.dispose);
+        final fakeApi = FakeWorkspaceApiClient();
+        final fakeWs = FakeWebSocketClient(fakeApi);
+        addTearDown(fakeWs.dispose);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            apiClientProvider.overrideWithValue(fakeApi),
-            websocketClientProvider.overrideWithValue(fakeWs),
-            authControllerProvider.overrideWith(
-              (ref) => AuthNotifier(fakeApi, restore: false)
-                ..state = const AuthState(
-                  user: UserModel(
-                    id: 'usr-1',
-                    username: 'Tester',
-                    email: 'test@example.com',
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              apiClientProvider.overrideWithValue(fakeApi),
+              websocketClientProvider.overrideWithValue(fakeWs),
+              authControllerProvider.overrideWith(
+                (ref) =>
+                    AuthNotifier(fakeApi, restore: false)
+                      ..state = const AuthState(
+                        user: UserModel(
+                          id: 'usr-1',
+                          username: 'Tester',
+                          email: 'test@example.com',
+                        ),
+                        token: 'dummy-token',
+                      ),
+              ),
+              serversControllerProvider.overrideWith(
+                (ref) => ServersNotifier(fakeApi, autoLoad: false)
+                  ..state = const ServersState(
+                    servers: [testServer],
+                    selectedServerId: 'srv-1',
                   ),
-                  token: 'dummy-token',
+              ),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: ServerWorkspaceView(
+                  server: testServer,
+                  onBackToHome: () {},
                 ),
-            ),
-            serversControllerProvider.overrideWith(
-              (ref) => ServersNotifier(fakeApi, autoLoad: false)
-                ..state = const ServersState(
-                  servers: [testServer],
-                  selectedServerId: 'srv-1',
-                ),
-            ),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: ServerWorkspaceView(
-                server: testServer,
-                onBackToHome: () {},
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
-
-      // 1. Alterna entre abas da sidebar lateral direita (Membros, Resumo, Canais)
-      final membersTab = find.text('Membros');
-      if (membersTab.evaluate().isNotEmpty) {
-        await tester.tap(membersTab.first);
         await tester.pumpAndSettle();
-      }
 
-      final summaryTab = find.text('Resumo');
-      if (summaryTab.evaluate().isNotEmpty) {
-        await tester.tap(summaryTab.first);
-        await tester.pumpAndSettle();
-      }
+        // 1. Alterna entre abas da sidebar lateral direita (Membros, Resumo, Canais)
+        final membersTab = find.text('Membros');
+        if (membersTab.evaluate().isNotEmpty) {
+          await tester.tap(membersTab.first);
+          await tester.pumpAndSettle();
+        }
 
-      final channelsTab = find.text('Canais');
-      if (channelsTab.evaluate().isNotEmpty) {
-        await tester.tap(channelsTab.first);
-        await tester.pumpAndSettle();
-      }
+        final summaryTab = find.text('Resumo');
+        if (summaryTab.evaluate().isNotEmpty) {
+          await tester.tap(summaryTab.first);
+          await tester.pumpAndSettle();
+        }
 
-      // 2. Troca para o canal de voz 'Lounge SFU'
-      final voiceChannelFinder = find.text('Lounge SFU');
-      if (voiceChannelFinder.evaluate().isNotEmpty) {
-        await tester.tap(voiceChannelFinder.first);
+        final channelsTab = find.text('Canais');
+        if (channelsTab.evaluate().isNotEmpty) {
+          await tester.tap(channelsTab.first);
+          await tester.pumpAndSettle();
+        }
+
+        // 2. Troca para o canal de voz 'Lounge SFU'
+        final voiceChannelFinder = find.text('Lounge SFU');
+        if (voiceChannelFinder.evaluate().isNotEmpty) {
+          await tester.tap(voiceChannelFinder.first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+
+        // 3. Emite eventos via WebSocket
+        // a) CHAT_MESSAGE
+        fakeWs.emit({
+          'type': 'CHAT_MESSAGE',
+          'channel_id': 'c1',
+          'server_id': 'srv-1',
+          'payload': {
+            'id': 'msg-ws-1',
+            'content': 'Mensagem em tempo real via WS',
+            'author': {'username': 'ColegaDev'},
+            'created_at': DateTime.now().toIso8601String(),
+          },
+        });
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-      }
+        await tester.pump(const Duration(milliseconds: 200));
 
-      // 3. Emite eventos via WebSocket
-      // a) CHAT_MESSAGE
-      fakeWs.emit({
-        'type': 'CHAT_MESSAGE',
-        'channel_id': 'c1',
-        'server_id': 'srv-1',
-        'payload': {
-          'id': 'msg-ws-1',
-          'content': 'Mensagem em tempo real via WS',
-          'author': {'username': 'ColegaDev'},
-          'created_at': DateTime.now().toIso8601String(),
-        },
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+        // b) MESSAGE_UPDATE
+        fakeWs.emit({
+          'type': 'MESSAGE_UPDATE',
+          'channel_id': 'c1',
+          'server_id': 'srv-1',
+          'payload': {'id': 'msg-ws-1', 'content': 'Mensagem editada via WS'},
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
-      // b) MESSAGE_UPDATE
-      fakeWs.emit({
-        'type': 'MESSAGE_UPDATE',
-        'channel_id': 'c1',
-        'server_id': 'srv-1',
-        'payload': {
-          'id': 'msg-ws-1',
-          'content': 'Mensagem editada via WS',
-        },
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // c) VOICE_STATE (join)
-      fakeWs.emit({
-        'type': 'VOICE_STATE',
-        'channel_id': 'c2',
-        'server_id': 'srv-1',
-        'payload': {
-          'session_id': 'sess-remote-1',
-          'user_id': 'usr-remote',
-          'username': 'RemoteUser',
+        // c) VOICE_STATE (join)
+        fakeWs.emit({
+          'type': 'VOICE_STATE',
           'channel_id': 'c2',
           'server_id': 'srv-1',
-          'is_in_voice': true,
-        },
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // d) VOICE_SYNC
-      fakeWs.emit({
-        'type': 'VOICE_SYNC',
-        'server_id': 'srv-1',
-        'payload': [
-          {
-            'session_id': 'sess-remote-2',
-            'user_id': 'usr-remote-2',
-            'username': 'RemoteUser2',
+          'payload': {
+            'session_id': 'sess-remote-1',
+            'user_id': 'usr-remote',
+            'username': 'RemoteUser',
             'channel_id': 'c2',
             'server_id': 'srv-1',
             'is_in_voice': true,
-          }
-        ],
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+          },
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
-      // e) VOICE_STATE (leave)
-      fakeWs.emit({
-        'type': 'VOICE_STATE',
-        'channel_id': 'c2',
-        'server_id': 'srv-1',
-        'payload': {
-          'session_id': 'sess-remote-1',
-          'user_id': 'usr-remote',
+        // d) VOICE_SYNC
+        fakeWs.emit({
+          'type': 'VOICE_SYNC',
+          'server_id': 'srv-1',
+          'payload': [
+            {
+              'session_id': 'sess-remote-2',
+              'user_id': 'usr-remote-2',
+              'username': 'RemoteUser2',
+              'channel_id': 'c2',
+              'server_id': 'srv-1',
+              'is_in_voice': true,
+            },
+          ],
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // e) VOICE_STATE (leave)
+        fakeWs.emit({
+          'type': 'VOICE_STATE',
           'channel_id': 'c2',
           'server_id': 'srv-1',
-          'is_in_voice': false,
-        },
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // f) MESSAGE_DELETE
-      fakeWs.emit({
-        'type': 'MESSAGE_DELETE',
-        'channel_id': 'c1',
-        'server_id': 'srv-1',
-        'payload': {
-          'id': 'msg-ws-1',
-        },
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // 4. Alterna de volta para o canal de texto 'geral'
-      final textChannelFinder = find.text('geral');
-      if (textChannelFinder.evaluate().isNotEmpty) {
-        await tester.tap(textChannelFinder.first);
+          'payload': {
+            'session_id': 'sess-remote-1',
+            'user_id': 'usr-remote',
+            'channel_id': 'c2',
+            'server_id': 'srv-1',
+            'is_in_voice': false,
+          },
+        });
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-      }
+        await tester.pump(const Duration(milliseconds: 200));
 
-      // 5. Teste em visualização compacta/mobile
-      tester.view.physicalSize = const Size(500, 800);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+        // f) MESSAGE_DELETE
+        fakeWs.emit({
+          'type': 'MESSAGE_DELETE',
+          'channel_id': 'c1',
+          'server_id': 'srv-1',
+          'payload': {'id': 'msg-ws-1'},
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
-      // Clica no menu hambúrguer para abrir a sheet de canais mobile
-      final menuBtn = find.byIcon(LucideIcons.menu);
-      if (menuBtn.evaluate().isNotEmpty) {
-        await tester.tap(menuBtn.first);
-        await tester.pumpAndSettle();
-
-        // Fecha a sheet tocando no canal
-        final sheetChan = find.text('# geral');
-        if (sheetChan.evaluate().isNotEmpty) {
-          await tester.tap(sheetChan.first);
-          await tester.pumpAndSettle();
+        // 4. Alterna de volta para o canal de texto 'geral'
+        final textChannelFinder = find.text('geral');
+        if (textChannelFinder.evaluate().isNotEmpty) {
+          await tester.tap(textChannelFinder.first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
         }
-      }
-    });
+
+        // 5. Teste em visualização compacta/mobile
+        tester.view.physicalSize = const Size(500, 800);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Clica no menu hambúrguer para abrir a sheet de canais mobile
+        final menuBtn = find.byIcon(LucideIcons.menu);
+        if (menuBtn.evaluate().isNotEmpty) {
+          await tester.tap(menuBtn.first);
+          await tester.pumpAndSettle();
+
+          // Fecha a sheet tocando no canal
+          final sheetChan = find.text('# geral');
+          if (sheetChan.evaluate().isNotEmpty) {
+            await tester.tap(sheetChan.first);
+            await tester.pumpAndSettle();
+          }
+        }
+      },
+    );
   });
 }
 
@@ -750,24 +763,36 @@ class FakeWorkspaceApiClient extends ApiClient {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getMessages(String serverId, String channelId) async {
+  Future<List<Map<String, dynamic>>> getMessages(
+    String serverId,
+    String channelId,
+  ) async {
     return [
       {
         'id': 'msg-existing-1',
         'author': {'username': 'OutroDev'},
         'content': 'Mensagem inicial do canal',
         'created_at': DateTime.now().toIso8601String(),
-      }
+      },
     ];
   }
 
   @override
-  Future<bool> updateMessage(String serverId, String channelId, String messageId, String content) async {
+  Future<bool> updateMessage(
+    String serverId,
+    String channelId,
+    String messageId,
+    String content,
+  ) async {
     return true;
   }
 
   @override
-  Future<bool> deleteMessage(String serverId, String channelId, String messageId) async {
+  Future<bool> deleteMessage(
+    String serverId,
+    String channelId,
+    String messageId,
+  ) async {
     return true;
   }
 
@@ -784,7 +809,10 @@ class FakeWorkspaceApiClient extends ApiClient {
   }
 
   @override
-  Future<List<ServerJoinRequestModel>> getJoinRequests(String serverId, {String? status}) async {
+  Future<List<ServerJoinRequestModel>> getJoinRequests(
+    String serverId, {
+    String? status,
+  }) async {
     return [];
   }
 }

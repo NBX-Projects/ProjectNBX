@@ -8,8 +8,6 @@ import 'package:justtalking/features/servers/models/server_model.dart';
 import 'package:justtalking/features/servers/models/server_role_model.dart';
 import 'package:justtalking/features/servers/widgets/home_sections/server_active_call_banner.dart';
 import 'package:justtalking/features/servers/widgets/home_sections/server_hero_banner.dart';
-import 'package:justtalking/features/servers/widgets/home_sections/server_info_card.dart';
-import 'package:justtalking/features/servers/widgets/home_sections/server_members_card.dart';
 import 'package:justtalking/features/servers/widgets/home_sections/server_pending_requests_card.dart';
 import 'package:justtalking/features/servers/widgets/home_sections/server_roles_card.dart';
 import 'package:justtalking/features/voice/models/voice_participant_info.dart';
@@ -70,7 +68,6 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
   List<ServerJoinRequestModel> _pendingRequests = [];
   List<Map<String, dynamic>> _members = [];
   List<ServerRoleModel> _roles = [];
-  bool _isLoadingData = true;
 
   @override
   void initState() {
@@ -106,13 +103,10 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
           _members = results[0] as List<Map<String, dynamic>>;
           _roles = results[1] as List<ServerRoleModel>;
           _pendingRequests = results[2] as List<ServerJoinRequestModel>;
-          _isLoadingData = false;
         });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() => _isLoadingData = false);
-      }
+      // Ignorar falhas silenciosamente ao carregar dados opcionais
     }
   }
 
@@ -324,87 +318,17 @@ class _ServerHomeViewState extends ConsumerState<ServerHomeView> {
                           const SizedBox(height: 14),
                         ],
 
-                        // Layout Responsivo: Membros, Cargos e Informações do Servidor
-                        if (isMobile) ...[
-                          ServerMembersCard(
-                            isMobile: true,
+                        // Cargos do Servidor (exibido para administradores com permissão de gerenciamento)
+                        if (_canManageRoles) ...[
+                          ServerRolesCard(
+                            isMobile: isMobile,
                             isDark: widget.isDark,
                             server: widget.server,
-                            members: _members,
-                            isLoading: _isLoadingData,
+                            roles: _roles,
                             selectedAccentColor: widget.selectedAccentColor,
+                            onRolesUpdated: _loadExtraData,
                           ),
                           const SizedBox(height: 14),
-                          if (_canManageRoles) ...[
-                            ServerRolesCard(
-                              isMobile: true,
-                              isDark: widget.isDark,
-                              server: widget.server,
-                              roles: _roles,
-                              selectedAccentColor: widget.selectedAccentColor,
-                              onRolesUpdated: _loadExtraData,
-                            ),
-                            const SizedBox(height: 14),
-                          ],
-                          ServerInfoCard(
-                            isMobile: true,
-                            isDark: widget.isDark,
-                            server: widget.server,
-                            rolesCount: _roles.length,
-                            pendingRequestsCount: _pendingRequests.length,
-                            selectedAccentColor: widget.selectedAccentColor,
-                            onMembersUpdated: _loadExtraData,
-                          ),
-                        ] else ...[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: ServerMembersCard(
-                                  isMobile: false,
-                                  isDark: widget.isDark,
-                                  server: widget.server,
-                                  members: _members,
-                                  isLoading: _isLoadingData,
-                                  selectedAccentColor:
-                                      widget.selectedAccentColor,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                flex: 2,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (_canManageRoles) ...[
-                                      ServerRolesCard(
-                                        isMobile: false,
-                                        isDark: widget.isDark,
-                                        server: widget.server,
-                                        roles: _roles,
-                                        selectedAccentColor:
-                                            widget.selectedAccentColor,
-                                        onRolesUpdated: _loadExtraData,
-                                      ),
-                                      const SizedBox(height: 14),
-                                    ],
-                                    ServerInfoCard(
-                                      isMobile: false,
-                                      isDark: widget.isDark,
-                                      server: widget.server,
-                                      rolesCount: _roles.length,
-                                      pendingRequestsCount:
-                                          _pendingRequests.length,
-                                      selectedAccentColor:
-                                          widget.selectedAccentColor,
-                                      onMembersUpdated: _loadExtraData,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ],
                     ),
