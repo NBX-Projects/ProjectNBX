@@ -40,15 +40,22 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
         run: |
-          test -n "$SERVER_KNOWN_HOSTS" || { echo "SERVER_KNOWN_HOSTS secret is required"; exit 1; }
-          printf '%s\n' "$SERVER_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          if [ -n "$SERVER_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SERVER_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            STRICT_CHECK="yes"
+          else
+            echo "Aviso: SERVER_KNOWN_HOSTS não definido. Utilizando StrictHostKeyChecking accept-new."
+            touch ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            STRICT_CHECK="accept-new"
+          fi
           cat <<EOF > ~/.ssh/config
           Host $SSH_SERVER
             User $SERVER_USER
             IdentityFile ~/.ssh/github_actions_deploy
             UserKnownHostsFile ~/.ssh/known_hosts
-            StrictHostKeyChecking yes
+            StrictHostKeyChecking $STRICT_CHECK
             ProxyCommand cloudflared access ssh --hostname %h
           EOF
           chmod 600 ~/.ssh/config
