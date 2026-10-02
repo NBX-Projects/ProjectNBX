@@ -116,7 +116,6 @@ jobs:
         run: |
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-${{ env.BUILD_FLAVOR }}-release.apk dist/JustTalking-${{ env.RELEASE_VERSION }}-android.apk
-          cp build/app/outputs/flutter-apk/app-${{ env.BUILD_FLAVOR }}-release.apk dist/ProjectNBX-${{ env.RELEASE_VERSION }}-android.apk
           (cd dist && sha256sum *.apk > SHA256SUMS-android.txt)
 
       - name: Upload Artifact (Ações do GitHub)
@@ -134,7 +133,6 @@ jobs:
           name: ${{ env.RELEASE_VERSION }}
           files: |
             dist/JustTalking-*-android.apk
-            dist/ProjectNBX-*-android.apk
             dist/SHA256SUMS-android.txt
           draft: false
           prerelease: false

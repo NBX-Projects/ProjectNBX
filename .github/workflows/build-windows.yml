@@ -127,10 +127,8 @@ jobs:
           $installer = Get-ChildItem -Path build/windows/installer -Filter "*.exe" | Select-Object -First 1
           if ($installer) {
             Copy-Item $installer.FullName "dist/JustTalking-Setup-$env:RELEASE_VERSION-windows.exe"
-            Copy-Item $installer.FullName "dist/ProjectNBX-Setup-$env:RELEASE_VERSION-windows.exe"
           }
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/JustTalking-$env:RELEASE_VERSION-windows-portable.zip" -Force
-          Copy-Item "dist/JustTalking-$env:RELEASE_VERSION-windows-portable.zip" "dist/ProjectNBX-$env:RELEASE_VERSION-windows-portable.zip"
 
           # Gerar checksums SHA-256 de integridade
           $hashes = Get-ChildItem -Path dist -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" }
@@ -152,8 +150,6 @@ jobs:
           files: |
             dist/JustTalking-Setup-*-windows.exe
             dist/JustTalking-*-windows-portable.zip
-            dist/ProjectNBX-Setup-*-windows.exe
-            dist/ProjectNBX-*-windows-portable.zip
             dist/SHA256SUMS.txt
           draft: false
           prerelease: false

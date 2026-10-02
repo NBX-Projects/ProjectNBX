@@ -74,6 +74,16 @@ class ReleaseInfo {
 
   /// Retorna o asset do instalador Windows (.exe) se disponível
   ReleaseAsset? get windowsInstallerAsset {
+    final justTalkingSetup = assets.cast<ReleaseAsset?>().firstWhere(
+      (asset) =>
+          asset != null &&
+          asset.name.toLowerCase().endsWith('.exe') &&
+          asset.name.toLowerCase().contains('justtalking') &&
+          asset.name.toLowerCase().contains('setup'),
+      orElse: () => null,
+    );
+    if (justTalkingSetup != null) return justTalkingSetup;
+
     return assets.cast<ReleaseAsset?>().firstWhere(
       (asset) =>
           asset != null &&
@@ -88,6 +98,15 @@ class ReleaseInfo {
 
   /// Retorna o asset do APK Android (.apk) se disponível
   ReleaseAsset? get androidApkAsset {
+    final justTalkingApk = assets.cast<ReleaseAsset?>().firstWhere(
+      (asset) =>
+          asset != null &&
+          asset.name.toLowerCase().endsWith('.apk') &&
+          asset.name.toLowerCase().contains('justtalking'),
+      orElse: () => null,
+    );
+    if (justTalkingApk != null) return justTalkingApk;
+
     return assets.cast<ReleaseAsset?>().firstWhere(
       (asset) => asset != null && asset.name.toLowerCase().endsWith('.apk'),
       orElse: () => null,
