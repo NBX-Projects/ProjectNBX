@@ -33,6 +33,7 @@ class HubTopBar extends ConsumerWidget {
   final VoidCallback? onBackToHome;
   final VoidCallback? onInviteMembers;
   final Color? accentColor;
+  final bool isMobile;
 
   const HubTopBar({
     super.key,
@@ -51,6 +52,7 @@ class HubTopBar extends ConsumerWidget {
     this.onBackToHome,
     this.onInviteMembers,
     this.accentColor,
+    this.isMobile = false,
   });
 
   @override
@@ -118,7 +120,7 @@ class HubTopBar extends ConsumerWidget {
               children: [
                 if (server == null) ...[
                   SizedBox(
-                    width: 68,
+                    width: isMobile ? 44 : 68,
                     child: Center(
                       child: SvgPicture.asset(
                         isDark
@@ -131,15 +133,19 @@ class HubTopBar extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    strings.appTitle,
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.lightTextPrimary,
+                  Flexible(
+                    child: Text(
+                      strings.appTitle,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ] else ...[
@@ -234,6 +240,7 @@ class HubTopBar extends ConsumerWidget {
                 user: user,
                 isDark: isDark,
                 onToggleTheme: onToggleTheme,
+                isMobile: isMobile,
               ),
 
               // Controles de Janela do Windows

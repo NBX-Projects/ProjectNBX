@@ -13,12 +13,14 @@ class UserStatusChip extends ConsumerStatefulWidget {
   final UserModel? user;
   final bool isDark;
   final VoidCallback? onToggleTheme;
+  final bool isMobile;
 
   const UserStatusChip({
     super.key,
     required this.user,
     required this.isDark,
     this.onToggleTheme,
+    this.isMobile = false,
   });
 
   @override
@@ -134,6 +136,8 @@ class _UserStatusChipState extends ConsumerState<UserStatusChip> {
     final initial = _displayName.isNotEmpty ? _displayName[0].toUpperCase() : 'U';
     final avatarUrl = user?.avatarUrl?.trim();
 
+    final isMobile = widget.isMobile || MediaQuery.sizeOf(context).width < 768;
+
     return Semantics(
       button: true,
       label: 'Abrir menu do perfil de $_displayName',
@@ -155,8 +159,8 @@ class _UserStatusChipState extends ConsumerState<UserStatusChip> {
                 mouseCursor: SystemMouseCursors.click,
                 borderRadius: AppRadius.borderSm,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 3 : 6,
                     vertical: 3,
                   ),
                   child: Row(
@@ -216,31 +220,33 @@ class _UserStatusChipState extends ConsumerState<UserStatusChip> {
                           ),
                         ],
                       ),
-                      const SizedBox(width: 8),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _displayName,
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: widget.isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary,
+                      if (!isMobile) ...[
+                        const SizedBox(width: 8),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _displayName,
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: widget.isDark
+                                    ? AppColors.darkTextPrimary
+                                    : AppColors.lightTextPrimary,
+                              ),
                             ),
-                          ),
-                          Text(
-                            _statusLabel(status),
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w500,
-                              color: statusColor,
+                            Text(
+                              _statusLabel(status),
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w500,
+                                color: statusColor,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -226,16 +226,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final voiceState = ref.watch(voiceStateProvider);
     final voiceNotifier = ref.read(voiceStateProvider.notifier);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 768;
-
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkCanvas : AppColors.lightCanvas,
-      body: SafeArea(
-        top: true,
-        bottom: true,
-        child: Column(
-          children: [
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight <= 56 || constraints.maxWidth <= 0) {
+            return const SizedBox.shrink();
+          }
+          final isMobile = constraints.maxWidth < 768;
+
+          return SafeArea(
+            top: true,
+            bottom: true,
+            child: Column(
+              children: [
             // Top Custom Window Bar (de um canto ao outro)
             HubTopBar(
               user: user,
@@ -266,6 +270,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             .loadServers(),
                       )
                   : null,
+              isMobile: isMobile,
             ),
 
             // Notification banner se houver atualização disponível
@@ -451,8 +456,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
             ),
-          ],
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

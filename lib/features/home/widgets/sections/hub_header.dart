@@ -23,27 +23,31 @@ class HubHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // Título e Subtítulo
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Início',
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Início',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                ),
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              '$totalCommunities ${totalCommunities == 1 ? "comunidade" : "comunidades"} · $totalInVoice em chamadas agora',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              const SizedBox(height: 3),
+              Text(
+                '$totalCommunities ${totalCommunities == 1 ? "comunidade" : "comunidades"} · $totalInVoice em chamadas agora',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
 
         // TODO: IMPLEMENTAÇÃO FUTURA - Botão "+ Explorar"

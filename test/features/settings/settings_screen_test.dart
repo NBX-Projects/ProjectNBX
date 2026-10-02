@@ -158,4 +158,211 @@ void main() {
       await tester.pumpAndSettle();
     }
   });
+
+  testWidgets(
+    'SettingsScreen mobile layout renders master menu and navigates into detail view',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const testUser = UserModel(
+        id: 'u200',
+        username: 'MobileGamer',
+        email: 'mobile@projectnbx.com',
+        status: 'online',
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(
+              (ref) => AuthNotifier(ApiClient(), restore: false)
+                ..state = const AuthState(
+                  user: testUser,
+                  token: 'dummy-token',
+                ),
+            ),
+            audioHardwareServiceProvider.overrideWithValue(
+              const MockAudioHardwareService(),
+            ),
+          ],
+          child: const MaterialApp(
+            home: SettingsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      const strings = AppStrings(AppLanguage.pt);
+
+      // 1. Mobile Master view: should NOT show desktop WindowControls
+      expect(find.byType(WindowControls), findsNothing);
+
+      // Verify header title
+      expect(find.text(strings.settingsTitle), findsOneWidget);
+
+      // In master menu, sections are listed with chevron indicators
+      expect(find.text(strings.myAccount), findsOneWidget);
+      expect(find.text(strings.appearanceAndLanguage), findsOneWidget);
+      expect(find.text(strings.voiceAndVideo), findsOneWidget);
+      expect(find.text(strings.hotkeysAndPTT), findsOneWidget);
+      expect(find.text(strings.systemStatusTitle), findsOneWidget);
+      expect(find.byIcon(LucideIcons.chevronRight), findsAtLeastNWidgets(5));
+
+      // Detail content (e.g. user email) should not be rendered yet in the master list
+      expect(find.text('mobile@projectnbx.com'), findsNothing);
+
+      // 2. Drill-down into "Minha Conta"
+      await tester.tap(find.text(strings.myAccount));
+      await tester.pumpAndSettle();
+
+      // Now in Detail view:
+      // Detail header has a back button (arrowLeft)
+      expect(find.byIcon(LucideIcons.arrowLeft), findsOneWidget);
+
+      // Profile details are rendered
+      expect(find.text('MobileGamer'), findsAtLeastNWidgets(1));
+      expect(find.text('mobile@projectnbx.com'), findsAtLeastNWidgets(1));
+      expect(find.text('Editar Perfil'), findsOneWidget);
+
+      // 3. Tap back button to return to master menu
+      await tester.tap(find.byIcon(LucideIcons.arrowLeft));
+      await tester.pumpAndSettle();
+
+      // Back in master menu
+      expect(find.byIcon(LucideIcons.arrowLeft), findsNothing);
+      expect(find.text(strings.myAccount), findsOneWidget);
+      expect(find.text('mobile@projectnbx.com'), findsNothing);
+
+      // 4. Drill-down into "Status dos Serviços & Conexão"
+      await tester.tap(find.text(strings.systemStatusTitle));
+      await tester.pumpAndSettle();
+
+      // Verify system status detail view
+      expect(find.byIcon(LucideIcons.arrowLeft), findsOneWidget);
+      expect(find.text('INFRAESTRUTURA DE SERVIÇOS'), findsOneWidget);
+      expect(find.text('Banco de Dados & Storage'), findsOneWidget);
+
+      // Return back
+      await tester.tap(find.byIcon(LucideIcons.arrowLeft));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(LucideIcons.arrowLeft), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'SettingsScreen on Android/iOS hides hotkeys section and falls back to voice',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(
+              (ref) => AuthNotifier(ApiClient(), restore: false)
+                ..state = const AuthState(
+                  user: UserModel(
+                    id: 'u300',
+                    username: 'PhoneUser',
+                    email: 'phone@projectnbx.com',
+                  ),
+                  token: 'token',
+                ),
+            ),
+            audioHardwareServiceProvider.overrideWithValue(
+              const MockAudioHardwareService(),
+            ),
+          ],
+          child: const MaterialApp(
+            home: SettingsScreen(
+              supportsHotkeys: false,
+              initialSection: 'hotkeys',
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      const strings = AppStrings(AppLanguage.pt);
+
+      // Hotkeys section must NOT exist
+      expect(find.text(strings.hotkeysAndPTT), findsNothing);
+
+      // Because initialSection was 'hotkeys' but supportsHotkeys is false,
+      // it should fall back to voice section
+      expect(find.text(strings.voiceAndVideo), findsAtLeastNWidgets(1));
+
+      // Pop back to master menu
+      await tester.tap(find.byIcon(LucideIcons.arrowLeft));
+      await tester.pumpAndSettle();
+
+      // In master menu, hotkeys item is NOT present
+      expect(find.text(strings.hotkeysAndPTT), findsNothing);
+      expect(find.text(strings.myAccount), findsOneWidget);
+      expect(find.text(strings.voiceAndVideo), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'SettingsScreen renders hotkeys section responsively on mobile screen',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authControllerProvider.overrideWith(
+              (ref) => AuthNotifier(ApiClient(), restore: false)
+                ..state = const AuthState(
+                  user: UserModel(
+                    id: 'u400',
+                    username: 'Tester',
+                    email: 'tester@projectnbx.com',
+                  ),
+                  token: 'token',
+                ),
+            ),
+            audioHardwareServiceProvider.overrideWithValue(
+              const MockAudioHardwareService(),
+            ),
+          ],
+          child: const MaterialApp(
+            home: SettingsScreen(
+              supportsHotkeys: true,
+              initialSection: 'hotkeys',
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      const strings = AppStrings(AppLanguage.pt);
+
+      // Detail header displays hotkeys title
+      expect(find.text(strings.hotkeysAndPTT), findsAtLeastNWidgets(1));
+
+      // Reset button is displayed in full width on mobile
+      expect(find.text('Restaurar Padrões'), findsOneWidget);
+
+      // Voice activity and PTT cards are displayed stacked
+      expect(find.text(strings.voiceActivity), findsOneWidget);
+      expect(find.text(strings.pushToTalk), findsOneWidget);
+
+      // Categorized shortcuts exist and don't overflow
+      expect(find.text('ÁUDIO & TRANSMISSÃO'), findsOneWidget);
+      expect(find.text('Mutar / Desmutar Microfone'), findsOneWidget);
+      expect(find.byIcon(LucideIcons.pencil), findsAtLeastNWidgets(1));
+    },
+  );
 }
