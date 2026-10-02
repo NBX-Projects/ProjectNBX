@@ -27,6 +27,7 @@ import 'package:justtalking/features/servers/widgets/server_workspace_view.dart'
 import 'package:justtalking/features/voice/controllers/voice_state_controller.dart';
 import 'package:justtalking/features/voice/widgets/quick_audio_device_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -42,13 +43,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _isServerRightSidebarVisible = true;
+  static const String _prefRightSidebarKey = 'nbx_right_sidebar_visible';
+  bool _isServerRightSidebarVisible = false;
   List<PublicServerModel> _publicServers = [];
   bool _isLoadingPublicServers = false;
 
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) {
+        final saved = prefs.getBool(_prefRightSidebarKey);
+        if (saved != null) {
+          setState(() => _isServerRightSidebarVisible = saved);
+        }
+      }
+    });
     _searchController.addListener(() {
       if (mounted) {
         setState(() => _searchQuery = _searchController.text);
@@ -140,6 +150,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       setState(
         () => _isServerRightSidebarVisible = !_isServerRightSidebarVisible,
       );
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setBool(_prefRightSidebarKey, _isServerRightSidebarVisible);
+      });
     }
   }
 
@@ -239,6 +252,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onOpenSearch: _handleQuickSearch,
               topMicKey: _topMicKey,
               topHeadphonesKey: _topHeadphonesKey,
+              isRightSidebarVisible: _isServerRightSidebarVisible,
+              onToggleRightSidebar: _handleToggleSidebar,
             ),
 
             // Notification banner se houver atualização disponível
@@ -261,7 +276,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           activeTab: _activeTab,
                           onTabChanged: (tab) {
                             setState(() => _activeTab = tab);
-                            if (tab != 'home') {
+                            final isServer =
+                                userJoinedServers.any((s) => s.id == tab);
+                            if (isServer) {
                               ref
                                   .read(serversControllerProvider.notifier)
                                   .selectServer(tab);
@@ -393,9 +410,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ),
 
                                     // Right Activity & Telemetry Sidebar (only visible on tablet/desktop)
-                                    if (!isMobile &&
-                                        _isServerRightSidebarVisible)
-                                      const HubRightPanel(),
+                                    if (!isMobile)
+                                      AnimatedSize(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        curve: Curves.easeInOut,
+                                        child: _isServerRightSidebarVisible
+                                            ? HubRightPanel(
+                                                onClose: _handleToggleSidebar,
+                                              )
+                                            : const SizedBox.shrink(),
+                                      ),
                                   ],
                                 ),
                         ),

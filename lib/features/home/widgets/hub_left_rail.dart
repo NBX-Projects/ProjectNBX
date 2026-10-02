@@ -69,22 +69,37 @@ class HubLeftRail extends ConsumerWidget {
 
     final navItems = [
       {'id': 'home', 'icon': LucideIcons.house, 'tooltip': strings.navHome},
-      {'id': 'favorites', 'icon': LucideIcons.star, 'tooltip': 'Servidores Favoritos'},
-      {'id': 'friends', 'icon': LucideIcons.user, 'tooltip': 'Amigos & Mensagens Diretas'},
-      {'id': 'explore', 'icon': LucideIcons.compass, 'tooltip': 'Explorar Comunidades'},
-      {'id': 'trending', 'icon': LucideIcons.flame, 'tooltip': 'Em Alta & Ao Vivo'},
-      {'id': 'tools', 'icon': LucideIcons.slidersHorizontal, 'tooltip': 'Ferramentas & Personalização'},
+      {
+        'id': 'favorites',
+        'icon': LucideIcons.star,
+        'tooltip': 'Servidores Favoritos',
+      },
+      {
+        'id': 'friends',
+        'icon': LucideIcons.user,
+        'tooltip': 'Amigos & Mensagens Diretas',
+      },
+      {
+        'id': 'explore',
+        'icon': LucideIcons.compass,
+        'tooltip': 'Explorar Comunidades',
+      },
+      {
+        'id': 'trending',
+        'icon': LucideIcons.flame,
+        'tooltip': 'Em Alta & Ao Vivo',
+      },
+      {
+        'id': 'tools',
+        'icon': LucideIcons.slidersHorizontal,
+        'tooltip': 'Ferramentas & Personalização',
+      },
     ];
 
     return Container(
       width: 68,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141520) : Colors.white,
-        border: Border(
-          right: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          ),
-        ),
       ),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -164,7 +179,7 @@ class HubLeftRail extends ConsumerWidget {
           child: InkWell(
             onTap: onTap,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
+            borderRadius: AppRadius.borderMd,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 44,
@@ -175,7 +190,7 @@ class HubLeftRail extends ConsumerWidget {
                           ? AppColors.darkSurfaceElevated
                           : AppColors.lightSurfaceElevated)
                     : Colors.transparent,
-                borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
+                borderRadius: AppRadius.borderMd,
                 border: isSelected
                     ? Border.all(
                         color: isDark
@@ -236,7 +251,9 @@ class HubLeftRail extends ConsumerWidget {
           child: InkWell(
             onTap: onTap,
             mouseCursor: SystemMouseCursors.click,
-            borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
+            borderRadius: isSelected
+                ? AppRadius.borderMd
+                : AppRadius.borderPill,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 44,
@@ -245,7 +262,9 @@ class HubLeftRail extends ConsumerWidget {
                 color: isSelected
                     ? accentColor
                     : (isDark ? AppColors.darkSurface : AppColors.lightSurface),
-                borderRadius: isSelected ? AppRadius.borderMd : AppRadius.borderPill,
+                borderRadius: isSelected
+                    ? AppRadius.borderMd
+                    : AppRadius.borderPill,
                 border: Border.all(
                   color: isSelected
                       ? accentColor
@@ -263,8 +282,9 @@ class HubLeftRail extends ConsumerWidget {
                     : null,
               ),
               child: ClipRRect(
-                borderRadius:
-                    isSelected ? AppRadius.borderMd : AppRadius.borderPill,
+                borderRadius: isSelected
+                    ? AppRadius.borderMd
+                    : AppRadius.borderPill,
                 child: Center(
                   child: hasCustomIcon
                       ? Image.network(

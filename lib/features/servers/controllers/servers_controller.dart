@@ -123,10 +123,20 @@ class ServersNotifier extends StateNotifier<ServersState> {
   }
 
   void selectServer(String serverId) {
-    final server = state.servers.firstWhere(
-      (s) => s.id == serverId,
-      orElse: () => state.servers.first,
+    if (state.servers.isEmpty) {
+      state = state.copyWith(
+        selectedServerId: serverId,
+        selectedChannelId: null,
+      );
+      return;
+    }
+    final server = state.servers.cast<ServerModel?>().firstWhere(
+      (s) => s?.id == serverId,
+      orElse: () => null,
     );
+    if (server == null) {
+      return;
+    }
     state = state.copyWith(
       selectedServerId: serverId,
       selectedChannelId: server.channels.isNotEmpty

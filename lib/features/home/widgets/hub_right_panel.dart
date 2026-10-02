@@ -5,7 +5,9 @@ import 'package:justtalking/core/theme/app_colors.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class HubRightPanel extends ConsumerWidget {
-  const HubRightPanel({super.key});
+  final VoidCallback? onClose;
+
+  const HubRightPanel({super.key, this.onClose});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -17,11 +19,6 @@ class HubRightPanel extends ConsumerWidget {
       width: 290,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF141520) : Colors.white,
-        border: Border(
-          left: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          ),
-        ),
       ),
       child: Stack(
         children: [
@@ -33,14 +30,41 @@ class HubRightPanel extends ConsumerWidget {
               bottom: 48,
             ),
             children: [
-              Text(
-                strings.recentActivity,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: isDark
-                      ? AppColors.darkTextMuted
-                      : AppColors.lightTextMuted,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    strings.recentActivity,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: isDark
+                          ? AppColors.darkTextMuted
+                          : AppColors.lightTextMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (onClose != null)
+                    Tooltip(
+                      message: 'Recolher painel (Ctrl + B)',
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: InkWell(
+                          onTap: onClose,
+                          mouseCursor: SystemMouseCursors.click,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              LucideIcons.panelRightClose,
+                              size: 16,
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
               Text(
@@ -70,30 +94,34 @@ class HubRightPanel extends ConsumerWidget {
             right: 12,
             child: Tooltip(
               message: 'Central de Ajuda e Documentação',
-              child: InkWell(
-                onTap: () {},
-                borderRadius: BorderRadius.circular(9999),
-                child: Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF282A36)
-                        : const Color(0xFFE2E8F0),
-                    shape: BoxShape.circle,
-                    border: Border.all(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: InkWell(
+                  onTap: () {},
+                  mouseCursor: SystemMouseCursors.click,
+                  borderRadius: BorderRadius.circular(9999),
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
                       color: isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder,
+                          ? const Color(0xFF282A36)
+                          : const Color(0xFFE2E8F0),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
+                      ),
                     ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      LucideIcons.helpCircle,
-                      size: 14,
-                      color: isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted,
+                    child: Center(
+                      child: Icon(
+                        LucideIcons.helpCircle,
+                        size: 14,
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
                     ),
                   ),
                 ),
