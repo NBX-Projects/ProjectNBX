@@ -9,9 +9,12 @@ type User struct {
 	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	Password  string    `json:"-"` // Ocultado na serialização JSON
-	AvatarURL string    `json:"avatar_url,omitempty"`
-	Status    string    `json:"status"` // "online", "idle", "dnd", "offline"
-	CreatedAt time.Time `json:"created_at"`
+	AvatarURL    string    `json:"avatar_url,omitempty"`
+	BannerURL    string    `json:"banner_url,omitempty"`
+	Bio          string    `json:"bio,omitempty"`
+	CustomStatus string    `json:"custom_status,omitempty"`
+	Status       string    `json:"status"` // "online", "idle", "dnd", "offline"
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // RegisterRequest payload de registro de usuário
@@ -29,11 +32,16 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-// UpdateUserRequest payload para atualização cadastral do usuário
+// UpdateUserRequest payload para atualização cadastral e perfil do usuário
 type UpdateUserRequest struct {
-	Name     string `json:"name"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	Name         string  `json:"name"`
+	Username     string  `json:"username"`
+	Email        string  `json:"email"`
+	AvatarURL    *string `json:"avatar_url,omitempty"`
+	BannerURL    *string `json:"banner_url,omitempty"`
+	Bio          *string `json:"bio,omitempty"`
+	CustomStatus *string `json:"custom_status,omitempty"`
+	Status       *string `json:"status,omitempty"`
 }
 
 // ChangePasswordRequest payload para alteração de senha

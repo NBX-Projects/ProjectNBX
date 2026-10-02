@@ -72,7 +72,13 @@ func (h *Hub) Run() {
 			h.mu.Unlock()
 
 			log.Printf("[Hub] Usuário conectado: %s (%s). Total de conexões: %d", client.Username, client.UserID, totalClients)
-			h.broadcastPresence(client.UserID, "online")
+			targetStatus := "online"
+			if user, err := h.Repo.GetUserByID(client.UserID); err == nil && user != nil {
+				if user.Status != "" && user.Status != "offline" {
+					targetStatus = user.Status
+				}
+			}
+			h.broadcastPresence(client.UserID, targetStatus)
 
 			// Envia sincronização de voz imediata para o cliente recém-conectado
 			if len(currentVoiceStates) > 0 {
@@ -440,6 +446,12 @@ func (h *Hub) HandleClientEvent(client *Client, event *models.WSEvent) {
 			Payload: pongPayload,
 		})
 		client.SendEvent(data)
+
+	case models.EventUserPresence:
+		var presenceReq models.PresencePayload
+		if err := json.Unmarshal(event.Payload, &presenceReq); err == nil && presenceReq.Status != "" {
+			h.broadcastPresence(client.UserID, presenceReq.Status)
+		}
 
 	// Eventos de Screen Sharing e WebRTC P2P
 	case models.EventScreenShareStart:

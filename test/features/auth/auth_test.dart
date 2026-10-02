@@ -53,17 +53,38 @@ class FakeApiClient extends ApiClient {
 
   @override
   Future<UserModel> updateProfile({
-    required String name,
-    required String username,
-    required String email,
+    String? name,
+    String? username,
+    String? email,
+    String? avatarUrl,
+    String? bannerUrl,
+    String? bio,
+    String? customStatus,
+    String? status,
   }) async {
     if (shouldFail) throw Exception(failureMessage);
     return UserModel(
       id: 'u-1',
-      name: name,
-      username: username,
-      email: email,
-      status: 'online',
+      name: name ?? 'Default Name',
+      username: username ?? 'default',
+      email: email ?? 'default@example.com',
+      avatarUrl: avatarUrl,
+      bannerUrl: bannerUrl,
+      bio: bio,
+      customStatus: customStatus,
+      status: status ?? 'online',
+    );
+  }
+
+  @override
+  Future<UserModel> updateStatus(String status) async {
+    if (shouldFail) throw Exception(failureMessage);
+    return UserModel(
+      id: 'u-1',
+      name: 'Default Name',
+      username: 'default',
+      email: 'default@example.com',
+      status: status,
     );
   }
 

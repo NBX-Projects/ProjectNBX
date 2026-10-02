@@ -246,6 +246,10 @@ class WebSocketClient {
     }
   }
 
+  void sendPresence(String status) {
+    sendEvent('USER_PRESENCE', {'status': status});
+  }
+
   void disconnect() {
     _reconnectTimer?.cancel();
     _currentServerId = null;

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:justtalking/core/network/api_client.dart';
 import 'package:justtalking/core/network/api_offline_exception.dart';
 import 'package:justtalking/core/network/api_status_controller.dart';
+import 'package:justtalking/core/network/websocket_client.dart';
 import 'package:justtalking/features/auth/models/user_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -147,10 +148,49 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<bool> updateStatus(String status) async {
+    final cleanStatus = status.trim().toLowerCase();
+    final user = state.user;
+    if (user == null) return false;
+
+    // Atualização otimista imediata no estado
+    final updatedUser = user.copyWith(status: cleanStatus);
+    state = state.copyWith(user: updatedUser);
+
+    // Persiste imediatamente no SharedPreferences local para nunca resetar
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyUser, jsonEncode(updatedUser.toJson()));
+    } catch (_) {}
+
+    // Notifica em tempo real via WebSocket para todos os participantes
+    try {
+      _ref?.read(websocketClientProvider).sendPresence(cleanStatus);
+    } catch (_) {}
+
+    // Persiste no backend de forma assíncrona
+    try {
+      final res = await _apiClient.updateStatus(cleanStatus);
+      final syncedUser = res.copyWith(status: cleanStatus);
+      state = state.copyWith(user: syncedUser);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyUser, jsonEncode(syncedUser.toJson()));
+      return true;
+    } catch (_) {
+      // O estado local e SharedPreferences permanecem válidos mesmo offline
+      return false;
+    }
+  }
+
   Future<bool> updateProfile({
-    required String name,
-    required String username,
-    required String email,
+    String? name,
+    String? username,
+    String? email,
+    String? avatarUrl,
+    String? bannerUrl,
+    String? bio,
+    String? customStatus,
+    String? status,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -158,10 +198,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
         name: name,
         username: username,
         email: email,
+        avatarUrl: avatarUrl,
+        bannerUrl: bannerUrl,
+        bio: bio,
+        customStatus: customStatus,
+        status: status,
       );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyUser, jsonEncode(updatedUser.toJson()));
+
+      if (status != null && status.isNotEmpty) {
+        try {
+          _ref?.read(websocketClientProvider).sendPresence(status);
+        } catch (_) {}
+      }
 
       state = state.copyWith(
         isLoading: false,

@@ -314,8 +314,12 @@ func (r *MemoryRepository) UpdateUser(user *models.User) error {
 	u.Name = user.Name
 	u.Username = user.Username
 	u.Email = user.Email
-	if user.AvatarURL != "" {
-		u.AvatarURL = user.AvatarURL
+	u.AvatarURL = user.AvatarURL
+	u.BannerURL = user.BannerURL
+	u.Bio = user.Bio
+	u.CustomStatus = user.CustomStatus
+	if user.Status != "" {
+		u.Status = user.Status
 	}
 	return nil
 }
