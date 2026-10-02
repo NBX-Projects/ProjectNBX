@@ -17,6 +17,7 @@ var (
 type ScreenShareRepository interface {
 	Create(ctx context.Context, session *ChannelScreenShareState) error
 	GetByChannel(ctx context.Context, channelID string) (*ChannelScreenShareState, error)
+	GetSessionsByChannel(ctx context.Context, channelID string) ([]*ChannelScreenShareState, error)
 	GetBySession(ctx context.Context, sessionID string) (*ChannelScreenShareState, error)
 	AddViewerIfCapacity(ctx context.Context, sessionID, userID string, maxViewers int) (bool, error)
 	RemoveViewer(ctx context.Context, sessionID, userID string) error
@@ -26,15 +27,15 @@ type ScreenShareRepository interface {
 
 // InMemoryScreenShareRepository implementação thread-safe em memória
 type InMemoryScreenShareRepository struct {
-	mu           sync.RWMutex
-	bySessionID  map[string]*ChannelScreenShareState
-	byChannelID  map[string]string // channelID -> sessionID
+	mu          sync.RWMutex
+	bySessionID map[string]*ChannelScreenShareState
+	byChannelID map[string]map[string]bool // channelID -> set of sessionIDs
 }
 
 func NewInMemoryScreenShareRepository() *InMemoryScreenShareRepository {
 	return &InMemoryScreenShareRepository{
 		bySessionID: make(map[string]*ChannelScreenShareState),
-		byChannelID: make(map[string]string),
+		byChannelID: make(map[string]map[string]bool),
 	}
 }
 
@@ -68,9 +69,14 @@ func (r *InMemoryScreenShareRepository) Create(ctx context.Context, session *Cha
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if existingSessionID, exists := r.byChannelID[session.ChannelID]; exists {
-		if existing, ok := r.bySessionID[existingSessionID]; ok && existing.State == SessionStateActive {
-			return ErrSessionAlreadyExists
+	// Verifica se o mesmo broadcaster já tem uma sessão ativa no canal
+	if sessionsInChannel, exists := r.byChannelID[session.ChannelID]; exists {
+		for sessID := range sessionsInChannel {
+			if existing, ok := r.bySessionID[sessID]; ok && existing.State == SessionStateActive {
+				if existing.BroadcasterID == session.BroadcasterID {
+					return ErrSessionAlreadyExists
+				}
+			}
 		}
 	}
 
@@ -93,7 +99,10 @@ func (r *InMemoryScreenShareRepository) Create(ctx context.Context, session *Cha
 	}
 
 	r.bySessionID[session.SessionID] = state
-	r.byChannelID[session.ChannelID] = session.SessionID
+	if r.byChannelID[session.ChannelID] == nil {
+		r.byChannelID[session.ChannelID] = make(map[string]bool)
+	}
+	r.byChannelID[session.ChannelID][session.SessionID] = true
 	return nil
 }
 
@@ -101,15 +110,37 @@ func (r *InMemoryScreenShareRepository) GetByChannel(ctx context.Context, channe
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	sessionID, exists := r.byChannelID[channelID]
-	if !exists {
+	sessionsInChannel, exists := r.byChannelID[channelID]
+	if !exists || len(sessionsInChannel) == 0 {
 		return nil, ErrSessionNotFound
 	}
-	session, exists := r.bySessionID[sessionID]
-	if !exists || session.State != SessionStateActive {
-		return nil, ErrSessionNotFound
+
+	for sessID := range sessionsInChannel {
+		if session, ok := r.bySessionID[sessID]; ok && session.State == SessionStateActive {
+			return r.copyState(session), nil
+		}
 	}
-	return r.copyState(session), nil
+
+	return nil, ErrSessionNotFound
+}
+
+func (r *InMemoryScreenShareRepository) GetSessionsByChannel(ctx context.Context, channelID string) ([]*ChannelScreenShareState, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	sessionsInChannel, exists := r.byChannelID[channelID]
+	if !exists || len(sessionsInChannel) == 0 {
+		return []*ChannelScreenShareState{}, nil
+	}
+
+	var activeSessions []*ChannelScreenShareState
+	for sessID := range sessionsInChannel {
+		if session, ok := r.bySessionID[sessID]; ok && session.State == SessionStateActive {
+			activeSessions = append(activeSessions, r.copyState(session))
+		}
+	}
+
+	return activeSessions, nil
 }
 
 func (r *InMemoryScreenShareRepository) GetBySession(ctx context.Context, sessionID string) (*ChannelScreenShareState, error) {
@@ -181,7 +212,12 @@ func (r *InMemoryScreenShareRepository) Delete(ctx context.Context, sessionID st
 	}
 
 	session.State = SessionStateStopped
-	delete(r.byChannelID, session.ChannelID)
+	if chSessions, ok := r.byChannelID[session.ChannelID]; ok {
+		delete(chSessions, session.SessionID)
+		if len(chSessions) == 0 {
+			delete(r.byChannelID, session.ChannelID)
+		}
+	}
 	delete(r.bySessionID, session.SessionID)
 	return nil
 }

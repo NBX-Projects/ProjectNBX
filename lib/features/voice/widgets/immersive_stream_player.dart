@@ -11,21 +11,31 @@ import 'package:justtalking/features/voice/widgets/viewports/stream_preview_view
 import 'package:livekit_client/livekit_client.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Banner compacto informando que um participante está transmitindo ao vivo
+/// Banner compacto informando que participante(s) estão transmitindo ao vivo
 class ActiveLiveStreamBanner extends StatelessWidget {
   final bool isDark;
-  final VoiceParticipantInfo broadcaster;
+  final VoiceParticipantInfo? broadcaster;
+  final List<VoiceParticipantInfo>? activeBroadcasters;
   final VoidCallback onWatchLive;
+  final VoidCallback? onOpenSelector;
 
   const ActiveLiveStreamBanner({
     super.key,
     required this.isDark,
-    required this.broadcaster,
+    this.broadcaster,
+    this.activeBroadcasters,
     required this.onWatchLive,
+    this.onOpenSelector,
   });
 
   @override
   Widget build(BuildContext context) {
+    final broadcastersList = activeBroadcasters ?? (broadcaster != null ? [broadcaster!] : <VoiceParticipantInfo>[]);
+    if (broadcastersList.isEmpty) return const SizedBox.shrink();
+
+    final isMultiple = broadcastersList.length > 1;
+    final primaryBroadcaster = broadcastersList.first;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -84,7 +94,9 @@ class ActiveLiveStreamBanner extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '${broadcaster.username} está transmitindo',
+                  isMultiple
+                      ? '${broadcastersList.length} transmissões ao vivo acontecendo'
+                      : '${primaryBroadcaster.username} está transmitindo',
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
@@ -94,7 +106,9 @@ class ActiveLiveStreamBanner extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  broadcaster.streamTitle ?? 'Tela Principal',
+                  isMultiple
+                      ? broadcastersList.map((b) => b.username).join(', ')
+                      : (primaryBroadcaster.streamTitle ?? 'Tela Principal'),
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: isDark ? Colors.white70 : const Color(0xFF64748B),
@@ -107,11 +121,11 @@ class ActiveLiveStreamBanner extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           ElevatedButton.icon(
-            onPressed: onWatchLive,
-            icon: const Icon(LucideIcons.play, size: 13),
-            label: const Text(
-              'Assistir Live',
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+            onPressed: isMultiple && onOpenSelector != null ? onOpenSelector : onWatchLive,
+            icon: Icon(isMultiple ? LucideIcons.layoutGrid : LucideIcons.play, size: 13),
+            label: Text(
+              isMultiple ? 'Ver Lives (${broadcastersList.length})' : 'Assistir Live',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF9333EA),

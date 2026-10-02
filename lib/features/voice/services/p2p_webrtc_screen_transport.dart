@@ -15,7 +15,8 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
   StreamSubscription<Map<String, dynamic>>? _wsSubscription;
   Timer? _statsTimer;
 
-  ScreenShareSession? _currentSession;
+  ScreenShareSession? _broadcastSession;
+  final Map<String, ScreenShareSession> _viewerSessions = {};
   MediaStream? _localStream;
 
   // Mapa de conexões P2P indexadas por Peer ID (Viewer ID no host, ou Broadcaster ID no viewer)
@@ -112,13 +113,13 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     switch (type) {
       case 'SCREEN_SHARE_STARTED':
         final sessionId = payload['session_id'] as String?;
-        if (sessionId != null && _currentSession != null) {
-          _currentSession = ScreenShareSession(
+        if (sessionId != null && _broadcastSession != null) {
+          _broadcastSession = ScreenShareSession(
             sessionId: sessionId,
-            channelId: _currentSession!.channelId,
-            broadcasterId: _currentSession!.broadcasterId,
+            channelId: _broadcastSession!.channelId,
+            broadcasterId: _broadcastSession!.broadcasterId,
             role: ScreenShareRole.broadcaster,
-            profile: _currentSession!.profile,
+            profile: _broadcastSession!.profile,
             startedAt: DateTime.now(),
           );
           _updateConnectionState(ScreenShareConnectionState.connected);
@@ -129,7 +130,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
       case 'SCREEN_SHARE_VIEWER_JOINED':
         final viewerId = payload['viewer_id'] as String?;
         final sessionId = payload['session_id'] as String?;
-        if (viewerId != null && sessionId != null && _currentSession?.role == ScreenShareRole.broadcaster) {
+        if (viewerId != null && sessionId != null && _broadcastSession != null) {
           _onViewerJoined(viewerId, sessionId);
         }
         break;
@@ -143,8 +144,10 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
 
       case 'SCREEN_SHARE_STOPPED':
         final sessionId = payload['session_id'] as String?;
-        if (_currentSession?.sessionId == sessionId || _activeRemoteShare?.sessionId == sessionId) {
-          _handleSessionStopped();
+        if (_broadcastSession?.sessionId == sessionId) {
+          stopBroadcast();
+        } else if (_viewerSessions.containsKey(sessionId) || _activeRemoteShare?.sessionId == sessionId) {
+          _handleRemoteSessionStopped(sessionId ?? '');
         }
         break;
 
@@ -179,7 +182,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
       profile: profile,
       startedAt: DateTime.now(),
     );
-    _currentSession = session;
+    _broadcastSession = session;
 
     _wsClient.sendEvent(
       'SCREEN_SHARE_START',
@@ -195,17 +198,29 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
 
   @override
   Future<void> stopBroadcast() async {
-    if (_currentSession != null) {
+    if (_broadcastSession != null && _broadcastSession!.sessionId.isNotEmpty) {
       _wsClient.sendEvent(
         'SCREEN_SHARE_STOP',
         {
-          'session_id': _currentSession!.sessionId,
-          'channel_id': _currentSession!.channelId,
+          'session_id': _broadcastSession!.sessionId,
+          'channel_id': _broadcastSession!.channelId,
         },
-        channelId: _currentSession!.channelId,
+        channelId: _broadcastSession!.channelId,
       );
     }
-    await _cleanupAll();
+
+    if (_localStream != null) {
+      for (final track in _localStream!.getTracks()) {
+        track.stop();
+      }
+      await _localStream?.dispose();
+      _localStream = null;
+    }
+    _broadcastSession = null;
+
+    if (_viewerSessions.isEmpty) {
+      _updateConnectionState(ScreenShareConnectionState.idle);
+    }
   }
 
   @override
@@ -223,7 +238,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
       profile: ScreenQualityProfile.medium,
       startedAt: DateTime.now(),
     );
-    _currentSession = session;
+    _viewerSessions[sessionId] = session;
 
     _wsClient.sendEvent(
       'SCREEN_SHARE_JOIN',
@@ -241,8 +256,17 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
 
   @override
   Future<void> disconnectFrom({required String sessionId}) async {
-    await _cleanupAll();
-    _updateConnectionState(ScreenShareConnectionState.closed);
+    final session = _viewerSessions.remove(sessionId);
+    if (session != null) {
+      _cleanupPeerConnection(session.broadcasterId);
+    }
+    if (_activeRemoteShare?.sessionId == sessionId) {
+      _activeRemoteShare = null;
+      _remoteStreamController.add(null);
+    }
+    if (_broadcastSession == null && _viewerSessions.isEmpty) {
+      _updateConnectionState(ScreenShareConnectionState.closed);
+    }
   }
 
   Future<RTCPeerConnection> _createPeerConnectionFor(String peerId, {required bool isPolite}) async {
@@ -254,8 +278,8 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     _makingOffer[peerId] = false;
     _ignoreOffer[peerId] = false;
 
-    // Se formos o broadcaster, adicionamos as tracks do stream local
-    if (_currentSession?.role == ScreenShareRole.broadcaster && _localStream != null) {
+    // Se formos o broadcaster para esta conexão, adicionamos as tracks do stream local
+    if (!isPolite && _localStream != null) {
       for (final track in _localStream!.getTracks()) {
         await pc.addTrack(track, _localStream!);
       }
@@ -263,8 +287,27 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
 
     pc.onIceCandidate = (candidate) {
       if (candidate.candidate != null && candidate.candidate!.isNotEmpty) {
+        String sessId = _broadcastSession?.sessionId ?? '';
+        if (isPolite) {
+          final foundSess = _viewerSessions.values.firstWhere(
+            (s) => s.broadcasterId == peerId,
+            orElse: () => _viewerSessions.values.isNotEmpty
+                ? _viewerSessions.values.first
+                : ScreenShareSession(
+                    sessionId: '',
+                    channelId: '',
+                    broadcasterId: '',
+                    role: ScreenShareRole.viewer,
+                    profile: ScreenQualityProfile.medium,
+                    startedAt: DateTime.fromMillisecondsSinceEpoch(0),
+                  ),
+          );
+          if (foundSess.sessionId.isNotEmpty) {
+            sessId = foundSess.sessionId;
+          }
+        }
         _wsClient.sendEvent('WEBRTC_ICE_CANDIDATE', {
-          'session_id': _currentSession?.sessionId ?? '',
+          'session_id': sessId,
           'to_user_id': peerId,
           'candidate': {
             'candidate': candidate.candidate,
@@ -278,9 +321,14 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     pc.onTrack = (event) {
       if (event.streams.isNotEmpty) {
         final stream = event.streams[0];
+        String sessId = '';
+        final found = _viewerSessions.values.where((s) => s.broadcasterId == peerId);
+        if (found.isNotEmpty) {
+          sessId = found.first.sessionId;
+        }
         _activeRemoteShare = RemoteScreenShare(
-          sessionId: _currentSession?.sessionId ?? '',
-          channelId: _currentSession?.channelId ?? '',
+          sessionId: sessId,
+          channelId: found.isNotEmpty ? found.first.channelId : '',
           broadcasterId: peerId,
           stream: stream,
           quality: 'auto',
@@ -342,7 +390,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     var pc = _peerConnections[fromUserId];
     pc ??= await _createPeerConnectionFor(fromUserId, isPolite: true);
 
-    final isPolite = _currentSession?.role == ScreenShareRole.viewer;
+    final isPolite = _viewerSessions.values.any((s) => s.broadcasterId == fromUserId);
     final offerCollision = (_makingOffer[fromUserId] ?? false) ||
         pc.signalingState != RTCSignalingState.RTCSignalingStateStable;
 
@@ -360,7 +408,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
       await pc.setLocalDescription(mungedAnswer);
 
       _wsClient.sendEvent('WEBRTC_ANSWER', {
-        'session_id': sessionId ?? _currentSession?.sessionId ?? '',
+        'session_id': sessionId ?? '',
         'to_user_id': fromUserId,
         'sdp': mungedAnswerSdp,
       });
@@ -419,7 +467,7 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
         final offer = await pc.createOffer({'iceRestart': true});
         await pc.setLocalDescription(offer);
         _wsClient.sendEvent('WEBRTC_OFFER', {
-          'session_id': _currentSession?.sessionId ?? '',
+          'session_id': _broadcastSession?.sessionId ?? '',
           'to_user_id': peerId,
           'sdp': offer.sdp,
         });
@@ -504,11 +552,18 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
     });
   }
 
-  void _handleSessionStopped() {
-    _activeRemoteShare = null;
-    _remoteStreamController.add(null);
-    _updateConnectionState(ScreenShareConnectionState.closed);
-    _cleanupAll();
+  void _handleRemoteSessionStopped(String sessionId) {
+    final session = _viewerSessions.remove(sessionId);
+    if (session != null) {
+      _cleanupPeerConnection(session.broadcasterId);
+    }
+    if (_activeRemoteShare?.sessionId == sessionId) {
+      _activeRemoteShare = null;
+      _remoteStreamController.add(null);
+    }
+    if (_broadcastSession == null && _viewerSessions.isEmpty) {
+      _updateConnectionState(ScreenShareConnectionState.closed);
+    }
   }
 
   void _cleanupPeerConnection(String peerId) {
@@ -539,7 +594,8 @@ class P2PWebRTCScreenTransport implements ScreenShareTransport {
 
     _activeRemoteShare = null;
     _remoteStreamController.add(null);
-    _currentSession = null;
+    _broadcastSession = null;
+    _viewerSessions.clear();
   }
 
   @override

@@ -32,6 +32,7 @@ import 'package:justtalking/features/voice/models/voice_participant_info.dart';
 import 'package:justtalking/features/voice/services/desktop_hardware_service.dart';
 import 'package:justtalking/features/voice/services/windows_audio_ducking_service.dart';
 import 'package:justtalking/features/voice/widgets/immersive_stream_player.dart';
+import 'package:justtalking/features/voice/widgets/multi_screen_share_dialog.dart';
 import 'package:justtalking/features/voice/widgets/screen_share_dialog.dart';
 import 'package:justtalking/features/voice/widgets/stream_bottom_control_bar.dart';
 import 'package:livekit_client/livekit_client.dart' hide ChatMessage;
@@ -110,6 +111,35 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
       }
     }
     return null;
+  }
+
+  List<VoiceParticipantInfo> get _activeBroadcasters {
+    if (_activeChannel == null) return [];
+    final map = _voiceParticipants[_activeChannel!.id];
+    if (map == null) return [];
+    final currentUserId = ref.read(authControllerProvider).user?.id;
+    return map.values
+        .where((p) =>
+            p.isInVoice &&
+            p.isTransmitting &&
+            p.userId != currentUserId &&
+            p.sessionId != _clientSessionId)
+        .toList();
+  }
+
+  void _openMultiStreamSelector() {
+    final broadcasters = _activeBroadcasters;
+    if (broadcasters.isEmpty) return;
+    MultiScreenShareDialog.show(
+      context: context,
+      isDark: ref.read(themeModeProvider) == ThemeMode.dark,
+      channelName: _activeChannel?.name ?? 'canal',
+      activeBroadcasters: broadcasters,
+      currentlyWatching: _watchingRemoteStream,
+      onSelectStream: (broadcaster) {
+        _setWatchingRemoteStream(broadcaster);
+      },
+    );
   }
 
   void _removeParticipantFromAllVoiceChannels(
@@ -910,6 +940,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         _isRightSidebarVisible = false;
       }
     });
+
+    if (participant != null && participant.sessionId.isNotEmpty) {
+      ref
+          .read(screenShareControllerProvider.notifier)
+          .joinScreenShare(participant.sessionId, participant.userId);
+    } else if (participant == null) {
+      ref.read(screenShareControllerProvider.notifier).leaveScreenShare();
+    }
+
     _syncScreenShareAudioState();
     _syncP2PScreenShareAudioState();
   }
@@ -1266,6 +1305,41 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         }
       });
       _syncScreenShareAudioState();
+      return;
+    } else if (type == 'SCREEN_SHARE_AVAILABLE') {
+      final bId = payload['broadcaster_id']?.toString() ?? '';
+      final cId = (payload['channel_id'] ?? event['channel_id'] ?? '').toString();
+      final sId = payload['session_id']?.toString() ?? '';
+      if (cId.isNotEmpty && bId.isNotEmpty) {
+        setState(() {
+          final chMap = _voiceParticipants.putIfAbsent(cId, () => {});
+          final existing = chMap[bId];
+          if (existing != null) {
+            chMap[bId] = existing.copyWith(
+              isTransmitting: true,
+              sessionId: sId.isNotEmpty ? sId : existing.sessionId,
+            );
+          }
+        });
+      }
+      return;
+    } else if (type == 'SCREEN_SHARE_STOPPED') {
+      final bId = payload['broadcaster_id']?.toString() ?? '';
+      final sId = payload['session_id']?.toString() ?? '';
+      setState(() {
+        for (final chMap in _voiceParticipants.values) {
+          for (final entry in chMap.entries) {
+            if ((bId.isNotEmpty && entry.value.userId == bId) ||
+                (sId.isNotEmpty && entry.value.sessionId == sId)) {
+              chMap[entry.key] = entry.value.copyWith(isTransmitting: false);
+            }
+          }
+        }
+        if (_watchingRemoteStream?.sessionId == sId ||
+            (bId.isNotEmpty && _watchingRemoteStream?.userId == bId)) {
+          _watchingRemoteStream = null;
+        }
+      });
       return;
     }
 
@@ -2183,6 +2257,7 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         isRightSidebarVisible: _isRightSidebarVisible,
         accentColor: _selectedAccentColor,
         activeBroadcaster: _activeBroadcaster,
+        activeBroadcasters: _activeBroadcasters,
         voiceParticipants: _voiceParticipants,
         clientSessionId: _clientSessionId,
         connectedVoiceChannelId: _connectedVoiceChannelId,
@@ -2197,9 +2272,15 @@ class _ServerWorkspaceViewState extends ConsumerState<ServerWorkspaceView> {
         },
         onToggleRightSidebar: () =>
             setState(() => _isRightSidebarVisible = !_isRightSidebarVisible),
+        onOpenMultiStreamSelector: _openMultiStreamSelector,
         onWatchLive: () {
-          if (_activeBroadcaster != null) {
-            _setWatchingRemoteStream(_activeBroadcaster);
+          final broadcasters = _activeBroadcasters;
+          if (broadcasters.isNotEmpty) {
+            if (broadcasters.length > 1) {
+              _openMultiStreamSelector();
+            } else {
+              _setWatchingRemoteStream(broadcasters.first);
+            }
           }
         },
         onSendMessage: (cKey, author) => _sendMessage(cKey, author),

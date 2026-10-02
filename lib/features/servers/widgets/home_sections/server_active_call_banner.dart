@@ -46,13 +46,17 @@ class ServerActiveCallBanner extends StatelessWidget {
 
     final isUserInCall = connectedVoiceChannelId == callChannel.id;
 
+    final hasTransmitting = activeCallParticipants.any((p) => p.isTransmitting);
+
     return Container(
       padding: EdgeInsets.all(isMobile ? 12 : 14),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF10281C) : const Color(0xFFECFDF5),
         borderRadius: AppRadius.borderLg,
         border: Border.all(
-          color: const Color(0xFF22C55E).withValues(alpha: 0.5),
+          color: hasTransmitting
+              ? const Color(0xFFEF4444).withValues(alpha: 0.6)
+              : const Color(0xFF22C55E).withValues(alpha: 0.5),
           width: 1.5,
         ),
       ),
@@ -60,14 +64,14 @@ class ServerActiveCallBanner extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF22C55E),
+            decoration: BoxDecoration(
+              color: hasTransmitting ? const Color(0xFFEF4444) : const Color(0xFF22C55E),
               borderRadius: AppRadius.borderMd,
             ),
-            child: const Icon(
-              LucideIcons.phoneCall,
+            child: Icon(
+              hasTransmitting ? LucideIcons.screenShare : LucideIcons.phoneCall,
               size: 18,
-              color: Colors.black,
+              color: Colors.white,
             ),
           ),
           const SizedBox(width: 12),
@@ -78,11 +82,11 @@ class ServerActiveCallBanner extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'CHAMADA AO VIVO',
+                      hasTransmitting ? 'TRANSMISSÃO AO VIVO' : 'CHAMADA AO VIVO',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF22C55E),
+                        color: hasTransmitting ? const Color(0xFFEF4444) : const Color(0xFF22C55E),
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -93,7 +97,7 @@ class ServerActiveCallBanner extends StatelessWidget {
                         vertical: 1.5,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF22C55E).withValues(alpha: 0.2),
+                        color: (hasTransmitting ? const Color(0xFFEF4444) : const Color(0xFF22C55E)).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -101,7 +105,7 @@ class ServerActiveCallBanner extends StatelessWidget {
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF22C55E),
+                          color: hasTransmitting ? const Color(0xFFEF4444) : const Color(0xFF22C55E),
                         ),
                       ),
                     ),
@@ -109,7 +113,9 @@ class ServerActiveCallBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  activeCallParticipants.map((p) => p.username).join(', '),
+                  activeCallParticipants
+                      .map((p) => p.isTransmitting ? '${p.username} 🔴' : p.username)
+                      .join(', '),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,

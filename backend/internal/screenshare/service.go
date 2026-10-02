@@ -13,14 +13,18 @@ import (
 // ChannelMembershipChecker função para validar se um usuário está no canal especificado
 type ChannelMembershipChecker func(serverID, channelID, userID string) bool
 
+// VoiceStateUpdater função para sincronizar o status de transmissão de áudio/voz no Hub
+type VoiceStateUpdater func(serverID, channelID, userID string, isTransmitting bool)
+
 // Service coordena as regras de negócio de Screen Sharing P2P
 type Service struct {
-	repo        ScreenShareRepository
-	rateLimiter *RateLimiter
-	turnService *TURNService
-	config      ScreenShareConfig
-	router      SignalingRouter
-	membership  ChannelMembershipChecker
+	repo         ScreenShareRepository
+	rateLimiter  *RateLimiter
+	turnService  *TURNService
+	config       ScreenShareConfig
+	router       SignalingRouter
+	membership   ChannelMembershipChecker
+	voiceUpdater VoiceStateUpdater
 }
 
 func NewService(
@@ -38,6 +42,10 @@ func NewService(
 		router:      router,
 		membership:  membership,
 	}
+}
+
+func (s *Service) SetVoiceStateUpdater(updater VoiceStateUpdater) {
+	s.voiceUpdater = updater
 }
 
 func (s *Service) GetRepository() ScreenShareRepository {
@@ -150,6 +158,10 @@ func (s *Service) HandleStart(ctx context.Context, userID, serverID string, req 
 		ChannelID: req.ChannelID,
 		ServerID:  serverID,
 	})
+
+	if s.voiceUpdater != nil {
+		s.voiceUpdater(serverID, req.ChannelID, userID, true)
+	}
 }
 
 // HandleJoin processa a entrada de um espectador na transmissão
@@ -267,6 +279,10 @@ func (s *Service) HandleStop(ctx context.Context, userID, serverID string, req *
 		ChannelID: session.ChannelID,
 		ServerID:  serverID,
 	})
+
+	if s.voiceUpdater != nil {
+		s.voiceUpdater(serverID, session.ChannelID, session.BroadcasterID, false)
+	}
 }
 
 // HandleSignaling repassa mensagens SDP Offer, SDP Answer e ICE Candidates
@@ -424,6 +440,10 @@ func (s *Service) OnUserDisconnected(ctx context.Context, userID, serverID strin
 						ChannelID: channelID,
 						ServerID:  serverID,
 					})
+
+					if s.voiceUpdater != nil {
+						s.voiceUpdater(serverID, channelID, bID, false)
+					}
 				}
 			}(bs.SessionID, bs.ChannelID, bs.BroadcasterID, graceUntil)
 		}

@@ -747,18 +747,38 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
               final user = m['user'] as Map<String, dynamic>? ?? {};
               final uName =
                   user['username'] ?? m['username'] ?? widget.username;
+              final uId = user['id'] ?? m['id'] ?? '';
               final role = m['role'] ?? 'member';
               final isOwner = role == 'owner';
 
-              return _buildSidebarMemberRow(
-                uName.toString(),
-                isOwner ? '👑 Dono & Criador' : 'Membro',
-                isOwner
-                    ? widget.accentColor
-                    : (isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B)),
-                isDark,
+              // Checa se este membro está em live em algum canal
+              VoiceParticipantInfo? transmittingInfo;
+              for (final chMap in widget.voiceParticipants.values) {
+                for (final p in chMap.values) {
+                  if ((p.userId == uId || p.username == uName) && p.isTransmitting && p.isInVoice) {
+                    transmittingInfo = p;
+                    break;
+                  }
+                }
+                if (transmittingInfo != null) break;
+              }
+
+              return InkWell(
+                onTap: transmittingInfo != null
+                    ? () => widget.onWatchStream?.call(transmittingInfo!)
+                    : null,
+                borderRadius: AppRadius.borderSm,
+                child: _buildSidebarMemberRow(
+                  uName.toString(),
+                  isOwner ? '👑 Dono & Criador' : 'Membro',
+                  isOwner
+                      ? widget.accentColor
+                      : (isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B)),
+                  isDark,
+                  isLive: transmittingInfo != null,
+                ),
               );
             }),
           ],
@@ -974,17 +994,35 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
-                color: const Color(0xFF9333EA).withValues(alpha: 0.3),
-                borderRadius: AppRadius.borderXs,
-              ),
-              child: const Text(
-                'AO VIVO',
-                style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                  color: Color(0xFFC084FC),
+                color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                borderRadius: AppRadius.borderPill,
+                border: Border.all(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.6),
+                  width: 0.8,
                 ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 4.5,
+                    height: 4.5,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 3.5),
+                  Text(
+                    'AO VIVO',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -997,8 +1035,9 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
     String name,
     String role,
     Color color,
-    bool isDark,
-  ) {
+    bool isDark, {
+    bool isLive = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
       child: Row(
@@ -1026,13 +1065,57 @@ class _ServerRightSidebarState extends State<ServerRightSidebar> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isLive) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                          borderRadius: AppRadius.borderPill,
+                          border: Border.all(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.6),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 4.5,
+                              height: 4.5,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFEF4444),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 3.5),
+                            Text(
+                              'AO VIVO',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFEF4444),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 Text(
                   role,

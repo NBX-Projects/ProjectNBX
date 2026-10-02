@@ -35,10 +35,12 @@ class ChannelChatView extends StatefulWidget {
   final bool isRightSidebarVisible;
   final Color accentColor;
   final VoiceParticipantInfo? activeBroadcaster;
+  final List<VoiceParticipantInfo>? activeBroadcasters;
   final VoidCallback? onToggleTransmission;
   final VoidCallback? onToggleVoiceChannel;
   final VoidCallback? onToggleRightSidebar;
   final VoidCallback? onWatchLive;
+  final VoidCallback? onOpenMultiStreamSelector;
   final void Function(String channelKey, String author) onSendMessage;
   final void Function(
     String channelKey,
@@ -76,10 +78,12 @@ class ChannelChatView extends StatefulWidget {
     this.isRightSidebarVisible = false,
     this.accentColor = const Color(0xFFF5CBA7),
     this.activeBroadcaster,
+    this.activeBroadcasters,
     this.onToggleTransmission,
     this.onToggleVoiceChannel,
     this.onToggleRightSidebar,
     this.onWatchLive,
+    this.onOpenMultiStreamSelector,
     required this.onSendMessage,
     this.onSendMessageWithMedia,
     this.onUploadMedia,
@@ -323,8 +327,10 @@ class _ChannelChatViewState extends State<ChannelChatView> {
     final isInVoice = widget.isInVoice;
     final accentColor = widget.accentColor;
     final activeBroadcaster = widget.activeBroadcaster;
+    final activeBroadcasters = widget.activeBroadcasters;
     final onToggleVoiceChannel = widget.onToggleVoiceChannel;
     final onWatchLive = widget.onWatchLive;
+    final onOpenMultiStreamSelector = widget.onOpenMultiStreamSelector;
     final onStartEditing = widget.onStartEditing;
     final onCancelEditing = widget.onCancelEditing;
     final onSaveEditing = widget.onSaveEditing;
@@ -459,6 +465,45 @@ class _ChannelChatViewState extends State<ChannelChatView> {
                                               : Colors.black87,
                                         ),
                                       ),
+                                      if (p.isTransmitting) ...[
+                                        const SizedBox(width: 5),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 1.5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                            borderRadius: AppRadius.borderPill,
+                                            border: Border.all(
+                                              color: const Color(0xFFEF4444).withValues(alpha: 0.6),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                width: 4.5,
+                                                height: 4.5,
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFFEF4444),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 3.5),
+                                              Text(
+                                                'AO VIVO',
+                                                style: GoogleFonts.jetBrainsMono(
+                                                  fontSize: 8.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: const Color(0xFFEF4444),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                       if (p.isDeafened) ...[
                                         const SizedBox(width: 4),
                                         Tooltip(
@@ -607,12 +652,22 @@ class _ChannelChatViewState extends State<ChannelChatView> {
                   ),
 
                 // 2. Banner de Transmissão Ativa no Canal
-                if (activeBroadcaster != null)
-                  ActiveLiveStreamBanner(
-                    isDark: isDark,
-                    broadcaster: activeBroadcaster,
-                    onWatchLive: onWatchLive ?? () {},
-                  ),
+                () {
+                  final effectiveBroadcasters = activeBroadcasters ??
+                      (activeBroadcaster != null
+                          ? [activeBroadcaster]
+                          : channelVoiceParticipants.where((p) => p.isTransmitting).toList());
+
+                  if (effectiveBroadcasters.isNotEmpty) {
+                    return ActiveLiveStreamBanner(
+                      isDark: isDark,
+                      activeBroadcasters: effectiveBroadcasters,
+                      onWatchLive: onWatchLive ?? () {},
+                      onOpenSelector: onOpenMultiStreamSelector,
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }(),
 
                 // 3. Messages List Area
                 Expanded(

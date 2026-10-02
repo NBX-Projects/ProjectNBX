@@ -33,6 +33,7 @@ class ScreenShareState {
   final ScreenQualityProfile selectedProfile;
   final ScreenShareSession? currentSession;
   final RemoteScreenShare? remoteShare;
+  final List<RemoteScreenShare> remoteShares;
   final ScreenShareConnectionState connectionState;
   final Map<String, dynamic> stats;
   final String? errorMessage;
@@ -46,6 +47,7 @@ class ScreenShareState {
     this.selectedProfile = ScreenQualityProfile.medium,
     this.currentSession,
     this.remoteShare,
+    this.remoteShares = const [],
     this.connectionState = ScreenShareConnectionState.idle,
     this.stats = const {},
     this.errorMessage,
@@ -60,6 +62,7 @@ class ScreenShareState {
     ScreenQualityProfile? selectedProfile,
     ScreenShareSession? currentSession,
     RemoteScreenShare? remoteShare,
+    List<RemoteScreenShare>? remoteShares,
     ScreenShareConnectionState? connectionState,
     Map<String, dynamic>? stats,
     String? errorMessage,
@@ -76,6 +79,7 @@ class ScreenShareState {
       selectedProfile: selectedProfile ?? this.selectedProfile,
       currentSession: currentSession ?? this.currentSession,
       remoteShare: clearRemoteShare ? null : (remoteShare ?? this.remoteShare),
+      remoteShares: remoteShares ?? this.remoteShares,
       connectionState: connectionState ?? this.connectionState,
       stats: stats ?? this.stats,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
@@ -107,15 +111,24 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
   void _initSubscriptions() {
     _remoteStreamSub = _transport.remoteStreamStream.listen((remoteShare) {
       if (remoteShare != null) {
+        final updatedList = List<RemoteScreenShare>.from(state.remoteShares);
+        final existingIdx = updatedList.indexWhere((r) => r.sessionId == remoteShare.sessionId);
+        if (existingIdx != -1) {
+          updatedList[existingIdx] = remoteShare;
+        } else {
+          updatedList.add(remoteShare);
+        }
         state = state.copyWith(
           isViewing: true,
           remoteShare: remoteShare,
+          remoteShares: updatedList,
           connectionState: ScreenShareConnectionState.connected,
         );
       } else {
         state = state.copyWith(
           isViewing: false,
           clearRemoteShare: true,
+          remoteShares: const [],
         );
       }
     });
@@ -124,11 +137,11 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
       state = state.copyWith(connectionState: connState);
       if (connState == ScreenShareConnectionState.closed ||
           connState == ScreenShareConnectionState.failed) {
-        if (state.isSharing) {
+        if (state.isSharing && !state.isViewing) {
           state = state.copyWith(isSharing: false);
         }
-        if (state.isViewing) {
-          state = state.copyWith(isViewing: false, clearRemoteShare: true);
+        if (state.isViewing && !state.isSharing) {
+          state = state.copyWith(isViewing: false, clearRemoteShare: true, remoteShares: const []);
         }
       }
     });
@@ -139,17 +152,7 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
 
     _wsSub = _wsClient.eventStream.listen((event) {
       final type = event['type'] as String?;
-      if (type == 'SCREEN_SHARE_AVAILABLE') {
-        // Notificação de tela disponível no canal
-        final payload = event['payload'];
-        if (payload is Map) {
-          final sessId = payload['session_id'] as String?;
-          final bId = payload['broadcaster_id'] as String?;
-          if (sessId != null && bId != null && !state.isSharing && !state.isViewing) {
-            // Auto-join ou disponibilidade
-          }
-        }
-      } else if (type == 'SCREEN_SHARE_ERROR') {
+      if (type == 'SCREEN_SHARE_ERROR') {
         final payload = event['payload'];
         String msg = 'Erro no compartilhamento de tela';
         if (payload is Map && payload['message'] != null) {
@@ -214,7 +217,7 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
     } catch (e) {
       state = state.copyWith(
         isSharing: false,
-        connectionState: ScreenShareConnectionState.failed,
+        connectionState: state.isViewing ? ScreenShareConnectionState.connected : ScreenShareConnectionState.failed,
         errorMessage: 'Erro ao iniciar transmissão: $e',
       );
       return false;
@@ -227,7 +230,7 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
     } catch (_) {}
     state = state.copyWith(
       isSharing: false,
-      connectionState: ScreenShareConnectionState.idle,
+      connectionState: state.isViewing ? ScreenShareConnectionState.connected : ScreenShareConnectionState.idle,
     );
   }
 
@@ -245,7 +248,7 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
     } catch (e) {
       state = state.copyWith(
         isViewing: false,
-        connectionState: ScreenShareConnectionState.failed,
+        connectionState: state.isSharing ? ScreenShareConnectionState.connected : ScreenShareConnectionState.failed,
         errorMessage: 'Erro ao assistir transmissão: $e',
       );
     }
@@ -259,7 +262,8 @@ class ScreenShareController extends StateNotifier<ScreenShareState> {
     state = state.copyWith(
       isViewing: false,
       clearRemoteShare: true,
-      connectionState: ScreenShareConnectionState.idle,
+      remoteShares: const [],
+      connectionState: state.isSharing ? ScreenShareConnectionState.connected : ScreenShareConnectionState.idle,
     );
   }
 

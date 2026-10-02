@@ -47,6 +47,7 @@ func NewHub(repo repository.Repository) *Hub {
 		hub,
 		hub.isUserInChannel,
 	)
+	hub.ScreenShareService.SetVoiceStateUpdater(hub.UpdateParticipantTransmitting)
 
 	return hub
 }
