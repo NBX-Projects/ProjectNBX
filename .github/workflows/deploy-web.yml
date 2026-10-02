@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'backend/**'
+      - 'docs/**'
+      - '.github/workflows/deploy-api.yml'
+      - '.github/workflows/build-*.yml'
+      - '.github/workflows/sync-version.yml'
+      - 'windows/**'
+      - 'android/**'
+      - 'README.md'
+      - 'LICENSE'
+      - 'PRIVACY.md'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -52,7 +63,7 @@ jobs:
 
           cat <<EOF > .env.prod
           APP_ENV=production
-          APP_NAME=ProjectNBX
+          APP_NAME=Just Talking
           API_BASE_URL=$PROD_API_BASE_URL
           WS_BASE_URL=$PROD_WS_BASE_URL
           LIVEKIT_URL=$PROD_LIVEKIT_URL
@@ -66,7 +77,9 @@ jobs:
       - name: Compilar Flutter Web
         run: |
           CLEAN_VER=$(echo "${{ env.RELEASE_VERSION }}" | sed 's/^v//')
-          flutter build web --release --base-href "/ProjectNBX/" --build-name=$CLEAN_VER --dart-define-from-file=.env.prod
+          BUILD_NUM=$(echo "$CLEAN_VER" | awk -F. '{print $3}' | sed 's/[^0-9].*//')
+          if [ -z "$BUILD_NUM" ]; then BUILD_NUM="1"; fi
+          flutter build web --release --base-href "/ProjectNBX/" --build-name=$CLEAN_VER --build-number=$BUILD_NUM --dart-define-from-file=.env.prod
 
       - name: Configurar Artefato do GitHub Pages
         uses: actions/upload-pages-artifact@v3

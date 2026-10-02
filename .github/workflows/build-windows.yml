@@ -67,7 +67,10 @@ jobs:
         shell: pwsh
         run: |
           $cleanVer = $env:RELEASE_VERSION -replace '^v',''
-          flutter build windows --release --build-name=$cleanVer --dart-define-from-file=.env.prod
+          $parts = $cleanVer -split '\.'
+          $buildNum = if ($parts.Length -ge 3) { $parts[2] -replace '\D.*','' } else { "1" }
+          if ([string]::IsNullOrWhiteSpace($buildNum)) { $buildNum = "1" }
+          flutter build windows --release --build-name=$cleanVer --build-number=$buildNum --dart-define-from-file=.env.prod
 
       - name: Compilar Instalador Inno Setup (.exe)
         shell: pwsh

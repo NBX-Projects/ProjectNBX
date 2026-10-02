@@ -108,7 +108,9 @@ jobs:
       - name: Compilar APK Android
         run: |
           CLEAN_VER=$(echo "${{ env.RELEASE_VERSION }}" | sed 's/^v//')
-          flutter build apk --flavor ${{ env.BUILD_FLAVOR }} --build-name=$CLEAN_VER --dart-define-from-file=.env.${{ env.BUILD_FLAVOR }} --release
+          BUILD_NUM=$(echo "$CLEAN_VER" | awk -F. '{print $3}' | sed 's/[^0-9].*//')
+          if [ -z "$BUILD_NUM" ]; then BUILD_NUM="1"; fi
+          flutter build apk --flavor ${{ env.BUILD_FLAVOR }} --build-name=$CLEAN_VER --build-number=$BUILD_NUM --dart-define-from-file=.env.${{ env.BUILD_FLAVOR }} --release
 
       - name: Preparar Arquivos de Distribuição
         run: |
