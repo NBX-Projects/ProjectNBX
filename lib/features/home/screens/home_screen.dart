@@ -239,219 +239,231 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             bottom: true,
             child: Column(
               children: [
-            // Top Custom Window Bar (de um canto ao outro)
-            HubTopBar(
-              user: user,
-              isDark: isDark,
-              totalInVoice: totalVoiceCount,
-              voiceState: voiceState,
-              voiceNotifier: voiceNotifier,
-              onToggleTheme: () =>
-                  ref.read(themeModeProvider.notifier).toggleTheme(),
-              onOpenSearch: _handleQuickSearch,
-              topMicKey: _topMicKey,
-              topHeadphonesKey: _topHeadphonesKey,
-              isRightSidebarVisible: _activeTab == 'home'
-                  ? _isServerRightSidebarVisible
-                  : _isServerWorkspaceSidebarVisible,
-              onToggleRightSidebar: _handleToggleSidebar,
-              server: selectedServer,
-              onBackToHome: () => setState(() {
-                _activeTab = 'home';
-                _isServerRightSidebarVisible = false;
-              }),
-              onInviteMembers: selectedServer != null
-                  ? () => InviteMemberDialog.show(
-                        context,
-                        selectedServer,
-                        onMembersUpdated: () => ref
-                            .read(serversControllerProvider.notifier)
-                            .loadServers(),
-                      )
-                  : null,
-              isMobile: isMobile,
-            ),
+                // Top Custom Window Bar (de um canto ao outro)
+                HubTopBar(
+                  user: user,
+                  isDark: isDark,
+                  totalInVoice: totalVoiceCount,
+                  voiceState: voiceState,
+                  voiceNotifier: voiceNotifier,
+                  onToggleTheme: () =>
+                      ref.read(themeModeProvider.notifier).toggleTheme(),
+                  onOpenSearch: _handleQuickSearch,
+                  topMicKey: _topMicKey,
+                  topHeadphonesKey: _topHeadphonesKey,
+                  isRightSidebarVisible: _activeTab == 'home'
+                      ? _isServerRightSidebarVisible
+                      : _isServerWorkspaceSidebarVisible,
+                  onToggleRightSidebar: _handleToggleSidebar,
+                  server: selectedServer,
+                  onBackToHome: () => setState(() {
+                    _activeTab = 'home';
+                    _isServerRightSidebarVisible = false;
+                  }),
+                  onInviteMembers: selectedServer != null
+                      ? () => InviteMemberDialog.show(
+                          context,
+                          selectedServer,
+                          onMembersUpdated: () => ref
+                              .read(serversControllerProvider.notifier)
+                              .loadServers(),
+                        )
+                      : null,
+                  isMobile: isMobile,
+                ),
 
-            // Layout Principal (Workspace / Hub)
-            Expanded(
-              child: isMobile && selectedServer != null
-                  ? ServerWorkspaceView(
-                      server: selectedServer,
-                      isRightSidebarVisible: _isServerWorkspaceSidebarVisible,
-                      onToggleRightSidebar: _handleToggleSidebar,
-                      onBackToHome: () => setState(() {
-                        _activeTab = 'home';
-                        _isServerRightSidebarVisible = false;
-                      }),
-                    )
-                  : Row(
-                      children: [
-                        // DESABILITADO: Não teremos mais barra na esquerda no Hub
-                        // HubLeftRail(
-                        //   servers: userJoinedServers,
-                        //   activeTab: _activeTab,
-                        //   onTabChanged: (tab) {
-                        //     setState(() {
-                        //       _activeTab = tab;
-                        //       if (tab == 'home') {
-                        //         _isServerRightSidebarVisible = false;
-                        //       }
-                        //     });
-                        //     final isServer =
-                        //         userJoinedServers.any((s) => s.id == tab);
-                        //     if (isServer) {
-                        //       ref
-                        //           .read(serversControllerProvider.notifier)
-                        //           .selectServer(tab);
-                        //     }
-                        //   },
-                        // ),
+                // Layout Principal (Workspace / Hub)
+                Expanded(
+                  child: isMobile && selectedServer != null
+                      ? ServerWorkspaceView(
+                          server: selectedServer,
+                          isRightSidebarVisible:
+                              _isServerWorkspaceSidebarVisible,
+                          onToggleRightSidebar: _handleToggleSidebar,
+                          onBackToHome: () => setState(() {
+                            _activeTab = 'home';
+                            _isServerRightSidebarVisible = false;
+                          }),
+                        )
+                      : Row(
+                          children: [
+                            // DESABILITADO: Não teremos mais barra na esquerda no Hub
+                            // HubLeftRail(
+                            //   servers: userJoinedServers,
+                            //   activeTab: _activeTab,
+                            //   onTabChanged: (tab) {
+                            //     setState(() {
+                            //       _activeTab = tab;
+                            //       if (tab == 'home') {
+                            //         _isServerRightSidebarVisible = false;
+                            //       }
+                            //     });
+                            //     final isServer =
+                            //         userJoinedServers.any((s) => s.id == tab);
+                            //     if (isServer) {
+                            //       ref
+                            //           .read(serversControllerProvider.notifier)
+                            //           .selectServer(tab);
+                            //     }
+                            //   },
+                            // ),
 
-                        // MAIN HUB CONTENT OR ACTIVE SERVER WORKSPACE
-                        Expanded(
-                          child: selectedServer != null
-                              ? ServerWorkspaceView(
-                                  server: selectedServer,
-                                  isRightSidebarVisible:
-                                      _isServerWorkspaceSidebarVisible,
-                                  onToggleRightSidebar: _handleToggleSidebar,
-                                  onBackToHome: () => setState(() {
-                                    _activeTab = 'home';
-                                    _isServerRightSidebarVisible = false;
-                                  }),
-                                )
-                              : Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    // Center Content
-                                    Expanded(
-                                      child: Container(
-                                        alignment: Alignment.topLeft,
-                                        color: isDark
-                                            ? AppColors.darkCanvas
-                                            : AppColors.lightCanvas,
-                                        child: SingleChildScrollView(
-                                          physics:
-                                              const AlwaysScrollableScrollPhysics(),
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: isMobile ? 14 : 24,
-                                            vertical: isMobile ? 14 : 20,
-                                          ),
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.start,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              // Hub Header (Início + Subtitle + Explorar)
-                                              HubHeader(
-                                                totalCommunities:
-                                                    servers.length,
-                                                totalInVoice: totalVoiceCount,
-                                                onExplore: () async {
-                                                  await CreateServerDialog.show(
-                                                    context,
-                                                  );
-                                                  _loadPublicServers();
-                                                },
+                            // MAIN HUB CONTENT OR ACTIVE SERVER WORKSPACE
+                            Expanded(
+                              child: selectedServer != null
+                                  ? ServerWorkspaceView(
+                                      server: selectedServer,
+                                      isRightSidebarVisible:
+                                          _isServerWorkspaceSidebarVisible,
+                                      onToggleRightSidebar:
+                                          _handleToggleSidebar,
+                                      onBackToHome: () => setState(() {
+                                        _activeTab = 'home';
+                                        _isServerRightSidebarVisible = false;
+                                      }),
+                                    )
+                                  : Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        // Center Content
+                                        Expanded(
+                                          child: Container(
+                                            alignment: Alignment.topLeft,
+                                            color: isDark
+                                                ? AppColors.darkCanvas
+                                                : AppColors.lightCanvas,
+                                            child: SingleChildScrollView(
+                                              physics:
+                                                  const AlwaysScrollableScrollPhysics(),
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: isMobile ? 14 : 24,
+                                                vertical: isMobile ? 14 : 20,
                                               ),
-
-                                              const SizedBox(height: 20),
-
-                                              // Lista de servidores do usuário
-                                              HubServerSections(
-                                                servers: servers,
-                                                onSelectServer: (serverId) {
-                                                  ref
-                                                      .read(
-                                                        serversControllerProvider
-                                                            .notifier,
-                                                      )
-                                                      .selectServer(serverId);
-                                                  setState(
-                                                    () {
-                                                      _activeTab = serverId;
-                                                      _isServerWorkspaceSidebarVisible =
-                                                          true;
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  // Hub Header (Início + Subtitle + Explorar)
+                                                  HubHeader(
+                                                    totalCommunities:
+                                                        servers.length,
+                                                    totalInVoice:
+                                                        totalVoiceCount,
+                                                    onCreateServer: () async {
+                                                      await CreateServerDialog.show(
+                                                        context,
+                                                      );
+                                                      _loadPublicServers();
                                                     },
-                                                  );
-                                                },
-                                              ),
+                                                  ),
 
-                                              const SizedBox(height: 28),
+                                                  const SizedBox(height: 20),
 
-                                              // Public Servers Discovery Section (não listar servidores que o usuário já participa)
-                                              () {
-                                                final myJoinedServerIds =
-                                                    userJoinedServers
-                                                        .map((s) => s.id)
-                                                        .toSet();
-                                                final availablePublicServers =
-                                                    _publicServers.where((pub) {
-                                                      final matchesFilter =
-                                                          _searchQuery
-                                                              .trim()
-                                                              .isEmpty ||
-                                                          pub.server.name
-                                                              .toLowerCase()
-                                                              .contains(
-                                                                _searchQuery
-                                                                    .trim()
-                                                                    .toLowerCase(),
-                                                              );
-                                                      return matchesFilter &&
-                                                          !pub.isMember &&
-                                                          !myJoinedServerIds
-                                                              .contains(
-                                                            pub.server.id,
+                                                  // Lista de servidores do usuário
+                                                  HubServerSections(
+                                                    servers: servers,
+                                                    onSelectServer: (serverId) {
+                                                      ref
+                                                          .read(
+                                                            serversControllerProvider
+                                                                .notifier,
+                                                          )
+                                                          .selectServer(
+                                                            serverId,
                                                           );
-                                                    }).toList();
+                                                      setState(() {
+                                                        _activeTab = serverId;
+                                                        _isServerWorkspaceSidebarVisible =
+                                                            true;
+                                                      });
+                                                    },
+                                                  ),
 
-                                                return Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    _buildSectionTitle(
-                                                      isDark,
-                                                      'EXPLORAR SERVIDORES PÚBLICOS',
-                                                      count:
-                                                          availablePublicServers
-                                                              .length,
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    _buildPublicServersGrid(
-                                                      availablePublicServers,
-                                                    ),
-                                                  ],
-                                                );
-                                              }(),
+                                                  const SizedBox(height: 28),
 
-                                              const SizedBox(height: 32),
-                                            ],
+                                                  // Public Servers Discovery Section (não listar servidores que o usuário já participa)
+                                                  () {
+                                                    final myJoinedServerIds =
+                                                        userJoinedServers
+                                                            .map((s) => s.id)
+                                                            .toSet();
+                                                    final availablePublicServers =
+                                                        _publicServers.where((
+                                                          pub,
+                                                        ) {
+                                                          final matchesFilter =
+                                                              _searchQuery
+                                                                  .trim()
+                                                                  .isEmpty ||
+                                                              pub.server.name
+                                                                  .toLowerCase()
+                                                                  .contains(
+                                                                    _searchQuery
+                                                                        .trim()
+                                                                        .toLowerCase(),
+                                                                  );
+                                                          return matchesFilter &&
+                                                              !pub.isMember &&
+                                                              !myJoinedServerIds
+                                                                  .contains(
+                                                                    pub
+                                                                        .server
+                                                                        .id,
+                                                                  );
+                                                        }).toList();
+
+                                                    return Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        _buildSectionTitle(
+                                                          isDark,
+                                                          'EXPLORAR SERVIDORES PÚBLICOS',
+                                                          count:
+                                                              availablePublicServers
+                                                                  .length,
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 12,
+                                                        ),
+                                                        _buildPublicServersGrid(
+                                                          availablePublicServers,
+                                                        ),
+                                                      ],
+                                                    );
+                                                  }(),
+
+                                                  const SizedBox(height: 32),
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
 
-                                    // Right Activity & Telemetry Sidebar (only visible on tablet/desktop)
-                                    if (!isMobile)
-                                      AnimatedSize(
-                                        duration:
-                                            const Duration(milliseconds: 200),
-                                        curve: Curves.easeInOut,
-                                        child: _isServerRightSidebarVisible
-                                            ? HubRightPanel(
-                                                onClose: _handleToggleSidebar,
-                                              )
-                                            : const SizedBox.shrink(),
-                                      ),
-                                  ],
-                                ),
+                                        // Right Activity & Telemetry Sidebar (only visible on tablet/desktop)
+                                        if (!isMobile)
+                                          AnimatedSize(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            curve: Curves.easeInOut,
+                                            child: _isServerRightSidebarVisible
+                                                ? HubRightPanel(
+                                                    onClose:
+                                                        _handleToggleSidebar,
+                                                  )
+                                                : const SizedBox.shrink(),
+                                          ),
+                                      ],
+                                    ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-            ),
+                ),
               ],
             ),
           );
@@ -560,7 +572,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 14,
             mainAxisSpacing: 14,
-            mainAxisExtent: 172,
+            mainAxisExtent: 238,
           ),
           itemBuilder: (context, index) {
             final pub = publicServers[index];

@@ -67,7 +67,9 @@ class _HubServerCardState extends State<HubServerCard> {
 
   Color _getCategoryColor(String category, Color fallbackAccent) {
     final c = category.toUpperCase().trim();
-    if (c.contains('GAMING') || c.contains('JOGO')) return const Color(0xFF4F46E5);
+    if (c.contains('GAMING') || c.contains('JOGO')) {
+      return const Color(0xFF4F46E5);
+    }
     if (c.contains('RACE') ||
         c.contains('SIM') ||
         c.contains('MANS') ||
@@ -81,16 +83,24 @@ class _HubServerCardState extends State<HubServerCard> {
         c.contains('PROGRAMAÇÃO')) {
       return const Color(0xFF2563EB);
     }
-    if (c.contains('ESTUDO') || c.contains('STUDY')) return const Color(0xFF059669);
+    if (c.contains('ESTUDO') || c.contains('STUDY')) {
+      return const Color(0xFF059669);
+    }
     if (c.contains('FPS') ||
         c.contains('CS2') ||
         c.contains('VALORANT') ||
         c.contains('APEX')) {
       return const Color(0xFFE11D48);
     }
-    if (c.contains('MÚSICA') || c.contains('MUSIC')) return const Color(0xFF7C3AED);
-    if (c.contains('DESIGN') || c.contains('ARTE')) return const Color(0xFFDB2777);
-    if (c.contains('CRIPTO') || c.contains('FINAN')) return const Color(0xFF10B981);
+    if (c.contains('MÚSICA') || c.contains('MUSIC')) {
+      return const Color(0xFF7C3AED);
+    }
+    if (c.contains('DESIGN') || c.contains('ARTE')) {
+      return const Color(0xFFDB2777);
+    }
+    if (c.contains('CRIPTO') || c.contains('FINAN')) {
+      return const Color(0xFF10B981);
+    }
     if (c.contains('COMUNIDADE') || c.contains('GERAL')) {
       return const Color(0xFF475569);
     }
@@ -104,8 +114,9 @@ class _HubServerCardState extends State<HubServerCard> {
     final server = widget.server;
     final category = _getCategoryForServer(server);
     final gradient = _getGradientForServer(server);
-    final surfaceColor =
-        isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final surfaceColor = isDark
+        ? AppColors.darkSurface
+        : AppColors.lightSurface;
     final accentColor = Color(
       server.accentColor != 0 ? server.accentColor : 0xFFF5CBA7,
     );
@@ -117,9 +128,7 @@ class _HubServerCardState extends State<HubServerCard> {
     // Apenas contar membros reais ativos em canais de voz/híbridos
     final voiceUsersCount = server.channels
         .where(
-          (c) =>
-              c.type == ChannelType.voice ||
-              c.type == ChannelType.hybrid,
+          (c) => c.type == ChannelType.voice || c.type == ChannelType.hybrid,
         )
         .fold<int>(0, (sum, c) => sum + c.activeMembers.length);
 
@@ -195,215 +204,217 @@ class _HubServerCardState extends State<HubServerCard> {
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: gradient,
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: gradient,
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  Center(
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        value:
-                                            loadingProgress.expectedTotalBytes !=
-                                                    null
-                                                ? loadingProgress
-                                                          .cumulativeBytesLoaded /
-                                                      loadingProgress
-                                                          .expectedTotalBytes!
-                                                : null,
-                                        color: Colors.white,
+                                    Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          value:
+                                              loadingProgress
+                                                      .expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                        .cumulativeBytesLoaded /
+                                                    loadingProgress
+                                                        .expectedTotalBytes!
+                                              : null,
+                                          color: Colors.white,
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                          ),
-                        ),
-                      ),
-                    ],
-
-                    if (server.bannerUrl == null ||
-                        server.bannerUrl!.trim().isEmpty)
-                      Positioned(
-                        right: -8,
-                        bottom: -8,
-                        child: Icon(
-                          _getCategoryWatermarkIcon(server),
-                          size: 78,
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
-                      ),
-
-                    // Escurecimento suave cinematográfico
-                    Positioned.fill(
-                      child: ColoredBox(
-                        color: Colors.black.withValues(alpha: 0.20),
-                      ),
-                    ),
-
-                    // Vignette lateral/superior para destacar badges
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.35),
-                              Colors.transparent,
-                            ],
-                            stops: const [0.0, 0.55],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Fusão suave na base: o banner se junta ao fundo do card ("desaparecer")
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              surfaceColor.withValues(alpha: 0.0),
-                              surfaceColor.withValues(alpha: 0.0),
-                              surfaceColor.withValues(alpha: 0.30),
-                              surfaceColor.withValues(alpha: 0.75),
-                              surfaceColor,
-                            ],
-                            stops: const [0.0, 0.30, 0.60, 0.85, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Top-Left Category Pill (estilo protótipo com contraste garantido)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: categoryColor,
-                          borderRadius: AppRadius.borderSm,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          category,
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                            color: categoryTextColor,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Top-Right Badge (Privado se não for público)
-                    if (!server.isPublic)
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.60),
-                            borderRadius: AppRadius.borderSm,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.20),
-                            ),
-                          ),
-                          child: const Icon(
-                            LucideIcons.lock,
-                            size: 11,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ),
-
-                    // Bottom-Right Pill no Banner (apenas se houver pessoas conectadas em voz)
-                    if (voiceUsersCount > 0)
-                      Positioned(
-                        bottom: 9,
-                        right: 9,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.70),
-                            borderRadius: AppRadius.borderPill,
-                            border: Border.all(
-                              color: const Color(
-                                0xFF22C55E,
-                              ).withValues(alpha: 0.45),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Color(0xFF22C55E),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Color(0xFF22C55E),
-                                      blurRadius: 4,
-                                      spreadRadius: 0.5,
                                     ),
                                   ],
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                '$voiceUsersCount em voz',
-                                style: GoogleFonts.inter(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF22C55E),
-                                ),
-                              ),
-                            ],
+                                );
+                              },
+                              errorBuilder: (_, _, _) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      if (server.bannerUrl == null ||
+                          server.bannerUrl!.trim().isEmpty)
+                        Positioned(
+                          right: -8,
+                          bottom: -8,
+                          child: Icon(
+                            _getCategoryWatermarkIcon(server),
+                            size: 78,
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                        ),
+
+                      // Escurecimento suave cinematográfico
+                      Positioned.fill(
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.20),
+                        ),
+                      ),
+
+                      // Vignette lateral/superior para destacar badges
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.35),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.55],
+                            ),
                           ),
                         ),
                       ),
-                  ],
+
+                      // Fusão suave na base: o banner se junta ao fundo do card ("desaparecer")
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                surfaceColor.withValues(alpha: 0.0),
+                                surfaceColor.withValues(alpha: 0.0),
+                                surfaceColor.withValues(alpha: 0.30),
+                                surfaceColor.withValues(alpha: 0.75),
+                                surfaceColor,
+                              ],
+                              stops: const [0.0, 0.30, 0.60, 0.85, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Top-Left Category Pill (estilo protótipo com contraste garantido)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: categoryColor,
+                            borderRadius: AppRadius.borderSm,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            category,
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                              color: categoryTextColor,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Top-Right Badge (Privado se não for público)
+                      if (!server.isPublic)
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.60),
+                              borderRadius: AppRadius.borderSm,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.20),
+                              ),
+                            ),
+                            child: const Icon(
+                              LucideIcons.lock,
+                              size: 11,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+
+                      // Bottom-Right Pill no Banner (apenas se houver pessoas conectadas em voz)
+                      if (voiceUsersCount > 0)
+                        Positioned(
+                          bottom: 9,
+                          right: 9,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.70),
+                              borderRadius: AppRadius.borderPill,
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF22C55E,
+                                ).withValues(alpha: 0.45),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Color(0xFF22C55E),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Color(0xFF22C55E),
+                                        blurRadius: 4,
+                                        spreadRadius: 0.5,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '$voiceUsersCount em voz',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF22C55E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
               // 2. Conteúdo do Card (Nome, Membros e Pílula de Atividade)
               Padding(
